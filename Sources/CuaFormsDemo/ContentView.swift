@@ -145,6 +145,11 @@ struct ContentView: View {
                 if model.hasExecutablePlan {
                     Button("Execute plan") { model.executePlan() }
                 }
+                if let countdown = model.countdown {
+                    Button("Disarm (\(countdown))") { model.disarm() }
+                } else {
+                    Button("Arm 5 s") { model.arm() }
+                }
                 if model.isRunning {
                     Button("Stop") { model.stop() }
                     ProgressView().controlSize(.small)
@@ -152,6 +157,8 @@ struct ContentView: View {
                 Spacer()
                 Toggle("Allow submit click", isOn: $model.allowSubmit)
             }
+            Text("Hotkeys from any app: ⌃⌥⌘F run · ⌃⌥⌘A arm 5 s · ⌃⌥⌘S stop")
+                .font(.caption2).foregroundStyle(.secondary)
             HStack {
                 Text("Min confidence \(model.minConfidence, format: .number.precision(.fractionLength(2)))")
                     .font(.caption).frame(width: 130, alignment: .leading)
@@ -206,6 +213,10 @@ struct ContentView: View {
 
     private var hud: some View {
         VStack(alignment: .trailing, spacing: 2) {
+            if let countdown = model.countdown {
+                Text("starting in \(countdown)")
+                    .font(.system(.title2, design: .rounded)).fontWeight(.bold)
+            }
             HStack(spacing: 6) {
                 Circle().fill(model.placement == nil ? Color.gray : Color.green).frame(width: 8, height: 8)
                 Text(model.placement == nil ? "On-device · Core ML" : "On-device · Neural Engine")

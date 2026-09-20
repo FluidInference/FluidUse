@@ -43,6 +43,10 @@ final class DemoModel: ObservableObject {
     @Published var allowSubmit = false
     @Published var lastLatency: Duration?
     @Published var errorMessage: String?
+    /// Seconds left before an armed run starts; nil when not armed.
+    @Published var countdown: Int?
+    private var countdownTask: Task<Void, Never>?
+    private var hotkeyMonitors: [Any] = []
 
     /// Where decisions are executed: the embedded page or another app's window.
     enum Target: Hashable {
@@ -63,7 +67,75 @@ final class DemoModel: ObservableObject {
     init() {
         driver.onNavigation = { [weak self] in self?.refreshPageInfo() }
         refreshApplications()
+        installHotkeys()
         if ProcessInfo.processInfo.environment["CUA_DEMO_AUTORUN"] != nil { autorun() }
+    }
+
+    // MARK: Recording triggers
+
+    /// Starts (or, with a reviewed plan pending, executes) after a visible countdown so a
+    /// screen recording can begin first. The overlay shows the remaining seconds.
+    func arm(seconds: Int = 5) {
+        guard !isRunning, countdown == nil else { return }
+        countdown = seconds
+        countdownTask = Task {
+            var remaining = seconds
+            while remaining > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else {
+                    countdown = nil
+                    return
+                }
+                remaining -= 1
+                countdown = remaining
+            }
+            countdown = nil
+            trigger()
+        }
+    }
+
+    func disarm() {
+        countdownTask?.cancel()
+        countdown = nil
+    }
+
+    /// What the hotkey and the countdown do: execute a reviewed plan if there is one,
+    /// otherwise fill the form.
+    func trigger() {
+        if hasExecutablePlan { executePlan() } else { run(execute: true) }
+    }
+
+    /// ⌃⌥⌘F starts the run from any app, ⌃⌥⌘A arms the countdown, ⌃⌥⌘S stops. Global
+    /// monitoring needs the same Accessibility permission the driver already has.
+    private func installHotkeys() {
+        let required: NSEvent.ModifierFlags = [.control, .option, .command]
+        let handle: (NSEvent) -> Void = { [weak self] event in
+            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == required,
+                let key = event.charactersIgnoringModifiers?.lowercased()
+            else { return }
+            Task { @MainActor in
+                switch key {
+                case "f": self?.trigger()
+                case "a": self?.arm()
+                case "s":
+                    self?.disarm()
+                    self?.stop()
+                default: break
+                }
+            }
+        }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: handle) {
+            hotkeyMonitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(
+            matching: .keyDown,
+            handler: { event in
+                handle(event)
+                return event
+            })
+        {
+            hotkeyMonitors.append(local)
+        }
     }
 
     var accessibilityTrusted: Bool { AccessibilityFormDriver.isTrusted }

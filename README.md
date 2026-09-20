@@ -100,6 +100,14 @@ which Preview marked edited and auto-saved. Safari web content is observed
 with its own labels. Chrome needs `AXManualAccessibility` enabled and was not
 tested.
 
+## Recording
+
+Clicking the demo window steals focus from the target, so the run can be
+triggered without touching it: **Arm 5 s** shows a countdown in the overlay
+and then starts, and the hotkeys work from any app once Accessibility access is
+granted: ⌃⌥⌘F runs (or executes a reviewed plan), ⌃⌥⌘A arms the countdown,
+⌃⌥⌘S stops. Start the screen recording, arrange the windows, press the hotkey.
+
 ## What is and is not the model
 
 The model sees exactly upstream's context string, for example:
