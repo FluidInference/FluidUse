@@ -157,7 +157,7 @@ struct ContentView: View {
                 Spacer()
                 Toggle("Allow submit click", isOn: $model.allowSubmit)
             }
-            Text("Hotkeys from any app: ⌃⌥⌘F run · ⌃⌥⌘A arm 5 s · ⌃⌥⌘S stop")
+            Text("Hotkeys from any app: 9 run · ⌃⌥⌘A arm 5 s · ⌃⌥⌘S stop")
                 .font(.caption2).foregroundStyle(.secondary)
             HStack {
                 Text("Min confidence \(model.minConfidence, format: .number.precision(.fractionLength(2)))")

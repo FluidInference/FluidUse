@@ -105,8 +105,8 @@ tested.
 Clicking the demo window steals focus from the target, so the run can be
 triggered without touching it: **Arm 5 s** shows a countdown in the overlay
 and then starts, and the hotkeys work from any app once Accessibility access is
-granted: ⌃⌥⌘F runs (or executes a reviewed plan), ⌃⌥⌘A arms the countdown,
-⌃⌥⌘S stops. Start the screen recording, arrange the windows, press the hotkey.
+granted: a bare **9** runs (or executes a reviewed plan), ⌃⌥⌘F does the same,
+⌃⌥⌘A arms the countdown, ⌃⌥⌘S stops. Start the screen recording, arrange the windows, press the hotkey.
 
 ## What is and is not the model
 

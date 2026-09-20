@@ -110,9 +110,14 @@ final class DemoModel: ObservableObject {
     private func installHotkeys() {
         let required: NSEvent.ModifierFlags = [.control, .option, .command]
         let handle: (NSEvent) -> Void = { [weak self] event in
-            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == required,
-                let key = event.charactersIgnoringModifiers?.lowercased()
-            else { return }
+            guard let key = event.charactersIgnoringModifiers?.lowercased() else { return }
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            // A bare 9 is the recording trigger; it is ignored while a run is in progress.
+            if key == "9", modifiers.isEmpty {
+                Task { @MainActor in self?.trigger() }
+                return
+            }
+            guard modifiers == required else { return }
             Task { @MainActor in
                 switch key {
                 case "f": self?.trigger()
