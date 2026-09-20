@@ -120,6 +120,8 @@ struct ContentView: View {
                 }
             } else {
                 HStack {
+                    TextField("Window title contains… (empty = front window)", text: $model.windowFilter)
+                        .textFieldStyle(.roundedBorder)
                     Button("Observe window") { model.observe() }
                     Button("Sample PDF in Preview") { model.openSamplePDF() }
                     if !model.accessibilityTrusted {

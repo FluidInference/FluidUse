@@ -63,6 +63,25 @@ the model fills 17 of 21 fields and checks the two required declarations,
 skipping the hard negatives (emergency contact phone, referral code, "how did
 you hear about us", newsletter); "Current employer" is skipped at 94%.
 
+## Browsers
+
+Safari and Chrome are driven the same way, with three differences the driver
+handles. Their web inputs ignore `AXValue` writes (WebKit applies the write to
+whichever field has focus, not the one addressed), so browsers are typed into
+with real key events after focusing the field through Accessibility; the driver
+refuses to type unless the addressed element is the focused element in the
+targeted window, so a stray click elsewhere aborts the run instead of typing
+into another window. Chrome enables web-content accessibility a couple of
+seconds after the first client query and clips element frames to the viewport,
+so the observer waits for the web area to populate, keeps zero-height frames,
+and scrolls each element into view before acting. Type part of the window
+title in the **Window title contains** field to pin a specific window rather
+than whichever one is in front.
+
+Verified with the sample page opened as a file in Safari and in Chrome: 17
+fields typed and both required declarations checked in each, labels taken from
+the pages' own accessibility titles. Firefox and Arc are untested.
+
 Verified on Preview with the IRS W-4 (`https://www.irs.gov/pub/irs-pdf/fw4.pdf`,
 whose fields carry no tooltips): the driver observed 21 controls, labels came
 out as "First name and middle initial", "Last name", "Address", "City or
@@ -110,5 +129,6 @@ trains "Upload file" buttons as `skip`. The log labels those rows `host rule`.
 Set `CUA_DEMO_AUTORUN=1` to load the model, the sample profile, and the sample
 form and fill it without clicking; add `CUA_DEMO_QUIT=1` to exit afterwards,
 `CUA_DEMO_DOCUMENT=/path/to/file.pdf` or `CUA_DEMO_URL=…` to substitute inputs,
-`CUA_DEMO_TARGET=Preview` to drive a running app instead of the web view, and
-`CUA_DEMO_PLAN_ONLY=1` to score without acting.
+`CUA_DEMO_TARGET=Preview` (or `Safari`, `"Google Chrome"`) to drive a running
+app instead of the web view, `CUA_DEMO_WINDOW=<title substring>` to pick its
+window, and `CUA_DEMO_PLAN_ONLY=1` to score without acting.

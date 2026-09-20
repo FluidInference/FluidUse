@@ -9,7 +9,21 @@ import Foundation
 @MainActor
 final class AccessibilityFormDriver: FormDriver {
     let application: NSRunningApplication
+    /// Substring of the window title to target; nil uses the app's focused window.
+    var windowTitleFilter: String?
     private let axApplication: AXUIElement
+    private var targetWindow: AXUIElement?
+
+    /// WebKit and Chromium apply an `AXValue` write to the focused field rather than the
+    /// addressed one, so browsers are driven with real key events from the start.
+    private static let browserBundlePrefixes = [
+        "com.apple.Safari", "com.google.Chrome", "org.chromium", "com.microsoft.edgemac", "com.brave.Browser",
+        "company.thebrowser", "org.mozilla.firefox", "com.vivaldi", "com.operasoftware",
+    ]
+    private var prefersKeystrokes: Bool {
+        let bundle = application.bundleIdentifier ?? ""
+        return Self.browserBundlePrefixes.contains { bundle.hasPrefix($0) }
+    }
     private var elements: [String: AXUIElement] = [:]
     private var frames: [String: CGRect] = [:]
     private let overlay = HighlightOverlay()
@@ -28,27 +42,79 @@ final class AccessibilityFormDriver: FormDriver {
     init(application: NSRunningApplication) {
         self.application = application
         axApplication = AXUIElementCreateApplication(application.processIdentifier)
+        // Chromium browsers build their web-content accessibility tree only when asked.
+        AXUIElementSetAttributeValue(axApplication, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        AXUIElementSetAttributeValue(axApplication, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
     }
 
+    /// Brings the app and the targeted window to the front so key events reach it.
     func activate() {
         application.activate()
+        guard let targetWindow else { return }
+        AXUIElementSetAttributeValue(targetWindow, kAXMainAttribute as CFString, kCFBooleanTrue)
+        AXUIElementSetAttributeValue(targetWindow, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        AXUIElementPerformAction(targetWindow, kAXRaiseAction as CFString)
+    }
+
+    /// True when the app's keyboard focus is on `element` inside the targeted window.
+    /// Key events go wherever focus is, so typing is refused unless this holds.
+    private func isFocused(_ element: AXUIElement) -> Bool {
+        guard let focused = attribute(axApplication, kAXFocusedUIElementAttribute),
+            CFGetTypeID(focused) == AXUIElementGetTypeID(), CFEqual(focused, element)
+        else { return false }
+        if let targetWindow, let window = attribute(axApplication, kAXFocusedWindowAttribute),
+            CFGetTypeID(window) == AXUIElementGetTypeID(), !CFEqual(window, targetWindow)
+        {
+            return false
+        }
+        return true
+    }
+
+    /// Titles of the app's windows, for choosing a target.
+    func windowTitles() -> [String] {
+        ((attribute(axApplication, kAXWindowsAttribute) as? [AXUIElement]) ?? []).compactMap {
+            attribute($0, kAXTitleAttribute) as? String
+        }
     }
 
     // MARK: Observation
 
     func snapshot() async throws -> PageSnapshot {
         guard Self.isTrusted else { throw DriverError.notTrusted }
-        guard let window = focusedWindow() else { throw DriverError.noWindow(application.localizedName ?? "app") }
+        guard let window = resolveWindow() else { throw DriverError.noWindow(application.localizedName ?? "app") }
+        targetWindow = window
         let title = attribute(window, kAXTitleAttribute) as? String ?? ""
         var statics: [(CGRect, String)] = []
         var controls: [(AXUIElement, String, [AXUIElement])] = []
-        walk(window, ancestors: []) { element, role, ancestors in
-            if role == "AXStaticText", let frame = self.frame(of: element) {
-                let text = Self.clean(self.attribute(element, kAXValueAttribute) as? String ?? "")
-                if !text.isEmpty { statics.append((frame, text)) }
-            } else if let mapped = Self.roleName(for: element, role: role, ancestors: ancestors) {
-                controls.append((element, mapped, ancestors))
+        if prefersKeystrokes {
+            // Chromium enables web-content accessibility a couple of seconds after the first
+            // client query; until then the window holds only its own chrome.
+            let deadline = ContinuousClock.now + .seconds(6)
+            while ContinuousClock.now < deadline, !hasPopulatedWebArea(window) {
+                try await Task.sleep(for: .milliseconds(300))
             }
+            // The page subtree keeps filling in for a while after the web area appears.
+            try await Task.sleep(for: .milliseconds(1500))
+        }
+        // Browsers hand back a truncated tree while a window switch or layout is in
+        // flight, so walk until two consecutive passes agree on the control count.
+        var previousCount = -1
+        var stablePasses = 0
+        for attempt in 0..<8 {
+            statics = []
+            controls = []
+            walk(window, ancestors: []) { element, role, ancestors in
+                if role == "AXStaticText", let frame = self.frame(of: element) {
+                    let text = Self.clean(self.attribute(element, kAXValueAttribute) as? String ?? "")
+                    if !text.isEmpty { statics.append((frame, text)) }
+                } else if let mapped = Self.roleName(for: element, role: role, ancestors: ancestors) {
+                    controls.append((element, mapped, ancestors))
+                }
+            }
+            stablePasses = controls.count == previousCount ? stablePasses + 1 : 0
+            if stablePasses >= 2 || (!prefersKeystrokes && attempt >= 1) { break }
+            previousCount = controls.count
+            try await Task.sleep(for: .milliseconds(500))
         }
         elements = [:]
         frames = [:]
@@ -98,21 +164,74 @@ final class AccessibilityFormDriver: FormDriver {
         }
     }
 
+    /// Native apps take values through `AXValue`; browsers get key events. If a native
+    /// app does not apply the first write, the driver falls back to key events too.
     func type(_ value: String, into token: String, characterDelay: Duration) async throws {
         guard let element = elements[token] else { throw DriverError.elementMissing(token) }
         let characters = Array(value)
-        for count in 1...max(characters.count, 1) {
-            try setValue(String(characters.prefix(count)), on: element, token: token)
-            try Task.checkCancellation()
-            if characterDelay > .zero { try await Task.sleep(for: characterDelay) }
+        let probe = String(characters.prefix(1))
+        if prefersKeystrokes {
+            try await typeKeystrokes(value, into: element, token: token, characterDelay: characterDelay)
+            guard currentValue(of: element) == value else { throw DriverError.valueNotApplied(token) }
+            return
         }
-        try setValue(value, on: element, token: token)
-        let readback = attribute(element, kAXValueAttribute) as? String ?? ""
-        guard readback == value else { throw DriverError.valueNotApplied(token) }
+        try setValue(probe, on: element, token: token)
+        if currentValue(of: element) == probe {
+            for count in 2...max(characters.count, 2) where count <= characters.count {
+                try setValue(String(characters.prefix(count)), on: element, token: token)
+                try Task.checkCancellation()
+                if characterDelay > .zero { try await Task.sleep(for: characterDelay) }
+            }
+            try setValue(value, on: element, token: token)
+        } else {
+            try await typeKeystrokes(value, into: element, token: token, characterDelay: characterDelay)
+        }
+        guard currentValue(of: element) == value else { throw DriverError.valueNotApplied(token) }
+    }
+
+    private func typeKeystrokes(
+        _ value: String, into element: AXUIElement, token: String, characterDelay: Duration
+    ) async throws {
+        activate()
+        AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
+        AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        try await Task.sleep(for: .milliseconds(150))
+        guard isFocused(element) else { throw DriverError.focusLost(token) }
+        let pid = application.processIdentifier
+        let source = CGEventSource(stateID: .combinedSessionState)
+        if !currentValue(of: element).isEmpty {
+            // Select all, then the typed text replaces it.
+            let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
+            let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            down?.flags = .maskCommand
+            up?.flags = .maskCommand
+            down?.postToPid(pid)
+            up?.postToPid(pid)
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        for scalar in value.unicodeScalars {
+            try Task.checkCancellation()
+            guard isFocused(element) else { throw DriverError.focusLost(token) }
+            var unit = [UniChar](String(scalar).utf16)
+            guard let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+                let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            else { throw DriverError.actionFailed(token, -1) }
+            down.keyboardSetUnicodeString(stringLength: unit.count, unicodeString: &unit)
+            up.keyboardSetUnicodeString(stringLength: unit.count, unicodeString: &unit)
+            down.postToPid(pid)
+            up.postToPid(pid)
+            try await Task.sleep(for: max(characterDelay, .milliseconds(8)))
+        }
+        try await Task.sleep(for: .milliseconds(150))
+    }
+
+    private func currentValue(of element: AXUIElement) -> String {
+        attribute(element, kAXValueAttribute) as? String ?? ""
     }
 
     func click(_ token: String) async throws {
         guard let element = elements[token] else { throw DriverError.elementMissing(token) }
+        AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
         let status = AXUIElementPerformAction(element, kAXPressAction as CFString)
         guard status == .success else { throw DriverError.actionFailed(token, status.rawValue) }
     }
@@ -180,15 +299,19 @@ final class AccessibilityFormDriver: FormDriver {
     }
 
     static func clean(_ text: String) -> String {
-        text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        var result = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        for pattern in [#"\s*\*+\s*$"#, #"\s*\(required\)\s*$"#, #"\s+required$"#, #"\s*:\s*$"#] {
+            result = result.replacingOccurrences(
+                of: pattern, with: "", options: [.regularExpression, .caseInsensitive])
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func normalizeWindowTitle(_ title: String) -> String {
         var result = title
         let patterns = [
             #"\s+[–—-]\s+Page \d+ of \d+$"#, #"\s+[–—-]\s+\d+ pages?$"#, #"\s+[–—-]\s+Edited$"#, #"\s+[–—-]\s+Locked$"#,
-            #"\.(pdf|docx?|pages|txt)$"#,
+            #"\.(pdf|docx?|pages|txt)$"#, #"\s+-\s+Google Chrome\s+-\s+[^-]+$"#,
         ]
         for pattern in patterns {
             result = result.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
@@ -218,13 +341,19 @@ final class AccessibilityFormDriver: FormDriver {
 
     // MARK: AX plumbing
 
-    private func focusedWindow() -> AXUIElement? {
+    private func resolveWindow() -> AXUIElement? {
+        let windows = (attribute(axApplication, kAXWindowsAttribute) as? [AXUIElement]) ?? []
+        if let filter = windowTitleFilter, !filter.isEmpty {
+            return windows.first {
+                (attribute($0, kAXTitleAttribute) as? String ?? "").localizedCaseInsensitiveContains(filter)
+            }
+        }
         if let focused = attribute(axApplication, kAXFocusedWindowAttribute),
             CFGetTypeID(focused) == AXUIElementGetTypeID()
         {
             return (focused as! AXUIElement)
         }
-        return (attribute(axApplication, kAXWindowsAttribute) as? [AXUIElement])?.first
+        return windows.first
     }
 
     private func walk(
@@ -244,6 +373,18 @@ final class AccessibilityFormDriver: FormDriver {
         for child in children { walk(child, ancestors: ancestors + [element], visit: visit) }
     }
 
+    private func hasPopulatedWebArea(_ root: AXUIElement) -> Bool {
+        var found = false
+        walk(root, ancestors: []) { element, role, _ in
+            if !found, role == "AXWebArea",
+                let children = self.attribute(element, kAXChildrenAttribute) as? [AXUIElement], !children.isEmpty
+            {
+                found = true
+            }
+        }
+        return found
+    }
+
     private func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
@@ -258,7 +399,9 @@ final class AccessibilityFormDriver: FormDriver {
         var dimensions = CGSize.zero
         AXValueGetValue(position as! AXValue, .cgPoint, &point)
         AXValueGetValue(size as! AXValue, .cgSize, &dimensions)
-        guard dimensions.width > 0, dimensions.height > 0 else { return nil }
+        // Browsers clip frames to the viewport, so a scrolled-out field reports a zero
+        // height; it is still real and can be scrolled into view before acting.
+        guard dimensions.width >= 0, dimensions.height >= 0 else { return nil }
         return CGRect(origin: point, size: dimensions)
     }
 
@@ -273,6 +416,7 @@ final class AccessibilityFormDriver: FormDriver {
         case elementMissing(String)
         case valueNotApplied(String)
         case actionFailed(String, Int32)
+        case focusLost(String)
         case unsupported(String)
 
         var errorDescription: String? {
@@ -284,6 +428,8 @@ final class AccessibilityFormDriver: FormDriver {
             case .elementMissing(let token): return "Element \(token) is no longer in the window"
             case .valueNotApplied(let token): return "The app did not accept the value for \(token)"
             case .actionFailed(let token, let code): return "Accessibility action on \(token) failed (AXError \(code))"
+            case .focusLost(let token):
+                return "Stopped: keyboard focus is not on \(token) in the target window, so nothing was typed"
             case .unsupported(let what): return "\(what) is not supported"
             }
         }

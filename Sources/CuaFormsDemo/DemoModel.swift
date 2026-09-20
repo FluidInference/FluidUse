@@ -52,6 +52,8 @@ final class DemoModel: ObservableObject {
     @Published var target: Target = .web
     @Published var applications: [NSRunningApplication] = []
     @Published var lastSnapshot: PageSnapshot?
+    /// Substring of the target window's title; empty means the app's focused window.
+    @Published var windowFilter = ""
     private var axDriver: AccessibilityFormDriver?
     private var manager: CuaS1FormsManager?
     private var runTask: Task<Void, Never>?
@@ -77,11 +79,15 @@ final class DemoModel: ObservableObject {
         case .web:
             return driver
         case .application(let pid):
-            if let axDriver, axDriver.application.processIdentifier == pid { return axDriver }
+            if let axDriver, axDriver.application.processIdentifier == pid {
+                axDriver.windowTitleFilter = windowFilter
+                return axDriver
+            }
             guard let app = applications.first(where: { $0.processIdentifier == pid }) else {
                 throw AccessibilityFormDriver.DriverError.noWindow("pid \(pid)")
             }
             let created = AccessibilityFormDriver(application: app)
+            created.windowTitleFilter = windowFilter
             axDriver = created
             return created
         }
@@ -110,6 +116,7 @@ final class DemoModel: ObservableObject {
             } else {
                 loadSampleDocument()
             }
+            if let filter = ProcessInfo.processInfo.environment["CUA_DEMO_WINDOW"] { windowFilter = filter }
             if ProcessInfo.processInfo.environment["CUA_DEMO_SAMPLE_PDF"] != nil {
                 openSamplePDF()
                 while target == .web { try? await Task.sleep(for: .milliseconds(200)) }
@@ -358,7 +365,10 @@ final class DemoModel: ObservableObject {
             defer { isRunning = false }
             do {
                 let driver = try currentDriver()
-                if let axDriver = driver as? AccessibilityFormDriver, execute { axDriver.activate() }
+                if let axDriver = driver as? AccessibilityFormDriver, execute {
+                    axDriver.activate()
+                    try await Task.sleep(for: .milliseconds(400))
+                }
                 try await performRun(driver: driver, manager: manager, entities: entities, execute: execute)
             } catch is CancellationError {
                 errorMessage = "Stopped"
