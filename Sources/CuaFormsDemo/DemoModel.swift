@@ -42,13 +42,63 @@ final class DemoModel: ObservableObject {
     @Published var lastLatency: Duration?
     @Published var errorMessage: String?
 
+    /// Where decisions are executed: the embedded page or another app's window.
+    enum Target: Hashable {
+        case web
+        case application(pid_t)
+    }
+
     let driver = WebFormDriver()
+    @Published var target: Target = .web
+    @Published var applications: [NSRunningApplication] = []
+    @Published var lastSnapshot: PageSnapshot?
+    private var axDriver: AccessibilityFormDriver?
     private var manager: CuaS1FormsManager?
     private var runTask: Task<Void, Never>?
 
     init() {
         driver.onNavigation = { [weak self] in self?.refreshPageInfo() }
+        refreshApplications()
         if ProcessInfo.processInfo.environment["CUA_DEMO_AUTORUN"] != nil { autorun() }
+    }
+
+    var accessibilityTrusted: Bool { AccessibilityFormDriver.isTrusted }
+
+    func refreshApplications() {
+        applications = AccessibilityFormDriver.candidates()
+        if case .application(let pid) = target, !applications.contains(where: { $0.processIdentifier == pid }) {
+            target = .web
+        }
+    }
+
+    /// The driver for the selected target; the Accessibility driver is rebuilt per app.
+    private func currentDriver() throws -> any FormDriver {
+        switch target {
+        case .web:
+            return driver
+        case .application(let pid):
+            if let axDriver, axDriver.application.processIdentifier == pid { return axDriver }
+            guard let app = applications.first(where: { $0.processIdentifier == pid }) else {
+                throw AccessibilityFormDriver.DriverError.noWindow("pid \(pid)")
+            }
+            let created = AccessibilityFormDriver(application: app)
+            axDriver = created
+            return created
+        }
+    }
+
+    /// Re-observe the target without scoring, for the schematic pane.
+    func observe() {
+        Task {
+            do {
+                let snapshot = try await currentDriver().snapshot()
+                lastSnapshot = snapshot
+                pageTitle = snapshot.title
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     /// `CUA_DEMO_AUTORUN=1`: load the model, the sample profile and the sample form, fill it,
@@ -60,7 +110,11 @@ final class DemoModel: ObservableObject {
             } else {
                 loadSampleDocument()
             }
-            if let page = ProcessInfo.processInfo.environment["CUA_DEMO_URL"], let url = URL(string: page) {
+            if let appName = ProcessInfo.processInfo.environment["CUA_DEMO_TARGET"],
+                let app = applications.first(where: { $0.localizedName == appName })
+            {
+                target = .application(app.processIdentifier)
+            } else if let page = ProcessInfo.processInfo.environment["CUA_DEMO_URL"], let url = URL(string: page) {
                 driver.load(url)
             } else {
                 loadSampleForm()
@@ -78,9 +132,11 @@ final class DemoModel: ObservableObject {
                 if ProcessInfo.processInfo.environment["CUA_DEMO_QUIT"] != nil { exit(1) }
                 return
             }
-            while driver.isLoading || driver.webView.url == nil { try? await Task.sleep(for: .milliseconds(100)) }
+            if target == .web {
+                while driver.isLoading || driver.webView.url == nil { try? await Task.sleep(for: .milliseconds(100)) }
+            }
             try? await Task.sleep(for: .milliseconds(500))
-            run(execute: true)
+            run(execute: ProcessInfo.processInfo.environment["CUA_DEMO_PLAN_ONLY"] == nil)
             _ = await runTask?.value
             if let median = medianLatency {
                 print("scored \(scoredCount) elements, \(actionCount) actions, median \(ContentView.format(median))")
@@ -251,7 +307,9 @@ final class DemoModel: ObservableObject {
         runTask = Task {
             defer { isRunning = false }
             do {
-                try await performRun(manager: manager, entities: entities, execute: execute)
+                let driver = try currentDriver()
+                if let axDriver = driver as? AccessibilityFormDriver, execute { axDriver.activate() }
+                try await performRun(driver: driver, manager: manager, entities: entities, execute: execute)
             } catch is CancellationError {
                 errorMessage = "Stopped"
             } catch {
@@ -264,9 +322,13 @@ final class DemoModel: ObservableObject {
         runTask?.cancel()
     }
 
-    private func performRun(manager: CuaS1FormsManager, entities: [Entity], execute: Bool) async throws {
+    private func performRun(
+        driver: any FormDriver, manager: CuaS1FormsManager, entities: [Entity], execute: Bool
+    ) async throws {
         let snapshot = try await driver.snapshot()
+        lastSnapshot = snapshot
         pageTitle = snapshot.title
+        print("observed \(snapshot.elements.count) elements in \"\(snapshot.title)\"")
         let title = FormSchema.normalizeTitle(snapshot.title)
         let options = FormSchema.renderOptions(entities: entities)
         let threshold = Float(minConfidence)
@@ -276,10 +338,13 @@ final class DemoModel: ObservableObject {
         for element in snapshot.elements where element.isActionable {
             try Task.checkCancellation()
             let context = FormSchema.renderContext(formTitle: title, element: element)
-            let clock = ContinuousClock()
-            let start = clock.now
-            let result = try await manager.score(context: context, options: options)
-            let latency = clock.now - start
+            // Time the call off the main actor so UI work does not inflate the number.
+            let (result, latency) = try await Task.detached(priority: .userInitiated) {
+                let clock = ContinuousClock()
+                let start = clock.now
+                let result = try await manager.score(context: context, options: options)
+                return (result, clock.now - start)
+            }.value
             lastLatency = latency
             let (action, entityIndex) = FormSchema.decode(
                 optionIndex: result.selectedIndex, entityCount: entities.count)

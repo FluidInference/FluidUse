@@ -11,7 +11,11 @@ struct ContentView: View {
             sidebar
                 .frame(minWidth: 380, idealWidth: 420, maxWidth: 520)
             ZStack(alignment: .topTrailing) {
-                WebViewContainer(webView: model.driver.webView)
+                if model.target == .web {
+                    WebViewContainer(webView: model.driver.webView)
+                } else {
+                    SnapshotSchematic(snapshot: model.lastSnapshot, rows: model.rows)
+                }
                 hud.padding(12)
             }
             .frame(minWidth: 640)
@@ -90,15 +94,37 @@ struct ContentView: View {
     private var pageSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Form page").font(.headline)
+                Text("Target").font(.headline)
                 Spacer()
-                Button("Sample form") { model.loadSampleForm() }
+                Picker("", selection: $model.target) {
+                    Text("Embedded web page").tag(DemoModel.Target.web)
+                    ForEach(model.applications, id: \.processIdentifier) { app in
+                        Text(app.localizedName ?? "?").tag(DemoModel.Target.application(app.processIdentifier))
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 220)
+                Button {
+                    model.refreshApplications()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
             }
-            HStack {
-                TextField("https://…", text: $model.urlField)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { model.navigate() }
-                Button("Go") { model.navigate() }
+            if model.target == .web {
+                HStack {
+                    TextField("https://…", text: $model.urlField)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { model.navigate() }
+                    Button("Go") { model.navigate() }
+                    Button("Sample form") { model.loadSampleForm() }
+                }
+            } else {
+                HStack {
+                    Button("Observe window") { model.observe() }
+                    if !model.accessibilityTrusted {
+                        Text("Accessibility access not granted").font(.caption).foregroundStyle(.red)
+                    }
+                }
             }
             if !model.pageTitle.isEmpty {
                 Text(model.pageTitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -239,6 +265,61 @@ private struct DecisionRowView: View {
         case .click: return .orange
         case .skip: return .secondary
         case .attach: return .teal
+        }
+    }
+}
+
+/// What the model observed, drawn to scale: control frames with their derived labels,
+/// tinted by the decision once one exists.
+private struct SnapshotSchematic: View {
+    let snapshot: PageSnapshot?
+    let rows: [DecisionRow]
+
+    var body: some View {
+        GeometryReader { geometry in
+            if let snapshot, !snapshot.elements.isEmpty {
+                let bounds = snapshot.elements.map(\.frame).reduce(snapshot.elements[0].frame) { $0.union($1) }
+                    .insetBy(dx: -40, dy: -40)
+                let scale = min(geometry.size.width / bounds.width, geometry.size.height / bounds.height)
+                ZStack(alignment: .topLeading) {
+                    Color(nsColor: .textBackgroundColor)
+                    ForEach(snapshot.elements) { element in
+                        let frame = element.frame
+                        let decision = rows.first { $0.element.token == element.token }
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(color(for: decision).opacity(0.18))
+                            RoundedRectangle(cornerRadius: 2)
+                                .stroke(color(for: decision), lineWidth: 1)
+                            Text(element.label.isEmpty ? element.role : element.label)
+                                .font(.system(size: max(7, 9 * scale)))
+                                .lineLimit(1)
+                                .padding(.leading, 2)
+                        }
+                        .frame(width: max(frame.width * scale, 6), height: max(frame.height * scale, 6))
+                        .offset(x: (frame.minX - bounds.minX) * scale, y: (frame.minY - bounds.minY) * scale)
+                    }
+                    Text("\(snapshot.url) · \(snapshot.elements.count) controls observed through Accessibility")
+                        .font(.caption).foregroundStyle(.secondary).padding(8)
+                }
+            } else {
+                VStack(spacing: 8) {
+                    Image(systemName: "macwindow.on.rectangle").font(.largeTitle).foregroundStyle(.secondary)
+                    Text("Observe window to see what the model will score").foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private func color(for row: DecisionRow?) -> Color {
+        switch row?.action {
+        case .fill: return .blue
+        case .check: return .purple
+        case .click: return .orange
+        case .attach: return .teal
+        case .skip: return .gray
+        case nil: return .secondary
         }
     }
 }
