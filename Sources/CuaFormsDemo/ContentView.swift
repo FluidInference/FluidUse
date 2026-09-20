@@ -381,7 +381,7 @@ private struct UtilizationTiles: View {
     let countdown: Int?
 
     var body: some View {
-        HStack(spacing: 12) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
             tile(
                 "NEURAL ENGINE",
                 monitor.anePowerMilliwatts.map { "\($0) mW" } ?? String(format: "%.1f%% busy", monitor.aneDutyPercent),
@@ -406,7 +406,7 @@ private struct UtilizationTiles: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
             Text(value).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(accent)
-                .lineLimit(1).minimumScaleFactor(0.5)
+                .lineLimit(1).minimumScaleFactor(0.4)
             Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

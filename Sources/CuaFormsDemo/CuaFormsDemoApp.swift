@@ -17,7 +17,7 @@ struct CuaFormsDemoApp: App {
         WindowGroup("CUA-S1-FORMS on-device") {
             ContentView()
                 .environmentObject(model)
-                .frame(minWidth: 640, idealWidth: 760, minHeight: 760, idealHeight: 1000)
+                .frame(minWidth: 380, idealWidth: 760, minHeight: 280, idealHeight: 1000)
         }
     }
 }
