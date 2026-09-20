@@ -110,7 +110,10 @@ final class DemoModel: ObservableObject {
             } else {
                 loadSampleDocument()
             }
-            if let appName = ProcessInfo.processInfo.environment["CUA_DEMO_TARGET"],
+            if ProcessInfo.processInfo.environment["CUA_DEMO_SAMPLE_PDF"] != nil {
+                openSamplePDF()
+                while target == .web { try? await Task.sleep(for: .milliseconds(200)) }
+            } else if let appName = ProcessInfo.processInfo.environment["CUA_DEMO_TARGET"],
                 let app = applications.first(where: { $0.localizedName == appName })
             {
                 target = .application(app.processIdentifier)
@@ -136,6 +139,10 @@ final class DemoModel: ObservableObject {
                 while driver.isLoading || driver.webView.url == nil { try? await Task.sleep(for: .milliseconds(100)) }
             }
             try? await Task.sleep(for: .milliseconds(500))
+            if ProcessInfo.processInfo.environment["CUA_DEMO_PREPARE"] != nil {
+                observe()
+                return
+            }
             run(execute: ProcessInfo.processInfo.environment["CUA_DEMO_PLAN_ONLY"] == nil)
             _ = await runTask?.value
             if let median = medianLatency {
@@ -275,6 +282,49 @@ final class DemoModel: ObservableObject {
         rows = []
         urlField = ""
         driver.load(url)
+    }
+
+    /// Copies the bundled fillable PDF to a temporary file (Preview auto-saves into it),
+    /// opens it, and targets Preview once it is running.
+    func openSamplePDF() {
+        guard
+            let source = Bundle.module.url(
+                forResource: "sample-application", withExtension: "pdf", subdirectory: "Resources")
+        else {
+            errorMessage = "Sample PDF is missing from the bundle"
+            return
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("CuaFormsDemo", isDirectory: true)
+        let copy = folder.appendingPathComponent("Example Robotics - Job Application.pdf")
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try? FileManager.default.removeItem(at: copy)
+            try FileManager.default.copyItem(at: source, to: copy)
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+        guard let preview = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Preview") else {
+            errorMessage = "Preview is not available"
+            return
+        }
+        rows = []
+        lastSnapshot = nil
+        NSWorkspace.shared.open([copy], withApplicationAt: preview, configuration: NSWorkspace.OpenConfiguration()) {
+            _, error in
+            Task { @MainActor in
+                if let error {
+                    self.errorMessage = error.localizedDescription
+                    return
+                }
+                try? await Task.sleep(for: .seconds(2))
+                self.refreshApplications()
+                if let app = self.applications.first(where: { $0.bundleIdentifier == "com.apple.Preview" }) {
+                    self.target = .application(app.processIdentifier)
+                    self.observe()
+                }
+            }
+        }
     }
 
     private func refreshPageInfo() {

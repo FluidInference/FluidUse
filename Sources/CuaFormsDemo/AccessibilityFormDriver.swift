@@ -58,8 +58,10 @@ final class AccessibilityFormDriver: FormDriver {
             let token = "ax-\(index + 1)"
             elements[token] = element
             frames[token] = frame
+            // Buttons carry their own titles; page text near an untitled button is not its name.
             let label = Self.stripEnumerator(
-                explicitLabel(element) ?? Self.nearbyLabel(for: frame, role: role, statics: statics))
+                explicitLabel(element)
+                    ?? (role == "Button" ? "" : Self.nearbyLabel(for: frame, role: role, statics: statics)))
             let value: String
             var checked: Bool?
             if role == "CheckBox" {
@@ -184,7 +186,11 @@ final class AccessibilityFormDriver: FormDriver {
 
     static func normalizeWindowTitle(_ title: String) -> String {
         var result = title
-        for pattern in [#"\s+[–—-]\s+Page \d+ of \d+$"#, #"\s+[–—-]\s+Edited$"#, #"\s+[–—-]\s+Locked$"#] {
+        let patterns = [
+            #"\s+[–—-]\s+Page \d+ of \d+$"#, #"\s+[–—-]\s+\d+ pages?$"#, #"\s+[–—-]\s+Edited$"#, #"\s+[–—-]\s+Locked$"#,
+            #"\.(pdf|docx?|pages|txt)$"#,
+        ]
+        for pattern in patterns {
             result = result.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
         }
         return FormSchema.normalizeTitle(result)

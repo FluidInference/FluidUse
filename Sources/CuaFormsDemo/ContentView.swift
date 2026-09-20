@@ -121,6 +121,7 @@ struct ContentView: View {
             } else {
                 HStack {
                     Button("Observe window") { model.observe() }
+                    Button("Sample PDF in Preview") { model.openSamplePDF() }
                     if !model.accessibilityTrusted {
                         Text("Accessibility access not granted").font(.caption).foregroundStyle(.red)
                     }
