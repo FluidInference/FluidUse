@@ -250,6 +250,7 @@ final class DemoModel: ObservableObject {
             row.status = "answer failed: \(error.localizedDescription)"
         }
         rows[rowIndex].status = row.status
+        appendConsole(["  ✓ \(row.status)"])
         try await Task.sleep(for: .milliseconds(120))
     }
 
@@ -725,6 +726,7 @@ final class DemoModel: ObservableObject {
                 break
             }
             rows[rowIndex].status = row.status
+            appendConsole(["  ✓ \(row.status)"])
             try await Task.sleep(for: .milliseconds(120))
         }
 

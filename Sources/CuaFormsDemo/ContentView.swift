@@ -6,35 +6,14 @@ import WebKit
 struct ContentView: View {
     @EnvironmentObject private var model: DemoModel
 
-    var body: some View {
-        HSplitView {
-            sidebar
-                .frame(minWidth: 380, idealWidth: 420, maxWidth: 520)
-            Group {
-                if model.target == .web {
-                    VSplitView {
-                        ZStack(alignment: .topTrailing) {
-                            WebViewContainer(webView: model.driver.webView)
-                            hud.padding(12)
-                        }
-                        .frame(minHeight: 240)
-                        ConsoleView(lines: model.console)
-                            .frame(minHeight: 160, idealHeight: 300)
-                    }
-                } else {
-                    ZStack(alignment: .topTrailing) {
-                        ConsoleView(lines: model.console)
-                        hud.padding(12)
-                    }
-                }
-            }
-            .frame(minWidth: 640)
-        }
+    @State private var lowerPane = LowerPane.console
+
+    enum LowerPane: String, CaseIterable {
+        case console = "Console"
+        case decisions = "Decisions"
     }
 
-    // MARK: Sidebar
-
-    private var sidebar: some View {
+    var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             modelSection
             Divider()
@@ -44,13 +23,46 @@ struct ContentView: View {
             Divider()
             runSection
             Divider()
-            decisionsSection
+            HStack {
+                Picker("", selection: $lowerPane) {
+                    ForEach(LowerPane.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 200)
+                Spacer()
+                if model.scoredCount > 0, let median = model.medianLatency {
+                    Text("\(model.scoredCount) scored · \(model.actionCount) actions · median \(Self.format(median))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            hud
+            Group {
+                if model.target == .web {
+                    VSplitView {
+                        WebViewContainer(webView: model.driver.webView).frame(minHeight: 200)
+                        lowerContent.frame(minHeight: 160)
+                    }
+                } else {
+                    lowerContent
+                }
+            }
+            .frame(maxHeight: .infinity)
             if let message = model.errorMessage {
                 Text(message).font(.callout).foregroundStyle(.red).textSelection(.enabled)
             }
         }
         .padding(14)
     }
+
+    @ViewBuilder private var lowerContent: some View {
+        switch lowerPane {
+        case .console: ConsoleView(lines: model.console)
+        case .decisions: decisionsList
+        }
+    }
+
+    // MARK: Sections
 
     private var modelSection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -193,16 +205,8 @@ struct ContentView: View {
         .disabled(model.isRunning && false)
     }
 
-    private var decisionsSection: some View {
+    private var decisionsList: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("Decisions").font(.headline)
-                Spacer()
-                if model.scoredCount > 0, let median = model.medianLatency {
-                    Text("\(model.scoredCount) scored · \(model.actionCount) actions · median \(Self.format(median))")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 3) {
@@ -232,16 +236,13 @@ struct ContentView: View {
     // MARK: HUD
 
     private var hud: some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            utilization
-            if let countdown = model.countdown {
-                Text("starting in \(countdown)")
-                    .font(.system(.title2, design: .rounded)).fontWeight(.bold)
-            }
-            HStack(spacing: 6) {
-                Circle().fill(model.placement == nil ? Color.gray : Color.green).frame(width: 8, height: 8)
-                Text(model.placement == nil ? "On-device · Core ML" : "On-device · Neural Engine")
-                    .font(.system(.caption, design: .rounded)).fontWeight(.semibold)
+        HStack(spacing: 10) {
+            Circle().fill(model.placement == nil ? Color.gray : Color.green).frame(width: 8, height: 8)
+            Text(model.placement == nil ? "On-device · Core ML" : "On-device · Neural Engine")
+                .font(.system(.caption, design: .rounded)).fontWeight(.semibold)
+            if let placement = model.placement {
+                Text("\(placement.neuralEngine)/\(placement.total) ops on ANE").font(
+                    .system(.caption2, design: .monospaced))
             }
             if let latency = model.lastLatency {
                 Text(
@@ -250,14 +251,12 @@ struct ContentView: View {
                 )
                 .font(.system(.caption2, design: .monospaced))
             }
-            if let placement = model.placement {
-                Text("\(placement.neuralEngine)/\(placement.total) ops on ANE")
-                    .font(.system(.caption2, design: .monospaced))
+            if let countdown = model.countdown {
+                Text("starting in \(countdown)").font(.system(.caption, design: .rounded)).fontWeight(.bold)
             }
+            Spacer()
+            utilization
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .allowsHitTesting(false)
     }
 
     private var utilization: some View {
