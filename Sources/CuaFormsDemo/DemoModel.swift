@@ -47,6 +47,8 @@ final class DemoModel: ObservableObject {
     @Published var errorMessage: String?
     /// Seconds left before an armed run starts; nil when not armed.
     @Published var countdown: Int?
+    /// Presentation mode hides the controls and enlarges the utilization readouts.
+    @Published var presenting = ProcessInfo.processInfo.environment["CUA_DEMO_PRESENT"] != nil
     /// Model input and output per decision, verbatim, for the console pane.
     @Published var console: [String] = []
     let monitor = SystemMonitor()
@@ -131,6 +133,7 @@ final class DemoModel: ObservableObject {
                 case "s":
                     self?.disarm()
                     self?.stop()
+                case "p": self?.presenting.toggle()
                 default: break
                 }
             }

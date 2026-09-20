@@ -14,6 +14,37 @@ struct ContentView: View {
     }
 
     var body: some View {
+        if model.presenting {
+            presentation
+        } else {
+            controls
+        }
+    }
+
+    /// Recording layout: big Neural Engine and CPU readouts, then the console.
+    private var presentation: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("CUA-S1-FORMS").font(.system(size: 22, weight: .bold, design: .rounded))
+                Text("706K params · Core ML · on-device").font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                if let placement = model.placement {
+                    Text("\(placement.neuralEngine)/\(placement.total) ops on Neural Engine")
+                        .font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary)
+                }
+            }
+            UtilizationTiles(
+                monitor: model.monitor, lastLatency: model.lastLatency, median: model.medianLatency,
+                scored: model.scoredCount, actions: model.actionCount, countdown: model.countdown)
+            ConsoleView(lines: model.console).frame(maxHeight: .infinity)
+            if let message = model.errorMessage {
+                Text(message).font(.callout).foregroundStyle(.red)
+            }
+        }
+        .padding(14)
+    }
+
+    private var controls: some View {
         VStack(alignment: .leading, spacing: 10) {
             modelSection
             Divider()
@@ -195,7 +226,7 @@ struct ContentView: View {
                 Spacer()
                 Toggle("Allow submit click", isOn: $model.allowSubmit)
             }
-            Text("Hotkeys from any app: 9 run · ⌃⌥⌘A arm 5 s · ⌃⌥⌘S stop")
+            Text("Hotkeys from any app: 9 run · ⌃⌥⌘A arm 5 s · ⌃⌥⌘S stop · ⌃⌥⌘P presentation")
                 .font(.caption2).foregroundStyle(.secondary)
             HStack {
                 Text("Min confidence \(model.minConfidence, format: .number.precision(.fractionLength(2)))")
@@ -337,6 +368,50 @@ private struct DecisionRowView: View {
         case .attach: return .teal
         case .answer: return .green
         }
+    }
+}
+
+/// Large readouts for recording: Neural Engine first, then CPU.
+private struct UtilizationTiles: View {
+    @ObservedObject var monitor: SystemMonitor
+    let lastLatency: Duration?
+    let median: Duration?
+    let scored: Int
+    let actions: Int
+    let countdown: Int?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            tile(
+                "NEURAL ENGINE",
+                monitor.anePowerMilliwatts.map { "\($0) mW" } ?? String(format: "%.1f%% busy", monitor.aneDutyPercent),
+                monitor.anePowerMilliwatts == nil ? "model duty cycle" : "power (powermetrics)", accent: .green)
+            tile("CPU · THIS APP", String(format: "%.0f%%", monitor.processCPUPercent), "of one core", accent: .blue)
+            tile(
+                "CPU · SYSTEM", String(format: "%.0f%%", monitor.systemCPUPercent),
+                monitor.cpuPowerMilliwatts.map { "\($0) mW package" } ?? "all cores", accent: .blue)
+            tile(
+                "DECISION",
+                lastLatency.map { ContentView.format($0) } ?? "—",
+                median.map { "median \(ContentView.format($0)) · \(scored) scored · \(actions) actions" }
+                    ?? "per model call",
+                accent: .orange)
+            if let countdown {
+                tile("STARTING IN", "\(countdown)", "seconds", accent: .red)
+            }
+        }
+    }
+
+    private func tile(_ title: String, _ value: String, _ detail: String, accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(accent)
+                .lineLimit(1).minimumScaleFactor(0.5)
+            Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
     }
 }
 
