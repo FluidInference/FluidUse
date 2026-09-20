@@ -1,0 +1,20 @@
+Applicant Profile
+Name: Maya Okafor
+Email: maya.okafor@example.invalid
+Phone: (503) 555-0142
+Address: 2210 Lakeview Ave
+City: Portland
+State: OR
+ZIP: 97205
+Country: United States
+LinkedIn: https://profiles.example.invalid/maya-okafor
+Website: https://okafor.example.invalid
+Current employer: Example Robotics
+Job title: Software Engineer
+Expected salary: $145,000
+Available: 2026-11-02
+University: Test University
+Degree: B.S. Computer Science
+Graduated: 2019
+Document ID: DOC-482913
+Printed: 2026-09-20

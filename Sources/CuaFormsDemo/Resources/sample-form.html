@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Senior Software Engineer, Perception - Example Robotics - Job Application</title>
+<style>
+  :root { color-scheme: light; --green: #0caa41; --ink: #2d2d2d; --muted: #6b7280; --line: #e5e7eb; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--ink); background: #f3f4f6; }
+  nav { background: #fff; border-bottom: 1px solid var(--line); height: 64px; display: flex; align-items: center; padding: 0 32px; gap: 28px; position: sticky; top: 0; z-index: 2; }
+  .logo { font-weight: 800; font-size: 22px; color: var(--green); letter-spacing: -.5px; }
+  .search { flex: 1; max-width: 520px; display: flex; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; }
+  .search span { padding: 9px 12px; color: var(--muted); font-size: 14px; }
+  .search span + span { border-left: 1px solid var(--line); }
+  nav a { color: var(--ink); text-decoration: none; font-weight: 600; font-size: 14px; }
+  .avatar { margin-left: auto; width: 34px; height: 34px; border-radius: 50%; background: #d1fae5; color: #065f46; display: grid; place-items: center; font-weight: 700; }
+  .wrap { max-width: 1120px; margin: 24px auto; display: grid; grid-template-columns: 1fr 380px; gap: 24px; padding: 0 24px; }
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+  .job-head { padding: 24px 28px; display: flex; gap: 18px; align-items: flex-start; }
+  .clogo { width: 64px; height: 64px; border-radius: 10px; background: #111827; color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 22px; }
+  .job-head h1 { margin: 0 0 4px; font-size: 22px; }
+  .job-head .meta { color: var(--muted); font-size: 14px; }
+  .stars { color: #f59e0b; font-size: 13px; }
+  .pill { display: inline-block; background: #ecfdf5; color: #047857; font-weight: 700; font-size: 12px; padding: 3px 9px; border-radius: 999px; margin-top: 8px; }
+  .desc { padding: 0 28px 24px; font-size: 14px; color: #374151; }
+  .desc h3 { margin: 18px 0 6px; font-size: 15px; }
+  .desc ul { margin: 0; padding-left: 18px; }
+  .apply { padding: 22px 24px; }
+  .apply h2 { margin: 0 0 2px; font-size: 18px; }
+  .apply .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .section { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 8px; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  label { font-size: 13px; font-weight: 600; }
+  .req::after { content: " *"; color: #dc2626; }
+  input[type=text], input[type=email], input[type=tel], input[type=url], textarea {
+    font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; }
+  input:focus, textarea:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px rgba(12,170,65,.18); }
+  textarea { min-height: 80px; resize: vertical; }
+  .upload { border: 1px dashed #cbd5e1; border-radius: 6px; padding: 12px; text-align: center; font-size: 13px; color: var(--muted); }
+  .upload input { display: none; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; font-size: 13px; margin: 6px 0; }
+  .check input { margin-top: 3px; }
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  button { font: inherit; font-size: 14px; padding: 10px 16px; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; }
+  button.primary { background: var(--green); border-color: var(--green); color: #fff; font-weight: 700; flex: 1; }
+  .banner { display: none; margin-top: 14px; padding: 12px 14px; border-radius: 6px; background: #ecfdf5; color: #065f46; font-weight: 600; font-size: 14px; }
+  .banner.show { display: block; }
+  .sticky { position: sticky; top: 84px; }
+  @media (max-width: 1000px) {
+    .wrap { grid-template-columns: 1fr; }
+    .search { display: none; }
+    .sticky { position: static; }
+  }
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">openroles</div>
+  <div class="search"><span>Senior Software Engineer</span><span>Portland, OR</span></div>
+  <a href="#">Jobs</a><a href="#">Companies</a><a href="#">Salaries</a>
+  <div class="avatar">M</div>
+</nav>
+
+<div class="wrap">
+  <div>
+    <div class="card">
+      <div class="job-head">
+        <div class="clogo">ER</div>
+        <div>
+          <div class="meta">Example Robotics <span class="stars">★★★★☆</span> 4.3</div>
+          <h1>Senior Software Engineer, Perception</h1>
+          <div class="meta">Portland, OR · Full-time · $150K – $190K (Employer est.)</div>
+          <span class="pill">⚡ Easy Apply</span>
+        </div>
+      </div>
+      <div class="desc">
+        <h3>About the role</h3>
+        <p>Example Robotics builds autonomous mobile manipulators for warehouse logistics. The perception team owns the
+          on-robot vision stack: detection, tracking, and depth estimation running on embedded accelerators.</p>
+        <h3>What you'll do</h3>
+        <ul>
+          <li>Ship real-time perception models to a fleet of 400+ robots</li>
+          <li>Own the data engine: labeling, active learning, evaluation</li>
+          <li>Profile and optimize inference on embedded GPUs and NPUs</li>
+        </ul>
+        <h3>What we're looking for</h3>
+        <ul>
+          <li>5+ years building production computer vision systems</li>
+          <li>Strong C++ and Python; experience with CUDA or similar</li>
+          <li>Bonus: robotics, SLAM, or edge deployment experience</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="sticky">
+    <form id="application" class="card apply" autocomplete="off" onsubmit="return false;">
+      <h2>Apply to Example Robotics</h2>
+      <div class="sub">Senior Software Engineer, Perception · Easy Apply</div>
+
+      <div class="section">Contact</div>
+      <div class="row">
+        <div class="field"><label class="req" for="first">First name</label><input id="first" type="text"></div>
+        <div class="field"><label class="req" for="last">Last name</label><input id="last" type="text"></div>
+      </div>
+      <div class="field"><label class="req" for="email">Email address</label><input id="email" type="email"></div>
+      <div class="row">
+        <div class="field"><label class="req" for="phone">Phone number</label><input id="phone" type="tel"></div>
+        <div class="field"><label for="workphone">Work phone</label><input id="workphone" type="tel"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="city">City</label><input id="city" type="text"></div>
+        <div class="field"><label for="state">State</label><input id="state" type="text"></div>
+      </div>
+      <div class="field"><label for="country">Country</label><input id="country" type="text"></div>
+
+      <div class="section">Resume</div>
+      <label class="upload" id="resume-label">Upload resume (PDF, DOCX) <input type="file" id="resume"
+        onchange="document.getElementById('resume-label').firstChild.textContent = this.files[0] ? '📄 ' + this.files[0].name + ' ' : 'Upload resume (PDF, DOCX) '"></label>
+
+      <div class="section">Profile</div>
+      <div class="field"><label for="linkedin">LinkedIn profile</label><input id="linkedin" type="url"></div>
+      <div class="field"><label for="site">Portfolio URL</label><input id="site" type="url"></div>
+      <div class="row">
+        <div class="field"><label for="employer">Current company</label><input id="employer" type="text"></div>
+        <div class="field"><label for="title">Current job title</label><input id="title" type="text"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="salary">Desired salary</label><input id="salary" type="text"></div>
+        <div class="field"><label for="start">Earliest start date</label><input id="start" type="text"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="school">School</label><input id="school" type="text"></div>
+        <div class="field"><label for="degree">Degree</label><input id="degree" type="text"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="grad">Graduation year</label><input id="grad" type="text"></div>
+        <div class="field"><label for="source">How did you hear about us?</label><input id="source" type="text"></div>
+      </div>
+      <div class="field"><label for="cover">Message to hiring manager</label><textarea id="cover"></textarea></div>
+
+      <div class="section">Declarations</div>
+      <label class="check"><input type="checkbox" id="auth"> I am legally authorized to work in this country</label>
+      <label class="check"><input type="checkbox" id="accurate"> I certify the information above is accurate</label>
+      <label class="check"><input type="checkbox" id="news"> Send me job alerts for similar roles</label>
+
+      <div class="actions">
+        <button type="button">Save for later</button>
+        <button type="button" class="primary" onclick="document.getElementById('done').classList.add('show')">Submit application</button>
+      </div>
+      <div id="done" class="banner">✓ Application submitted to Example Robotics.</div>
+    </form>
+  </div>
+</div>
+</body>
+</html>
