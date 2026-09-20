@@ -107,6 +107,27 @@ which Preview marked edited and auto-saved. Safari web content is observed
 with its own labels. Chrome needs `AXManualAccessibility` enabled and was not
 tested.
 
+## Answer sheet
+
+The model only matches a form field to one of the values it is handed, and it
+was trained on short captions ("Phone number"), not on questions ("Will you
+require Visa Sponsorship now, or in the future?"). Even with the answers in the
+document it skips such questions. So predetermined answers are a separate,
+host-side input: **Answer sheet › Open…** loads a text file of
+`question text contains => answer` lines (see `Resources/sample-answers.txt`),
+and any element whose label contains the question text is handled by the
+harness without consulting the model, logged in green as `answer sheet`. Combo
+boxes get the answer typed and confirmed; affirmative answers (Yes, I agree, I
+acknowledge) take the first option, since consent lists word it their own way;
+text fields are typed; checkboxes are set. Where the answers come from, a saved
+sheet or an LLM run once per applicant, is outside this demo.
+
+On the live Greenhouse posting that leaves only the résumé upload for the
+person: the model fills the contact and profile fields, the answer sheet handles
+Country, Location, the eligibility questions, "where did you hear about us",
+and the two acknowledgments, and the demographic questions stay untouched.
+`CUA_DEMO_ANSWERS=/path/to/answers.txt` loads a sheet in autorun mode.
+
 ## Recording
 
 Clicking the demo window steals focus from the target, so the run can be

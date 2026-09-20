@@ -71,6 +71,16 @@ struct ContentView: View {
                 Text("\(model.documentName) · \(model.enabledEntities.count) of \(model.entities.count) entities")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            HStack {
+                Text("Answer sheet").font(.subheadline).fontWeight(.medium)
+                Spacer()
+                if !model.answersName.isEmpty {
+                    Text("\(model.answersName) · \(model.answers.count) answers").font(.caption).foregroundStyle(
+                        .secondary)
+                    Button("Clear") { model.clearAnswers() }
+                }
+                Button("Open…") { openAnswers() }
+            }
             if !model.entities.isEmpty {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 2) {
@@ -246,6 +256,16 @@ struct ContentView: View {
         return String(format: "%.2f ms", milliseconds)
     }
 
+    private func openAnswers() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose a text file with `question text contains => answer` lines"
+        if panel.runModal() == .OK, let url = panel.url {
+            model.loadAnswers(url)
+        }
+    }
+
     private func openDocument() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.pdf, .plainText]
@@ -270,6 +290,9 @@ private struct DecisionRowView: View {
                     if row.action == .fill, let entity = row.entity {
                         Text("← \(entity.label): \(entity.value)").lineLimit(1)
                     }
+                    if row.action == .answer, let entity = row.entity {
+                        Text("← \(entity.value)").lineLimit(1)
+                    }
                 }
                 .font(.caption2)
             }
@@ -292,6 +315,7 @@ private struct DecisionRowView: View {
         case .click: return .orange
         case .skip: return .secondary
         case .attach: return .teal
+        case .answer: return .green
         }
     }
 }
@@ -345,6 +369,7 @@ private struct SnapshotSchematic: View {
         case .check: return .purple
         case .click: return .orange
         case .attach: return .teal
+        case .answer: return .green
         case .skip: return .gray
         case nil: return .secondary
         }

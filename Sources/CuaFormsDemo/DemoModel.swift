@@ -31,6 +31,8 @@ final class DemoModel: ObservableObject {
     @Published var modelStatus = "Model not loaded"
     @Published var placement: ComputePlacement?
     @Published var entities: [Entity] = []
+    @Published var answers: [PredeterminedAnswer] = []
+    @Published var answersName = ""
     @Published var documentName = ""
     private(set) var documentURL: URL?
     @Published var pageTitle = ""
@@ -172,6 +174,61 @@ final class DemoModel: ObservableObject {
         }
     }
 
+    /// Applies an answer-sheet entry without consulting the model and logs it as such.
+    private func applyAnswer(
+        _ answer: PredeterminedAnswer, to element: FormElement, driver: any FormDriver, execute: Bool
+    ) async throws {
+        var row = DecisionRow(
+            element: element, action: .answer, entity: Entity(label: answer.question, value: answer.value),
+            confidence: nil, latency: nil, status: execute ? "answer sheet" : "planned")
+        print("\(element.role) \"\(element.label.prefix(60))\" -> answer sheet [\(answer.value)]")
+        rows.append(row)
+        let rowIndex = rows.count - 1
+        guard execute else { return }
+        try await driver.highlight(element.token, on: true)
+        defer { Task { try? await driver.highlight(element.token, on: false) } }
+        do {
+            switch element.role {
+            case "ComboBox":
+                if element.value.localizedCaseInsensitiveContains(answer.value) {
+                    row.status = "already selected"
+                } else {
+                    if ["yes", "i agree", "i acknowledge", "i accept"].contains(answer.value.lowercased()) {
+                        // Consent lists word their one option differently ("Acknowledge/Confirm"),
+                        // and typing "Yes" leaves the control with no matches; take the first option.
+                        try await driver.selectAffirmative(in: element.token)
+                        row.status = "first option · answer sheet"
+                    } else {
+                        try await driver.select(answer.value, in: element.token)
+                        row.status = "selected · answer sheet"
+                    }
+                }
+            case "CheckBox":
+                let wantsChecked = ["yes", "true", "checked", "on"].contains(answer.value.lowercased())
+                if element.checked == wantsChecked {
+                    row.status = "already \(wantsChecked ? "checked" : "unchecked")"
+                } else {
+                    try await driver.click(element.token)
+                    row.status = "\(wantsChecked ? "checked" : "unchecked") · answer sheet"
+                }
+            default:
+                if element.value == answer.value {
+                    row.status = "already filled"
+                } else {
+                    let perCharacter = min(
+                        Duration.milliseconds(characterDelayMilliseconds),
+                        .milliseconds(1200 / max(answer.value.count, 1)))
+                    try await driver.type(answer.value, into: element.token, characterDelay: perCharacter)
+                    row.status = "filled · answer sheet"
+                }
+            }
+        } catch {
+            row.status = "answer failed: \(error.localizedDescription)"
+        }
+        rows[rowIndex].status = row.status
+        try await Task.sleep(for: .milliseconds(120))
+    }
+
     /// Re-observe the target without scoring, for the schematic pane.
     func observe() {
         Task {
@@ -194,6 +251,9 @@ final class DemoModel: ObservableObject {
                 loadDocument(URL(fileURLWithPath: path))
             } else {
                 loadSampleDocument()
+            }
+            if let path = ProcessInfo.processInfo.environment["CUA_DEMO_ANSWERS"] {
+                loadAnswers(URL(fileURLWithPath: path))
             }
             if let filter = ProcessInfo.processInfo.environment["CUA_DEMO_WINDOW"] { windowFilter = filter }
             if ProcessInfo.processInfo.environment["CUA_DEMO_SAMPLE_PDF"] != nil {
@@ -327,6 +387,22 @@ final class DemoModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Loads an answer sheet (`question contains => answer` lines) applied by the harness.
+    func loadAnswers(_ url: URL) {
+        do {
+            answers = PredeterminedAnswer.parse(try String(contentsOf: url, encoding: .utf8))
+            answersName = url.lastPathComponent
+            if answers.isEmpty { errorMessage = "No `question => answer` lines found in \(url.lastPathComponent)" }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func clearAnswers() {
+        answers = []
+        answersName = ""
     }
 
     func loadSampleDocument() {
@@ -488,6 +564,14 @@ final class DemoModel: ObservableObject {
                 let delay = Duration.milliseconds(characterDelayMilliseconds)
                 for index in rows.indices where rows[index].status == "planned" {
                     let row = rows[index]
+                    if row.action == .answer, let entity = row.entity {
+                        rows[index].status = "answer sheet"
+                        try await applyAnswer(
+                            PredeterminedAnswer(question: entity.label, value: entity.value), to: row.element,
+                            driver: driver, execute: true)
+                        rows.removeLast()  // applyAnswer appends its own row; keep the planned one updated
+                        continue
+                    }
                     guard row.action == .fill || row.action == .check else { continue }
                     guard row.approved else {
                         rows[index].status = "vetoed"
@@ -530,6 +614,10 @@ final class DemoModel: ObservableObject {
 
         for element in snapshot.elements where element.isActionable {
             try Task.checkCancellation()
+            if element.role != "Button", let answer = PredeterminedAnswer.match(element.label, in: answers) {
+                try await applyAnswer(answer, to: element, driver: driver, execute: execute)
+                continue
+            }
             let context = FormSchema.renderContext(formTitle: title, element: element.forScoring)
             // Time the call off the main actor so UI work does not inflate the number.
             let (result, latency) = try await Task.detached(priority: .userInitiated) {

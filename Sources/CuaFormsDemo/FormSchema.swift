@@ -6,6 +6,33 @@ enum FormAction: String, Sendable {
     case fill, check, click, skip
     /// Host rule, not a model option: attach the source document to a file input.
     case attach
+    /// Host rule, not a model option: a predetermined answer keyed by the question text.
+    case answer
+}
+
+/// A predetermined answer from a separate step (a saved answer sheet or an LLM run once per
+/// applicant), applied by the harness to any element whose label contains `question`.
+/// The model never sees these; it was trained on short captions, not questions.
+struct PredeterminedAnswer: Identifiable, Sendable {
+    let question: String
+    let value: String
+    var id: String { question }
+
+    /// Lines of the form `question text contains => answer`; `#` starts a comment.
+    static func parse(_ text: String) -> [PredeterminedAnswer] {
+        text.components(separatedBy: .newlines).compactMap { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty, !trimmed.hasPrefix("#"), let range = trimmed.range(of: "=>") else { return nil }
+            let question = trimmed[..<range.lowerBound].trimmingCharacters(in: .whitespaces)
+            let value = trimmed[range.upperBound...].trimmingCharacters(in: .whitespaces)
+            guard !question.isEmpty, !value.isEmpty else { return nil }
+            return PredeterminedAnswer(question: question, value: value)
+        }
+    }
+
+    static func match(_ label: String, in answers: [PredeterminedAnswer]) -> PredeterminedAnswer? {
+        answers.first { label.localizedCaseInsensitiveContains($0.question) }
+    }
 }
 
 /// A labeled value from the source document; rendered as one `fill` option.

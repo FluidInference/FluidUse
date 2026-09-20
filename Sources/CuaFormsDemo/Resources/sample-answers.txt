@@ -1,0 +1,12 @@
+# Predetermined answers: "question text contains" => "answer to choose or type"
+Location (City) => Portland, Oregon, United States
+currently based in any of these countries => United States
+London office on a hybrid schedule => Yes
+Visa Sponsorship => No
+authorization to work => Authorized
+live in one of the following states => No
+Where did you first hear about this role => LinkedIn
+Job Applicant Privacy Notice => Yes
+double-check all the information => Yes
+Twitter => https://twitter.example.invalid/mayaokafor
+Github => https://github.example.invalid/mayaokafor
