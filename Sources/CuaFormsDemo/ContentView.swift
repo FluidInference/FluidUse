@@ -25,12 +25,14 @@ struct ContentView: View {
     private var presentation: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text("CUA-S1-FORMS").font(.system(size: 22, weight: .bold, design: .rounded))
-                Text("706K params · Core ML · on-device").font(.callout).foregroundStyle(.secondary)
+                Text("CUA-S1-FORMS").font(.system(size: 22, weight: .bold, design: .rounded)).lineLimit(1)
+                    .fixedSize()
+                Text("706K params · Core ML · on-device").font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                    .minimumScaleFactor(0.6)
                 Spacer()
                 if let placement = model.placement {
-                    Text("\(placement.neuralEngine)/\(placement.total) ops on Neural Engine")
-                        .font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary)
+                    Text("\(placement.neuralEngine)/\(placement.total) ops on ANE")
+                        .font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             UtilizationTiles(
