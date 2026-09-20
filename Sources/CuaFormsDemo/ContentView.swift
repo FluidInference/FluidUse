@@ -10,18 +10,23 @@ struct ContentView: View {
         HSplitView {
             sidebar
                 .frame(minWidth: 380, idealWidth: 420, maxWidth: 520)
-            VSplitView {
-                ZStack(alignment: .topTrailing) {
-                    if model.target == .web {
-                        WebViewContainer(webView: model.driver.webView)
-                    } else {
-                        SnapshotSchematic(snapshot: model.lastSnapshot, rows: model.rows)
+            Group {
+                if model.target == .web {
+                    VSplitView {
+                        ZStack(alignment: .topTrailing) {
+                            WebViewContainer(webView: model.driver.webView)
+                            hud.padding(12)
+                        }
+                        .frame(minHeight: 240)
+                        ConsoleView(lines: model.console)
+                            .frame(minHeight: 160, idealHeight: 300)
                     }
-                    hud.padding(12)
+                } else {
+                    ZStack(alignment: .topTrailing) {
+                        ConsoleView(lines: model.console)
+                        hud.padding(12)
+                    }
                 }
-                .frame(minHeight: 240)
-                ConsoleView(lines: model.console)
-                    .frame(minHeight: 160, idealHeight: 300)
             }
             .frame(minWidth: 640)
         }
@@ -255,19 +260,8 @@ struct ContentView: View {
         .allowsHitTesting(false)
     }
 
-    @ViewBuilder private var utilization: some View {
-        let monitor = model.monitor
-        HStack(spacing: 10) {
-            Text(String(format: "CPU app %.0f%%", monitor.processCPUPercent))
-            Text(String(format: "system %.0f%%", monitor.systemCPUPercent))
-            if let ane = monitor.anePowerMilliwatts {
-                Text("ANE \(ane) mW")
-            } else {
-                Text(String(format: "ANE busy %.1f%%", monitor.aneDutyPercent))
-            }
-            if let cpu = monitor.cpuPowerMilliwatts { Text("CPU \(cpu) mW") }
-        }
-        .font(.system(.caption2, design: .monospaced))
+    private var utilization: some View {
+        UtilizationView(monitor: model.monitor)
     }
 
     static func format(_ duration: Duration) -> String {
@@ -341,6 +335,25 @@ private struct DecisionRowView: View {
     }
 }
 
+/// Observes the monitor directly so the overlay refreshes with each sample.
+private struct UtilizationView: View {
+    @ObservedObject var monitor: SystemMonitor
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(String(format: "CPU app %.0f%%", monitor.processCPUPercent))
+            Text(String(format: "system %.0f%%", monitor.systemCPUPercent))
+            if let ane = monitor.anePowerMilliwatts {
+                Text("ANE \(ane) mW")
+            } else {
+                Text(String(format: "ANE busy %.1f%%", monitor.aneDutyPercent))
+            }
+            if let cpu = monitor.cpuPowerMilliwatts { Text("CPU \(cpu) mW") }
+        }
+        .font(.system(.caption2, design: .monospaced))
+    }
+}
+
 /// Terminal-style log of every model call: the exact context, the options, and the
 /// ranked choices, so the decisions are visibly the model's.
 private struct ConsoleView: View {
@@ -374,62 +387,6 @@ private struct ConsoleView: View {
         if line.hasPrefix("■") { return Color(red: 0.55, green: 0.85, blue: 0.55) }
         if line.contains("→") { return Color(red: 1, green: 0.85, blue: 0.4) }
         return Color(red: 0.8, green: 0.82, blue: 0.85)
-    }
-}
-
-/// What the model observed, drawn to scale: control frames with their derived labels,
-/// tinted by the decision once one exists.
-private struct SnapshotSchematic: View {
-    let snapshot: PageSnapshot?
-    let rows: [DecisionRow]
-
-    var body: some View {
-        GeometryReader { geometry in
-            if let snapshot, !snapshot.elements.isEmpty {
-                let bounds = snapshot.elements.map(\.frame).reduce(snapshot.elements[0].frame) { $0.union($1) }
-                    .insetBy(dx: -40, dy: -40)
-                let scale = min(geometry.size.width / bounds.width, geometry.size.height / bounds.height)
-                ZStack(alignment: .topLeading) {
-                    Color(nsColor: .textBackgroundColor)
-                    ForEach(snapshot.elements) { element in
-                        let frame = element.frame
-                        let decision = rows.first { $0.element.token == element.token }
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(color(for: decision).opacity(0.18))
-                            RoundedRectangle(cornerRadius: 2)
-                                .stroke(color(for: decision), lineWidth: 1)
-                            Text(element.label.isEmpty ? element.role : element.label)
-                                .font(.system(size: max(7, 9 * scale)))
-                                .lineLimit(1)
-                                .padding(.leading, 2)
-                        }
-                        .frame(width: max(frame.width * scale, 6), height: max(frame.height * scale, 6))
-                        .offset(x: (frame.minX - bounds.minX) * scale, y: (frame.minY - bounds.minY) * scale)
-                    }
-                    Text("\(snapshot.url) · \(snapshot.elements.count) controls observed through Accessibility")
-                        .font(.caption).foregroundStyle(.secondary).padding(8)
-                }
-            } else {
-                VStack(spacing: 8) {
-                    Image(systemName: "macwindow.on.rectangle").font(.largeTitle).foregroundStyle(.secondary)
-                    Text("Observe window to see what the model will score").foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-    }
-
-    private func color(for row: DecisionRow?) -> Color {
-        switch row?.action {
-        case .fill: return .blue
-        case .check: return .purple
-        case .click: return .orange
-        case .attach: return .teal
-        case .answer: return .green
-        case .skip: return .gray
-        case nil: return .secondary
-        }
     }
 }
 

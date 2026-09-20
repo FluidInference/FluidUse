@@ -311,6 +311,7 @@ final class DemoModel: ObservableObject {
             try? await Task.sleep(for: .milliseconds(500))
             if ProcessInfo.processInfo.environment["CUA_DEMO_PREPARE"] != nil {
                 observe()
+                appendConsole(["ready · press 9 in the target app to run"])
                 return
             }
             run(execute: ProcessInfo.processInfo.environment["CUA_DEMO_PLAN_ONLY"] == nil)
