@@ -134,6 +134,7 @@ final class DemoModel: ObservableObject {
                     self?.disarm()
                     self?.stop()
                 case "p": self?.presenting.toggle()
+                case "r": self?.reset()
                 default: break
                 }
             }
@@ -565,6 +566,18 @@ final class DemoModel: ObservableObject {
 
     func stop() {
         runTask?.cancel()
+    }
+
+    /// Clears the console, decisions, latency figures, and error state; stops any run.
+    func reset() {
+        disarm()
+        stop()
+        rows = []
+        console = ["reset · press 9 in the target app to run"]
+        lastLatency = nil
+        lastSnapshot = nil
+        errorMessage = nil
+        monitor.resetActivity()
     }
 
     func toggleApproval(_ row: DecisionRow) {

@@ -34,6 +34,7 @@ struct ContentView: View {
                     Text("\(placement.neuralEngine)/\(placement.total) ops on ANE")
                         .font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
                 }
+                Button("Reset") { model.reset() }.controlSize(.small)
             }
             UtilizationTiles(
                 monitor: model.monitor, lastLatency: model.lastLatency, median: model.medianLatency,
@@ -221,6 +222,7 @@ struct ContentView: View {
                 } else {
                     Button("Arm 5 s") { model.arm() }
                 }
+                Button("Reset") { model.reset() }
                 if model.isRunning {
                     Button("Stop") { model.stop() }
                     ProgressView().controlSize(.small)
@@ -228,7 +230,7 @@ struct ContentView: View {
                 Spacer()
                 Toggle("Allow submit click", isOn: $model.allowSubmit)
             }
-            Text("Hotkeys from any app: 9 run · ⌃⌥⌘A arm 5 s · ⌃⌥⌘S stop · ⌃⌥⌘P presentation")
+            Text("Hotkeys from any app: 9 run · ⌃⌥⌘A arm 5 s · ⌃⌥⌘S stop · ⌃⌥⌘P presentation · ⌃⌥⌘R reset")
                 .font(.caption2).foregroundStyle(.secondary)
             HStack {
                 Text("Min confidence \(model.minConfidence, format: .number.precision(.fractionLength(2)))")

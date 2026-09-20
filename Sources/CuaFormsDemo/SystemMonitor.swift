@@ -40,6 +40,12 @@ final class SystemMonitor: ObservableObject {
         }
     }
 
+    func resetActivity() {
+        modelBusy = .zero
+        busyWindow = []
+        aneDutyPercent = 0
+    }
+
     /// Called with each model call's wall time; feeds the duty-cycle figure.
     func recordModelCall(_ latency: Duration) {
         modelBusy += latency
