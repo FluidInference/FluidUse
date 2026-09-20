@@ -440,6 +440,13 @@ final class AccessibilityFormDriver: FormDriver {
         for pattern in patterns {
             result = result.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
         }
+        // Applicant-tracking pages title themselves "Job Application for <role> at <company>";
+        // the checkpoint's training titles read "<Company> - Job Application".
+        if let match = result.range(of: #"^Job Application for .+ at (.+)$"#, options: .regularExpression) {
+            let company = result[match].replacingOccurrences(
+                of: #"^Job Application for .+ at "#, with: "", options: .regularExpression)
+            result = "\(company) - Job Application"
+        }
         return FormSchema.normalizeTitle(result)
     }
 
