@@ -165,10 +165,13 @@ final class AccessibilityFormDriver: FormDriver {
 
     // MARK: Actions
 
+    /// Scrolls the element into view. The outline overlay is off unless
+    /// `CUA_DEMO_HIGHLIGHT` is set; on camera the typing itself is the cue.
     func highlight(_ token: String, on: Bool) async throws {
         guard let frame = frames[token] else { return }
         if on {
             if let element = elements[token] { AXUIElementPerformAction(element, "AXScrollToVisible" as CFString) }
+            guard Self.showsOverlay else { return }
             // The element may have moved after scrolling; re-read its frame.
             if let element = elements[token], let updated = self.frame(of: element) {
                 frames[token] = updated
@@ -176,10 +179,12 @@ final class AccessibilityFormDriver: FormDriver {
             } else {
                 overlay.show(around: frame)
             }
-        } else {
+        } else if Self.showsOverlay {
             overlay.hide()
         }
     }
+
+    private static let showsOverlay = ProcessInfo.processInfo.environment["CUA_DEMO_HIGHLIGHT"] != nil
 
     /// Native apps take values through `AXValue`; browsers get key events. If a native
     /// app does not apply the first write, the driver falls back to key events too.
