@@ -20,6 +20,8 @@ final class SystemMonitor: ObservableObject {
     private var lastWall = ContinuousClock.now
     private var lastTicks: (busy: UInt64, total: UInt64)?
     private var modelBusy: Duration = .zero
+    /// Recent (busy, wall) pairs; the duty cycle is averaged over about two seconds.
+    private var busyWindow: [(busy: Double, wall: Double)] = []
 
     init() {
         let path = ProcessInfo.processInfo.environment["CUA_DEMO_POWERMETRICS"] ?? "/tmp/cua-powermetrics.log"
@@ -58,7 +60,11 @@ final class SystemMonitor: ObservableObject {
         processCPUPercent = max(0, cpuSeconds / wallSeconds * 100)
         lastRusage = usage
         let busySeconds = Double(modelBusy.components.seconds) + Double(modelBusy.components.attoseconds) / 1e18
-        aneDutyPercent = min(100, busySeconds / wallSeconds * 100)
+        busyWindow.append((busySeconds, wallSeconds))
+        if busyWindow.count > 4 { busyWindow.removeFirst(busyWindow.count - 4) }
+        let windowBusy = busyWindow.reduce(0) { $0 + $1.busy }
+        let windowWall = busyWindow.reduce(0) { $0 + $1.wall }
+        aneDutyPercent = windowWall > 0 ? min(100, windowBusy / windowWall * 100) : 0
         modelBusy = .zero
         lastWall = now
         sampleSystemCPU()

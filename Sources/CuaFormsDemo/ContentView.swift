@@ -386,8 +386,10 @@ private struct UtilizationTiles: View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
             tile(
                 "NEURAL ENGINE",
-                monitor.anePowerMilliwatts.map { "\($0) mW" } ?? String(format: "%.1f%% busy", monitor.aneDutyPercent),
-                monitor.anePowerMilliwatts == nil ? "model duty cycle" : "power (powermetrics)", accent: .green)
+                String(format: "%.1f%%", monitor.aneDutyPercent),
+                monitor.anePowerMilliwatts.map { "busy · \($0) mW (powermetrics)" }
+                    ?? "busy (share of time in model calls)",
+                accent: .green)
             tile("CPU · THIS APP", String(format: "%.0f%%", monitor.processCPUPercent), "of one core", accent: .blue)
             tile(
                 "CPU · SYSTEM", String(format: "%.0f%%", monitor.systemCPUPercent),
@@ -425,11 +427,8 @@ private struct UtilizationView: View {
         HStack(spacing: 10) {
             Text(String(format: "CPU app %.0f%%", monitor.processCPUPercent))
             Text(String(format: "system %.0f%%", monitor.systemCPUPercent))
-            if let ane = monitor.anePowerMilliwatts {
-                Text("ANE \(ane) mW")
-            } else {
-                Text(String(format: "ANE busy %.1f%%", monitor.aneDutyPercent))
-            }
+            Text(String(format: "ANE %.1f%%", monitor.aneDutyPercent))
+            if let ane = monitor.anePowerMilliwatts { Text("\(ane) mW") }
             if let cpu = monitor.cpuPowerMilliwatts { Text("CPU \(cpu) mW") }
         }
         .font(.system(.caption2, design: .monospaced))
