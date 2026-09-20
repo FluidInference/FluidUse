@@ -56,18 +56,33 @@ final class AccessibilityFormDriver: FormDriver {
         AXUIElementPerformAction(targetWindow, kAXRaiseAction as CFString)
     }
 
-    /// True when the app's keyboard focus is on `element` inside the targeted window.
-    /// Key events go wherever focus is, so typing is refused unless this holds.
-    private func isFocused(_ element: AXUIElement) -> Bool {
+    /// The element holding keyboard focus, if it is `element` or an inner control drawn
+    /// in the same place (composite web widgets focus a child of the addressed node),
+    /// and the focused window is the targeted one. Key events go wherever focus is, so
+    /// typing is refused unless this resolves.
+    private func focusedCounterpart(of element: AXUIElement) -> AXUIElement? {
         guard let focused = attribute(axApplication, kAXFocusedUIElementAttribute),
-            CFGetTypeID(focused) == AXUIElementGetTypeID(), CFEqual(focused, element)
-        else { return false }
+            CFGetTypeID(focused) == AXUIElementGetTypeID()
+        else { return nil }
         if let targetWindow, let window = attribute(axApplication, kAXFocusedWindowAttribute),
             CFGetTypeID(window) == AXUIElementGetTypeID(), !CFEqual(window, targetWindow)
         {
-            return false
+            return nil
         }
-        return true
+        let focusedElement = focused as! AXUIElement
+        if CFEqual(focusedElement, element) { return focusedElement }
+        guard let target = frame(of: element), let inner = frame(of: focusedElement), target.width > 0,
+            target.height > 0
+        else { return nil }
+        let overlap = target.intersection(inner)
+        guard !overlap.isNull, overlap.width * overlap.height >= 0.5 * inner.width * inner.height,
+            target.contains(CGPoint(x: inner.midX, y: inner.midY))
+        else { return nil }
+        return focusedElement
+    }
+
+    private func isFocused(_ element: AXUIElement) -> Bool {
+        focusedCounterpart(of: element) != nil
     }
 
     /// Titles of the app's windows, for choosing a target.
@@ -171,8 +186,10 @@ final class AccessibilityFormDriver: FormDriver {
         let characters = Array(value)
         let probe = String(characters.prefix(1))
         if prefersKeystrokes {
-            try await typeKeystrokes(value, into: element, token: token, characterDelay: characterDelay)
-            guard currentValue(of: element) == value else { throw DriverError.valueNotApplied(token) }
+            let typed = try await typeKeystrokes(value, into: element, token: token, characterDelay: characterDelay)
+            guard Self.matches(currentValue(of: typed), value) || Self.matches(currentValue(of: element), value) else {
+                throw DriverError.valueNotApplied(token)
+            }
             return
         }
         try setValue(probe, on: element, token: token)
@@ -184,22 +201,28 @@ final class AccessibilityFormDriver: FormDriver {
             }
             try setValue(value, on: element, token: token)
         } else {
-            try await typeKeystrokes(value, into: element, token: token, characterDelay: characterDelay)
+            let typed = try await typeKeystrokes(value, into: element, token: token, characterDelay: characterDelay)
+            guard Self.matches(currentValue(of: typed), value) || Self.matches(currentValue(of: element), value) else {
+                throw DriverError.valueNotApplied(token)
+            }
+            return
         }
         guard currentValue(of: element) == value else { throw DriverError.valueNotApplied(token) }
     }
 
+    /// Returns the element that actually received the keystrokes.
+    @discardableResult
     private func typeKeystrokes(
         _ value: String, into element: AXUIElement, token: String, characterDelay: Duration
-    ) async throws {
+    ) async throws -> AXUIElement {
         activate()
         AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
         AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         try await Task.sleep(for: .milliseconds(150))
-        guard isFocused(element) else { throw DriverError.focusLost(token) }
+        guard let focused = focusedCounterpart(of: element) else { throw DriverError.focusLost(token) }
         let pid = application.processIdentifier
         let source = CGEventSource(stateID: .combinedSessionState)
-        if !currentValue(of: element).isEmpty {
+        if !currentValue(of: focused).isEmpty || !currentValue(of: element).isEmpty {
             // Select all, then the typed text replaces it.
             let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
             let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
@@ -223,6 +246,15 @@ final class AccessibilityFormDriver: FormDriver {
             try await Task.sleep(for: max(characterDelay, .milliseconds(8)))
         }
         try await Task.sleep(for: .milliseconds(150))
+        return focused
+    }
+
+    /// Web widgets reformat as you type (phone masks, trimmed spaces), so the read-back
+    /// is compared on letters and digits only.
+    private static func matches(_ readback: String, _ value: String) -> Bool {
+        func core(_ text: String) -> String { text.lowercased().filter { $0.isLetter || $0.isNumber } }
+        let expected = core(value)
+        return !expected.isEmpty && core(readback).contains(expected)
     }
 
     private func currentValue(of element: AXUIElement) -> String {

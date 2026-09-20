@@ -82,6 +82,15 @@ Verified with the sample page opened as a file in Safari and in Chrome: 17
 fields typed and both required declarations checked in each, labels taken from
 the pages' own accessibility titles. Firefox and Arc are untested.
 
+On a live Greenhouse application (a public job posting in Safari) the driver
+observed 52 controls and the model filled First Name, Last Name, Email, Phone
+(reformatted by the page's phone widget), and LinkedIn correctly, skipped every
+dropdown, and wanted to put the city into the Twitter and Github fields. Use
+**Plan only** on a real site, uncheck rows you do not want, then **Execute
+plan**. Click decisions on non-submit buttons are logged as ignored; the submit
+click stays behind **Allow submit click**. Typing stops if keyboard focus leaves
+the targeted window, for instance when you click another tab mid-run.
+
 Verified on Preview with the IRS W-4 (`https://www.irs.gov/pub/irs-pdf/fw4.pdf`,
 whose fields carry no tooltips): the driver observed 21 controls, labels came
 out as "First name and middle initial", "Last name", "Address", "City or

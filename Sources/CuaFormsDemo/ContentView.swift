@@ -142,6 +142,9 @@ struct ContentView: View {
                 Button("Fill form") { model.run(execute: true) }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.return, modifiers: .command)
+                if model.hasExecutablePlan {
+                    Button("Execute plan") { model.executePlan() }
+                }
                 if model.isRunning {
                     Button("Stop") { model.stop() }
                     ProgressView().controlSize(.small)
@@ -177,7 +180,17 @@ struct ContentView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 3) {
                         ForEach(model.rows) { row in
-                            DecisionRowView(row: row).id(row.id)
+                            HStack(spacing: 4) {
+                                if row.status == "planned" && (row.action == .fill || row.action == .check) {
+                                    Toggle(
+                                        "",
+                                        isOn: Binding(get: { row.approved }, set: { _ in model.toggleApproval(row) })
+                                    )
+                                    .toggleStyle(.checkbox).labelsHidden()
+                                }
+                                DecisionRowView(row: row)
+                            }
+                            .id(row.id)
                         }
                     }
                 }

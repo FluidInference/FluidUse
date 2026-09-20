@@ -14,6 +14,8 @@ struct DecisionRow: Identifiable, Sendable {
     let confidence: Float?
     let latency: Duration?
     var status: String
+    /// Plan-only rows can be unchecked before "Execute plan" so a wrong fill never runs.
+    var approved = true
 }
 
 /// Operation placement from the public compute plan, so the badge is measured, not asserted.
@@ -382,6 +384,59 @@ final class DemoModel: ObservableObject {
         runTask?.cancel()
     }
 
+    func toggleApproval(_ row: DecisionRow) {
+        guard let index = rows.firstIndex(where: { $0.id == row.id }) else { return }
+        rows[index].approved.toggle()
+    }
+
+    var hasExecutablePlan: Bool {
+        rows.contains { ($0.action == .fill || $0.action == .check) && $0.status == "planned" }
+    }
+
+    /// Acts on the approved fill/check rows of a plan-only run, in order, using the same
+    /// element tokens; the page must not have changed since the plan.
+    func executePlan() {
+        guard !isRunning, hasExecutablePlan else { return }
+        isRunning = true
+        errorMessage = nil
+        runTask = Task {
+            defer { isRunning = false }
+            do {
+                let driver = try currentDriver()
+                if let axDriver = driver as? AccessibilityFormDriver {
+                    axDriver.activate()
+                    try await Task.sleep(for: .milliseconds(400))
+                }
+                let delay = Duration.milliseconds(characterDelayMilliseconds)
+                for index in rows.indices where rows[index].status == "planned" {
+                    let row = rows[index]
+                    guard row.action == .fill || row.action == .check else { continue }
+                    guard row.approved else {
+                        rows[index].status = "vetoed"
+                        continue
+                    }
+                    try Task.checkCancellation()
+                    try await driver.highlight(row.element.token, on: true)
+                    defer { Task { try? await driver.highlight(row.element.token, on: false) } }
+                    if row.action == .fill, let value = row.entity?.value {
+                        let perCharacter = min(delay, .milliseconds(1200 / max(value.count, 1)))
+                        try await driver.type(value, into: row.element.token, characterDelay: perCharacter)
+                        rows[index].status = "filled"
+                    } else if row.action == .check {
+                        try await driver.click(row.element.token)
+                        let checked = try await driver.isChecked(row.element.token)
+                        rows[index].status = checked == true ? "checked" : "check not confirmed"
+                    }
+                    try await Task.sleep(for: .milliseconds(120))
+                }
+            } catch is CancellationError {
+                errorMessage = "Stopped"
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
     private func performRun(
         driver: any FormDriver, manager: CuaS1FormsManager, entities: [Entity], execute: Bool
     ) async throws {
@@ -424,7 +479,11 @@ final class DemoModel: ObservableObject {
                 continue
             }
             if action == .click {
-                pendingClicks.append(row)
+                if FormSchema.isSubmitControl(element) {
+                    pendingClicks.append(row)
+                } else {
+                    rows[rowIndex].status = "ignored · not a submit control"
+                }
                 continue
             }
             guard execute else { continue }
