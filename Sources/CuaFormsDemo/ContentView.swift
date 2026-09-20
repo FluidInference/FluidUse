@@ -81,44 +81,50 @@ struct ContentView: View {
         }
     }
 
+    @State private var showDocument = false
+
+    /// One summary line by default; expand for the entity list and the answer sheet.
     private var documentSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Source document").font(.headline)
-                Spacer()
-                Button("Sample profile") { model.loadSampleDocument() }
-                Button("Open…") { openDocument() }
-            }
-            if !model.documentName.isEmpty {
-                Text("\(model.documentName) · \(model.enabledEntities.count) of \(model.entities.count) entities")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            HStack {
-                Text("Answer sheet").font(.subheadline).fontWeight(.medium)
-                Spacer()
-                if !model.answersName.isEmpty {
-                    Text("\(model.answersName) · \(model.answers.count) answers").font(.caption).foregroundStyle(
-                        .secondary)
-                    Button("Clear") { model.clearAnswers() }
+        DisclosureGroup(isExpanded: $showDocument) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Button("Sample profile") { model.loadSampleDocument() }
+                    Button("Open document…") { openDocument() }
+                    Spacer()
+                    if !model.answersName.isEmpty { Button("Clear answers") { model.clearAnswers() } }
+                    Button("Open answer sheet…") { openAnswers() }
                 }
-                Button("Open…") { openAnswers() }
-            }
-            if !model.entities.isEmpty {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(model.entities) { entity in
-                            Toggle(isOn: Binding(get: { entity.enabled }, set: { _ in model.toggle(entity) })) {
-                                HStack(spacing: 4) {
-                                    Text(entity.label).fontWeight(.medium)
-                                    Text(entity.value).foregroundStyle(.secondary).lineLimit(1)
+                if !model.entities.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(model.entities) { entity in
+                                Toggle(isOn: Binding(get: { entity.enabled }, set: { _ in model.toggle(entity) })) {
+                                    HStack(spacing: 4) {
+                                        Text(entity.label).fontWeight(.medium)
+                                        Text(entity.value).foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                    .font(.caption)
                                 }
-                                .font(.caption)
+                                .toggleStyle(.checkbox)
                             }
-                            .toggleStyle(.checkbox)
                         }
                     }
+                    .frame(maxHeight: 150)
                 }
-                .frame(maxHeight: 150)
+            }
+            .padding(.top, 4)
+        } label: {
+            HStack(spacing: 6) {
+                Text("Source").font(.headline)
+                Text(
+                    model.documentName.isEmpty
+                        ? "none" : "\(model.documentName) · \(model.enabledEntities.count) entities"
+                )
+                .font(.caption).foregroundStyle(.secondary)
+                if !model.answersName.isEmpty {
+                    Text("· \(model.answersName) · \(model.answers.count) answers").font(.caption).foregroundStyle(
+                        .secondary)
+                }
             }
         }
     }
