@@ -453,6 +453,7 @@ final class DemoModel: ObservableObject {
                 errorMessage = "Stopped"
             } catch {
                 errorMessage = error.localizedDescription
+                print("error: \(error.localizedDescription)")
             }
         }
     }

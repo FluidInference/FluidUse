@@ -26,6 +26,7 @@ final class AccessibilityFormDriver: FormDriver {
     }
     private var elements: [String: AXUIElement] = [:]
     private var frames: [String: CGRect] = [:]
+    private var observed: [String: FormElement] = [:]
     private let overlay = HighlightOverlay()
 
     static var isTrusted: Bool { AXIsProcessTrusted() }
@@ -151,11 +152,12 @@ final class AccessibilityFormDriver: FormDriver {
             } else {
                 value = attribute(element, kAXValueAttribute) as? String ?? ""
             }
-            result.append(
-                FormElement(
-                    token: token, role: role, label: label, value: value,
-                    placeholder: attribute(element, kAXPlaceholderValueAttribute) as? String ?? "",
-                    checked: checked, frame: frame))
+            let formElement = FormElement(
+                token: token, role: role, label: label, value: value,
+                placeholder: attribute(element, kAXPlaceholderValueAttribute) as? String ?? "",
+                checked: checked, frame: frame)
+            observed[token] = formElement
+            result.append(formElement)
         }
         return PageSnapshot(
             title: Self.normalizeWindowTitle(title), url: application.localizedName ?? "", elements: result)
@@ -216,10 +218,21 @@ final class AccessibilityFormDriver: FormDriver {
         _ value: String, into element: AXUIElement, token: String, characterDelay: Duration
     ) async throws -> AXUIElement {
         activate()
+        var element = element
         AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
         AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         try await Task.sleep(for: .milliseconds(150))
-        guard let focused = focusedCounterpart(of: element) else { throw DriverError.focusLost(token) }
+        var counterpart = focusedCounterpart(of: element)
+        if counterpart == nil, let relocated = relocate(token) {
+            // Web frameworks re-render after a blur, replacing the accessibility node we
+            // captured; find the control again by role and label, as upstream does.
+            element = relocated
+            AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
+            AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+            try await Task.sleep(for: .milliseconds(150))
+            counterpart = focusedCounterpart(of: element)
+        }
+        guard let focused = counterpart else { throw DriverError.focusLost(token) }
         let pid = application.processIdentifier
         let source = CGEventSource(stateID: .combinedSessionState)
         if !currentValue(of: focused).isEmpty || !currentValue(of: element).isEmpty {
@@ -255,6 +268,30 @@ final class AccessibilityFormDriver: FormDriver {
         func core(_ text: String) -> String { text.lowercased().filter { $0.isLetter || $0.isNumber } }
         let expected = core(value)
         return !expected.isEmpty && core(readback).contains(expected)
+    }
+
+    /// Re-walks the target window for a live element with the observed role and label,
+    /// preferring the one nearest the original frame, and rebinds the token to it.
+    private func relocate(_ token: String) -> AXUIElement? {
+        guard let wanted = observed[token], let window = targetWindow ?? resolveWindow() else { return nil }
+        var candidates: [(AXUIElement, CGRect)] = []
+        walk(window, ancestors: []) { element, role, ancestors in
+            guard Self.roleName(for: element, role: role, ancestors: ancestors) == wanted.role,
+                let frame = self.frame(of: element),
+                Self.stripEnumerator(self.explicitLabel(element) ?? "") == wanted.label
+            else { return }
+            candidates.append((element, frame))
+        }
+        let origin = wanted.frame
+        guard
+            let best = candidates.min(by: {
+                hypot($0.1.midX - origin.midX, $0.1.midY - origin.midY)
+                    < hypot($1.1.midX - origin.midX, $1.1.midY - origin.midY)
+            })
+        else { return nil }
+        elements[token] = best.0
+        frames[token] = best.1
+        return best.0
     }
 
     private func currentValue(of element: AXUIElement) -> String {
