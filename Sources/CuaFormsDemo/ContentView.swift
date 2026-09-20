@@ -10,13 +10,18 @@ struct ContentView: View {
         HSplitView {
             sidebar
                 .frame(minWidth: 380, idealWidth: 420, maxWidth: 520)
-            ZStack(alignment: .topTrailing) {
-                if model.target == .web {
-                    WebViewContainer(webView: model.driver.webView)
-                } else {
-                    SnapshotSchematic(snapshot: model.lastSnapshot, rows: model.rows)
+            VSplitView {
+                ZStack(alignment: .topTrailing) {
+                    if model.target == .web {
+                        WebViewContainer(webView: model.driver.webView)
+                    } else {
+                        SnapshotSchematic(snapshot: model.lastSnapshot, rows: model.rows)
+                    }
+                    hud.padding(12)
                 }
-                hud.padding(12)
+                .frame(minHeight: 240)
+                ConsoleView(lines: model.console)
+                    .frame(minHeight: 160, idealHeight: 300)
             }
             .frame(minWidth: 640)
         }
@@ -223,6 +228,7 @@ struct ContentView: View {
 
     private var hud: some View {
         VStack(alignment: .trailing, spacing: 2) {
+            utilization
             if let countdown = model.countdown {
                 Text("starting in \(countdown)")
                     .font(.system(.title2, design: .rounded)).fontWeight(.bold)
@@ -247,6 +253,21 @@ struct ContentView: View {
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
         .allowsHitTesting(false)
+    }
+
+    @ViewBuilder private var utilization: some View {
+        let monitor = model.monitor
+        HStack(spacing: 10) {
+            Text(String(format: "CPU app %.0f%%", monitor.processCPUPercent))
+            Text(String(format: "system %.0f%%", monitor.systemCPUPercent))
+            if let ane = monitor.anePowerMilliwatts {
+                Text("ANE \(ane) mW")
+            } else {
+                Text(String(format: "ANE busy %.1f%%", monitor.aneDutyPercent))
+            }
+            if let cpu = monitor.cpuPowerMilliwatts { Text("CPU \(cpu) mW") }
+        }
+        .font(.system(.caption2, design: .monospaced))
     }
 
     static func format(_ duration: Duration) -> String {
@@ -317,6 +338,42 @@ private struct DecisionRowView: View {
         case .attach: return .teal
         case .answer: return .green
         }
+    }
+}
+
+/// Terminal-style log of every model call: the exact context, the options, and the
+/// ranked choices, so the decisions are visibly the model's.
+private struct ConsoleView: View {
+    let lines: [String]
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                        Text(line)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(color(for: line))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .id(index)
+                    }
+                }
+                .padding(10)
+            }
+            .background(Color(red: 0.07, green: 0.08, blue: 0.1))
+            .onChange(of: lines.count) { _, count in
+                if count > 0 { proxy.scrollTo(count - 1, anchor: .bottom) }
+            }
+        }
+    }
+
+    private func color(for line: String) -> Color {
+        if line.hasPrefix("▶") { return Color(red: 0.55, green: 0.8, blue: 1) }
+        if line.hasPrefix("$") { return Color(red: 0.75, green: 0.75, blue: 0.75) }
+        if line.hasPrefix("■") { return Color(red: 0.55, green: 0.85, blue: 0.55) }
+        if line.contains("→") { return Color(red: 1, green: 0.85, blue: 0.4) }
+        return Color(red: 0.8, green: 0.82, blue: 0.85)
     }
 }
 

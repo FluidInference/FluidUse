@@ -47,6 +47,9 @@ final class DemoModel: ObservableObject {
     @Published var errorMessage: String?
     /// Seconds left before an armed run starts; nil when not armed.
     @Published var countdown: Int?
+    /// Model input and output per decision, verbatim, for the console pane.
+    @Published var console: [String] = []
+    let monitor = SystemMonitor()
     private var countdownTask: Task<Void, Never>?
     private var hotkeyMonitors: [Any] = []
 
@@ -70,6 +73,7 @@ final class DemoModel: ObservableObject {
         driver.onNavigation = { [weak self] in self?.refreshPageInfo() }
         refreshApplications()
         installHotkeys()
+        monitor.start()
         if ProcessInfo.processInfo.environment["CUA_DEMO_AUTORUN"] != nil { autorun() }
     }
 
@@ -174,6 +178,24 @@ final class DemoModel: ObservableObject {
         }
     }
 
+    /// Appends the exact model input and its top choices to the console.
+    private func logDecision(context: String, options: [String], result: CuaS1FormsResult, latency: Duration) {
+        var lines = context.components(separatedBy: "\n").map { "  " + $0 }
+        let shown = options.prefix(4).joined(separator: " | ")
+        lines.append("  options[\(options.count)]: \(shown)\(options.count > 4 ? " | …" : "")")
+        let ranked = result.probabilities.enumerated().sorted { $0.element > $1.element }.prefix(3)
+        let top = ranked.map { String(format: "%@ %.1f%%", options[$0.offset], $0.element * 100) }.joined(
+            separator: "  ·  ")
+        lines.append("  → \(top)")
+        lines.append("  model call \(ContentView.format(latency)) on Neural Engine")
+        appendConsole(["▶ CUA-S1-FORMS"] + lines)
+    }
+
+    private func appendConsole(_ lines: [String]) {
+        console.append(contentsOf: lines)
+        if console.count > 600 { console.removeFirst(console.count - 600) }
+    }
+
     /// Applies an answer-sheet entry without consulting the model and logs it as such.
     private func applyAnswer(
         _ answer: PredeterminedAnswer, to element: FormElement, driver: any FormDriver, execute: Bool
@@ -182,6 +204,8 @@ final class DemoModel: ObservableObject {
             element: element, action: .answer, entity: Entity(label: answer.question, value: answer.value),
             confidence: nil, latency: nil, status: execute ? "answer sheet" : "planned")
         print("\(element.role) \"\(element.label.prefix(60))\" -> answer sheet [\(answer.value)]")
+        appendConsole(["■ host · answer sheet (model not consulted): \"\(element.label.prefix(60))\" → \(answer.value)"]
+        )
         rows.append(row)
         let rowIndex = rows.count - 1
         guard execute else { return }
@@ -606,6 +630,7 @@ final class DemoModel: ObservableObject {
         lastSnapshot = snapshot
         pageTitle = snapshot.title
         print("observed \(snapshot.elements.count) elements in \"\(snapshot.title)\"")
+        appendConsole(["", "$ observe \(snapshot.url) → \(snapshot.elements.count) controls in \"\(snapshot.title)\""])
         let title = FormSchema.normalizeTitle(snapshot.title)
         let options = FormSchema.renderOptions(entities: entities)
         let threshold = Float(minConfidence)
@@ -630,6 +655,8 @@ final class DemoModel: ObservableObject {
             let (action, entityIndex) = FormSchema.decode(
                 optionIndex: result.selectedIndex, entityCount: entities.count)
             let confidence: Float = result.probabilities[result.selectedIndex]
+            monitor.recordModelCall(latency)
+            logDecision(context: context, options: options, result: result, latency: latency)
             var row = DecisionRow(
                 element: element, action: action, entity: entityIndex.map { entities[$0] },
                 confidence: confidence, latency: latency, status: action == .skip ? "skipped" : "planned")

@@ -128,6 +128,27 @@ Country, Location, the eligibility questions, "where did you hear about us",
 and the two acknowledgments, and the demographic questions stay untouched.
 `CUA_DEMO_ANSWERS=/path/to/answers.txt` loads a sheet in autorun mode.
 
+## Console and utilization
+
+The lower right pane is a console of every model call: the exact context the
+model saw (TASK / FORM / ELEMENT lines), the option list, the top three choices
+with probabilities, and the call time. Answer-sheet rows appear there in green
+marked "model not consulted", so the split between the model's decisions and
+host rules is visible on screen.
+
+The overlay shows this process's CPU use, system CPU use, and the Neural
+Engine. macOS exposes no public ANE utilization counter and the private power
+counters are unreadable without root, so by default the ANE figure is the
+model's duty cycle (time inside model calls over wall time). For real hardware
+numbers, start powermetrics in a terminal before recording:
+
+```bash
+sudo powermetrics -i 500 --samplers cpu_power,ane_power -o /tmp/cua-powermetrics.log
+```
+
+The app tails that file (path override: `CUA_DEMO_POWERMETRICS`) and shows
+"ANE NN mW" and "CPU NN mW" from it while it is being written.
+
 ## Recording
 
 Clicking the demo window steals focus from the target, so the run can be
