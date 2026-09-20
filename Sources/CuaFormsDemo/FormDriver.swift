@@ -10,6 +10,21 @@ protocol FormDriver: AnyObject {
     func click(_ token: String) async throws
     func isChecked(_ token: String) async throws -> Bool?
     func attach(_ fileURL: URL, to token: String) async throws
+    /// Chooses `value` in a combo box or select, typing to filter where the control allows it.
+    func select(_ value: String, in token: String) async throws
+    /// Chooses the affirmative option (Yes / I agree / I acknowledge) in a combo box used as consent.
+    func selectAffirmative(in token: String) async throws
 }
 
-extension WebFormDriver: FormDriver {}
+extension WebFormDriver: FormDriver {
+    func select(_ value: String, in token: String) async throws {
+        try await type(value, into: token, characterDelay: .zero)
+    }
+
+    func selectAffirmative(in token: String) async throws {
+        for candidate in ["Yes", "I agree", "I acknowledge", "I accept", "Agree"] {
+            if (try? await type(candidate, into: token, characterDelay: .zero)) != nil { return }
+        }
+        throw DriverError.valueNotApplied(token)
+    }
+}

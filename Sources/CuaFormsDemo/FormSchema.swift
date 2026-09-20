@@ -37,6 +37,27 @@ struct FormElement: Identifiable, Sendable {
 
     var isFileUpload: Bool { role == "FileUpload" }
 
+    /// A combo box whose label is a statement to agree with is a consent control; the
+    /// model knows those as checkboxes. Other combo boxes are scored as text fields so a
+    /// matching entity can be chosen in them.
+    var scoringRole: String {
+        guard role == "ComboBox" else { return role }
+        let lowered = label.lowercased()
+        let consent = [
+            "i acknowledge", "i agree", "i certify", "i confirm", "i have read", "by submitting", "i understand",
+            "i accept", "i consent",
+        ]
+        return consent.contains(where: lowered.contains) ? "CheckBox" : "Edit"
+    }
+
+    /// The element as the model sees it.
+    var forScoring: FormElement {
+        guard role == "ComboBox" else { return self }
+        return FormElement(
+            token: token, role: scoringRole, label: label, value: value, placeholder: placeholder,
+            checked: scoringRole == "CheckBox" ? (value.isEmpty ? false : true) : nil, frame: frame)
+    }
+
     var normalizedRole: String {
         role.replacingOccurrences(of: "_", with: "").replacingOccurrences(of: " ", with: "").lowercased()
     }

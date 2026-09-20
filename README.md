@@ -84,8 +84,15 @@ the pages' own accessibility titles. Firefox and Arc are untested.
 
 On a live Greenhouse application (a public job posting in Safari) the driver
 observed 52 controls and the model filled First Name, Last Name, Email, Phone
-(reformatted by the page's phone widget), and LinkedIn correctly, skipped every
-dropdown, and wanted to put the city into the Twitter and Github fields. Use
+(reformatted by the page's phone widget), LinkedIn, and Website correctly, chose
+United States in the Country select, and wanted to put the city into the
+Twitter and Github fields. Combo boxes are scored as text fields (or as
+checkboxes when their label is a consent statement) and a chosen value is
+typed into the control and confirmed with Return, the way react-select expects;
+the eligibility and demographic dropdowns have no answer in the document and
+are skipped. The résumé upload is a manual step on browsers: their file panel
+runs in a separate sandbox helper that synthetic key events do not reach
+reliably. Use
 **Plan only** on a real site, uncheck rows you do not want, then **Execute
 plan**. Click decisions on non-submit buttons are logged as ignored; the submit
 click stays behind **Allow submit click**. Typing stops if keyboard focus leaves

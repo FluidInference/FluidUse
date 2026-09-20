@@ -530,7 +530,7 @@ final class DemoModel: ObservableObject {
 
         for element in snapshot.elements where element.isActionable {
             try Task.checkCancellation()
-            let context = FormSchema.renderContext(formTitle: title, element: element)
+            let context = FormSchema.renderContext(formTitle: title, element: element.forScoring)
             // Time the call off the main actor so UI work does not inflate the number.
             let (result, latency) = try await Task.detached(priority: .userInitiated) {
                 let clock = ContinuousClock()
@@ -568,6 +568,25 @@ final class DemoModel: ObservableObject {
             try await driver.highlight(element.token, on: true)
             defer { Task { try? await driver.highlight(element.token, on: false) } }
             switch action {
+            case .fill where element.role == "ComboBox":
+                let value = row.entity?.value ?? ""
+                if element.value.localizedCaseInsensitiveContains(value) {
+                    row.status = "already selected"
+                } else {
+                    do {
+                        try await driver.select(value, in: element.token)
+                        row.status = "selected · host rule"
+                    } catch {
+                        row.status = "select failed: \(error.localizedDescription)"
+                    }
+                }
+            case .check where element.role == "ComboBox":
+                do {
+                    try await driver.selectAffirmative(in: element.token)
+                    row.status = "affirmed · host rule"
+                } catch {
+                    row.status = "select failed: \(error.localizedDescription)"
+                }
             case .fill:
                 let value = row.entity?.value ?? ""
                 if element.value == value {

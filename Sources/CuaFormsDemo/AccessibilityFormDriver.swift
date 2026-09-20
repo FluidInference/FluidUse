@@ -310,8 +310,58 @@ final class AccessibilityFormDriver: FormDriver {
         return (attribute(element, kAXValueAttribute) as? NSNumber)?.intValue == 1
     }
 
+    /// Browsers host their file panel in a separate sandbox helper; driving it with
+    /// synthetic keys proved unreliable, so attaching stays a manual step on app targets.
     func attach(_ fileURL: URL, to token: String) async throws {
         throw DriverError.unsupported("File attachment through Accessibility")
+    }
+
+    /// Focuses the combo box, types to filter, and confirms the highlighted option.
+    /// Works for react-select style controls and location typeaheads.
+    func select(_ value: String, in token: String) async throws {
+        guard let element = elements[token] else { throw DriverError.elementMissing(token) }
+        let typed = try await typeKeystrokes(value, into: element, token: token, characterDelay: .milliseconds(12))
+        try await Task.sleep(for: .milliseconds(700))
+        try postKey(125, flags: [])  // Down: highlight the first match
+        try await Task.sleep(for: .milliseconds(150))
+        try postKey(36, flags: [])  // Return: choose it
+        try await Task.sleep(for: .milliseconds(400))
+        let chosen = [
+            currentValue(of: typed), currentValue(of: element), description(of: element), description(of: typed),
+        ]
+        guard chosen.contains(where: { Self.matches($0, String(value.prefix(4))) }) else {
+            throw DriverError.valueNotApplied(token)
+        }
+    }
+
+    func selectAffirmative(in token: String) async throws {
+        guard let element = elements[token] else { throw DriverError.elementMissing(token) }
+        activate()
+        AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
+        AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        try await Task.sleep(for: .milliseconds(150))
+        guard isFocused(element) || relocate(token) != nil else { throw DriverError.focusLost(token) }
+        try postKey(125, flags: [])  // Down: open the list on its first option
+        try await Task.sleep(for: .milliseconds(400))
+        try postKey(36, flags: [])  // Return: choose it
+        try await Task.sleep(for: .milliseconds(400))
+        let chosen = currentValue(of: element) + " " + description(of: element)
+        guard !chosen.trimmingCharacters(in: .whitespaces).isEmpty else { throw DriverError.valueNotApplied(token) }
+    }
+
+    private func description(of element: AXUIElement) -> String {
+        attribute(element, kAXDescriptionAttribute) as? String ?? ""
+    }
+
+    private func postKey(_ keyCode: CGKeyCode, flags: CGEventFlags) throws {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+            let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false)
+        else { throw DriverError.unsupported("Key event") }
+        down.flags = flags
+        up.flags = flags
+        down.postToPid(application.processIdentifier)
+        up.postToPid(application.processIdentifier)
     }
 
     // MARK: Labels
