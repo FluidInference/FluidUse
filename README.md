@@ -73,7 +73,7 @@ mmBERT/Gemma byte-fallback BPE and matches HuggingFace `tokenizers` on the conve
 
 On laya's own published suites (3,899 questions rebuilt from upstream's scripts) the Core ML
 buckets match the PyTorch reference's accuracy on every suite (AG News 0.935, Emotion 0.537,
-MASSIVE-20 0.657, spam/phishing 0.993, guardrails 0.805, …) at 5.2 ms median per question versus
+MASSIVE-20 0.657, spam/phishing 0.993, guardrails 0.808, …) at 5.2 ms median per question versus
 61.6 ms for PyTorch on the same Mac's CPU. Full tables in [Benchmarks.md](Benchmarks.md); the
 questions, reference answers, reports and conversion live in
 [mobius `models/computer-use/laya/coreml`](https://github.com/FluidInference/mobius/tree/main/models/computer-use/laya/coreml).

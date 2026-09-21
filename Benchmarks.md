@@ -80,13 +80,13 @@ slots). "Upstream" is the laya-multilingual column of laya's BENCHMARKS.md (Tesl
 | Support triage (10 queues) | 400 | 0.522 | 0.540 | **0.542** | 0.537 | 5.3 ms |
 | Email spam (noul) | 400 | 0.993 | 0.993 | **0.993** | 0.993 | 5.8 ms |
 | Phishing (noul) | 400 | 0.993 | 0.993 | **0.993** | 0.993 | 9.0 ms |
-| Guardrails / jailbreak (noul, held out) | 400 | 0.755 | 0.805 | **0.805** | 0.810 | 3.8 ms |
+| Guardrails / jailbreak (noul, held out) | 400 | 0.755 | 0.805 | **0.808** | 0.810 | 3.8 ms |
 | Moderation / toxicity (noul, held out) | 400 | 0.525 | 0.535 | **0.535** | 0.535 | 3.8 ms |
 | RAG passage relevance (noul) | 400 | 0.657 | 0.672 | **0.672** | 0.675 | 5.3 ms |
 | Model routing domain (6) | 399 | 0.123 | 0.441 | **0.441** | 0.454 | 5.3 ms |
 
 Core ML fp16 matches the PyTorch reference on every suite, with 100% row-level argmax agreement on
-eight suites and 99.8% / 99.5% on the other two. Whole run from Swift: **3,899 questions in 22.9 s,
+eight suites and 99.8% on the other two. Whole run from Swift: **3,899 questions in 22.9 s,
 p50 5.2 ms, p95 18.0 ms** (bucket picked per prompt), versus 61.6 ms per question for PyTorch FP32
 on the same CPU and 32.8 ms per question upstream reports on a T4. The PyTorch column reproduces
 upstream's table except model routing, where the published 0.123 looks like an upstream run
