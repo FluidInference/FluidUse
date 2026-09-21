@@ -92,6 +92,32 @@ on the same CPU and 32.8 ms per question upstream reports on a T4. The PyTorch c
 upstream's table except model routing, where the published 0.123 looks like an upstream run
 artefact (their own script gives 0.441 here).
 
+### The "Laya vs Jev, measured" five tasks
+
+The laya Tetris post compares laya to Jev on five tasks, 100 labelled examples each, laya 0.3.4
+English checkpoint on an M1 Max GPU. It names the tasks but not the datasets, sampling or wording,
+so this reproduction uses the obvious public dataset for each (AG News, UCI SMS Spam, DAIR Emotion,
+Yelp Review Full, deepset prompt-injections), the first 100 rows of the test split, and laya's own
+question wording; Jev is closed and its column is copied from the post. The multilingual checkpoint
+is the one FluidUse ships, so its PyTorch column is the reference for the Core ML column.
+
+| Task | Post: laya (M1 Max) | Post: Jev | laya English, PyTorch here | laya multilingual, PyTorch here | Core ML multilingual (M5 Pro) | p50 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| News topic · choice | 93% | 92% | 95% | 97% | **97%** | 5.5 ms |
+| SMS spam · noul | 96% | 96% | 88% | 58% | **58%** | 4.2 ms |
+| Emotion · choice | 45% | 53% | 65% | 58% | **58%** | 4.1 ms |
+| Review star rating · score | 35% | 70% | 39% | 35% | **35%** | 5.9 ms |
+| Prompt injection · noul | 65% | 71% | 79% | 64% | **65%** | 4.4 ms |
+| **All 500** | 66.8% | 76.4% | 73.2% | 62.4% | **62.6%** | 4.5 ms |
+
+Core ML matches its PyTorch reference on every task (100% row agreement on four, 99% on prompt
+injection) at 4.5 ms median per question. The English checkpoint lands close to the post on the
+three tasks where a dataset is unambiguous (news, SMS spam, review stars) and above it on emotion
+and prompt injection, which suggests the post drew those from different data. The multilingual
+checkpoint is markedly weaker on SMS spam: the first 100 UCI rows are 83% ham and it flags 57 of
+them as spam. The 5-way star rating is near chance for both checkpoints, consistent with laya's own
+note that its `score` questions are weak.
+
 ### Latency and placement per bucket
 
 16 fixture questions vs PyTorch (`verification-multilingual-L*.json`) and `coreml-cli` profiles
