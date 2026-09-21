@@ -85,7 +85,9 @@ swift run -c release FluidUseLaya benchmark --suites Benchmarks/laya/suites.json
 swift run -c release LayaTetrisDemo                              # SwiftUI: laya plays Tetris, live decisions
 ```
 
-`LayaTetrisDemo` ([Sources/LayaTetrisDemo](Sources/LayaTetrisDemo)) scores every legal landing
+![laya plays Tetris](Media/laya-tetris.png)
+
+`LayaTetrisDemo` ([Sources/LayaTetrisDemo](Sources/LayaTetrisDemo), [15 s clip](Media/laya-tetris.mp4)) scores every legal landing
 of the current piece with *"Is this a clean placement?"* and plays the best one, showing each
 sentence, its probability, and per-call latency. Zero-shot laya clears a few dozen lines before
 topping out; the built-in heuristic policy plays indefinitely. It is a latency demo, not a Tetris
