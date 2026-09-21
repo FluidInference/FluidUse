@@ -1,5 +1,6 @@
 import FluidUse
 import Foundation
+import LayaTetris
 import SwiftUI
 
 /// One scored landing, shown in the decision console.
@@ -62,7 +63,7 @@ final class GameModel: ObservableObject {
     private var runStart = Date()
     private var runDecisionSeconds = 0.0
 
-    static let question = LayaQuestion.noul("Is this a clean placement?")
+    static let question = LayaTetris.question
 
     /// `LAYA_DEMO_AUTOLOAD=1` loads the model on launch; `LAYA_DEMO_AUTORUN=1` loads and plays without clicks; `LAYA_DEMO_QUIT_AFTER=<s>`
     /// prints the stats and exits, which is how the demo is smoke-tested headlessly.
@@ -74,7 +75,13 @@ final class GameModel: ObservableObject {
         loadModel()
         Task {
             while manager == nil && isLoading { try? await Task.sleep(nanoseconds: 100_000_000) }
-            guard manager != nil else { return }
+            guard manager != nil else {
+                if environment["LAYA_DEMO_QUIT_AFTER"] != nil {
+                    print("autorun: model load failed: \(errorMessage ?? "unknown error")")
+                    exit(1)
+                }
+                return
+            }
             reset()
             toggle()
             if environment["LAYA_DEMO_STRESS"] == "1" {
@@ -152,6 +159,7 @@ final class GameModel: ObservableObject {
         promptTokens = 0
         bucket = 0
         runDecisionSeconds = 0
+        pieceCallMs = []
         log = []
     }
 
@@ -188,10 +196,7 @@ final class GameModel: ObservableObject {
             case .laya:
                 guard let manager else { break }
                 for candidate in all {
-                    if Task.isCancelled {
-                        isRunning = false
-                        return
-                    }
+                    guard !Task.isCancelled, run == generation else { return }
                     evaluating = candidate
                     let sentence = game.describe(candidate, piece: piece)
                     let t0 = DispatchTime.now().uptimeNanoseconds

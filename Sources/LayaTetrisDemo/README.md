@@ -31,5 +31,4 @@ LAYA_DEMO_AUTORUN=1 LAYA_DEMO_STRESS=1 LAYA_DEMO_QUIT_AFTER=30 swift run -c rele
 `LAYA_DEMO_AUTOLOAD=1` loads the model on launch without playing, `LAYA_DEMO_SEED=<n>` fixes the
 piece sequence.
 
-The simulation is the same code as `swift run FluidUseLaya tetris`; the app keeps its own copy in
-`TetrisSimulation.swift` because executables cannot share sources.
+The simulation (`Sources/LayaTetris`) is shared with `swift run FluidUseLaya tetris`.

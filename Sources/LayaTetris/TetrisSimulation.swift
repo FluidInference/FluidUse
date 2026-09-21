@@ -1,14 +1,17 @@
+import FluidUse
 import Foundation
 
-// Tetris simulation shared with `FluidUseLaya tetris` (Sources/FluidUseLaya/LayaTetrisCommand.swift).
-// The demo keeps its own copy because executable targets cannot share sources.
+/// Headless 10×20 Tetris used by `FluidUseLaya tetris` and `LayaTetrisDemo`: legal landings, their
+/// features, the one-sentence description laya scores, and a heuristic baseline.
+public enum LayaTetris {
+    /// The question both the CLI and the demo ask about every landing.
+    public static let question = LayaQuestion.noul("Is this a clean placement?")
+}
 
-// MARK: - Tetris simulation
-
-struct SplitMix64 {
+public struct SplitMix64 {
     private var state: UInt64
-    init(seed: UInt64) { state = seed }
-    mutating func next() -> UInt64 {
+    public init(seed: UInt64) { state = seed }
+    public mutating func next() -> UInt64 {
         state &+= 0x9E37_79B9_7F4A_7C15
         var z = state
         z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
@@ -17,44 +20,44 @@ struct SplitMix64 {
     }
 }
 
-struct TetrisGame {
-    static let width = 10
-    static let height = 20
+public struct TetrisGame {
+    public static let width = 10
+    public static let height = 20
 
-    struct Piece {
-        let name: String
+    public struct Piece: Sendable {
+        public let name: String
         /// Rotation states as cell offsets (column, row) with row 0 at the top of the piece box.
-        let rotations: [[(Int, Int)]]
+        public let rotations: [[(Int, Int)]]
     }
 
-    struct Features {
-        let linesCleared: Int
-        let newHoles: Int
-        let landingHeight: Int
-        let maxHeight: Int
-        let bumpiness: Int
-        let bumpinessDelta: Int
-        let wellDepth: Int
-        let flushSides: Int
+    public struct Features: Sendable {
+        public let linesCleared: Int
+        public let newHoles: Int
+        public let landingHeight: Int
+        public let maxHeight: Int
+        public let bumpiness: Int
+        public let bumpinessDelta: Int
+        public let wellDepth: Int
+        public let flushSides: Int
 
         /// Dellacherie-style linear evaluation used by the baseline policy.
-        var heuristic: Double {
+        public var heuristic: Double {
             Double(linesCleared) * 3.4 - Double(newHoles) * 7.9 - Double(landingHeight) * 4.5 - Double(bumpiness) * 1.2
                 - Double(wellDepth) * 3.4
         }
     }
 
-    struct Candidate: Identifiable {
-        let id: Int
-        let rotation: Int
-        let column: Int
-        let board: [[Bool]]
+    public struct Candidate: Identifiable, Sendable {
+        public let id: Int
+        public let rotation: Int
+        public let column: Int
+        public let board: [[Bool]]
         /// Board cells (x, y) the piece occupies before any line clears.
-        let cells: [(Int, Int)]
-        let features: Features
+        public let cells: [(Int, Int)]
+        public let features: Features
     }
 
-    static let pieces: [Piece] = [
+    public static let pieces: [Piece] = [
         Piece(name: "I", rotations: [[(0, 0), (1, 0), (2, 0), (3, 0)], [(0, 0), (0, 1), (0, 2), (0, 3)]]),
         Piece(name: "O", rotations: [[(0, 0), (1, 0), (0, 1), (1, 1)]]),
         Piece(
@@ -79,19 +82,19 @@ struct TetrisGame {
             ]),
     ]
 
-    private(set) var board: [[Bool]]
-    private(set) var linesCleared = 0
-    private(set) var isOver = false
+    public private(set) var board: [[Bool]]
+    public private(set) var linesCleared = 0
+    public private(set) var isOver = false
     private var bag: [Int] = []
     private var rng: SplitMix64
 
-    init(seed: UInt64) {
+    public init(seed: UInt64) {
         board = Array(repeating: Array(repeating: false, count: Self.width), count: Self.height)
         rng = SplitMix64(seed: seed)
     }
 
     /// Next piece from a seven-bag randomizer, or nil once the stack has topped out.
-    mutating func spawn() -> Piece? {
+    public mutating func spawn() -> Piece? {
         guard !isOver else { return nil }
         if bag.isEmpty {
             bag = Array(0..<Self.pieces.count)
@@ -102,7 +105,7 @@ struct TetrisGame {
         return Self.pieces[bag.removeLast()]
     }
 
-    func candidates(for piece: Piece) -> [Candidate] {
+    public func candidates(for piece: Piece) -> [Candidate] {
         var result: [Candidate] = []
         let heightsBefore = columnHeights(board)
         let bumpinessBefore = bumpiness(heightsBefore)
@@ -137,7 +140,7 @@ struct TetrisGame {
         return result
     }
 
-    mutating func apply(_ candidate: Candidate) {
+    public mutating func apply(_ candidate: Candidate) {
         board = candidate.board
         linesCleared += candidate.features.linesCleared
         if board[0].contains(true) || board[1].contains(true) { isOver = true }
@@ -146,7 +149,7 @@ struct TetrisGame {
     /// One natural sentence per landing, the only thing laya sees. Under the short question
     /// "Is this a clean placement?" the multilingual checkpoint ranks these sensibly: holes and a
     /// taller stack pull P(clean) down, a cleared line pushes it up; numeric feature dumps do not.
-    func describe(_ candidate: Candidate, piece: Piece) -> String {
+    public func describe(_ candidate: Candidate, piece: Piece) -> String {
         let f = candidate.features
         var clauses: [String] = []
         clauses.append(
@@ -182,11 +185,11 @@ struct TetrisGame {
         return value < names.count ? names[value] : String(value)
     }
 
-    func render() -> String {
+    public func render() -> String {
         Self.render(board)
     }
 
-    func render(after candidate: Candidate) -> String {
+    public func render(after candidate: Candidate) -> String {
         Self.render(candidate.board)
     }
 

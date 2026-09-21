@@ -8,8 +8,10 @@ public enum LayaError: Error, LocalizedError, Sendable, Equatable {
     case invalidOptionCount(Int)
     /// The option at this zero-based index is empty.
     case emptyOption(Int)
-    /// The rendered options do not fit the option budget of the checkpoint, even after shrinking.
-    case optionsExceedBudget(Int)
+    /// A choice label appears twice; upstream keys options by label, so duplicates cannot be expressed.
+    case duplicateOption(String)
+    /// The question type string is not choice, score, or noul.
+    case unknownQuestionType(String)
     /// No loaded length bucket can hold the head of this prompt.
     case promptTooLong(tokens: Int, maximumLength: Int)
     /// A required file (model bundle, tokenizer) is missing or malformed.
@@ -27,8 +29,10 @@ public enum LayaError: Error, LocalizedError, Sendable, Equatable {
             return "laya requires 2–\(LayaManager.maximumOptions) options; received \(count)."
         case .emptyOption(let index):
             return "laya option \(index) is empty."
-        case .optionsExceedBudget(let budget):
-            return "laya options exceed the checkpoint's option budget of \(budget) tokens."
+        case .duplicateOption(let label):
+            return "laya choice option \"\(label)\" is listed more than once."
+        case .unknownQuestionType(let type):
+            return "laya question type must be choice, score, or noul; received \(type)."
         case .promptTooLong(let tokens, let maximumLength):
             return "laya prompt head needs \(tokens) tokens; the largest loaded bucket is \(maximumLength)."
         case .invalidAsset(let reason):
@@ -111,6 +115,25 @@ public struct LayaQuestion: Sendable, Equatable {
             kind: .noul(falseDescription: falseDescription, trueDescription: trueDescription))
     }
 
+    /// Build a question from its wire form: a type name, instructions, and `[label, description?]`
+    /// pairs (choice labels with optional descriptions, score levels, or noul `false`/`true` descriptions).
+    public init(type: String, instructions: String, options: [[String?]]) throws {
+        let pairs: [(String, String?)] = options.map { (($0.first ?? nil) ?? "", $0.count > 1 ? $0[1] : nil) }
+        switch type {
+        case "choice":
+            self.init(instructions: instructions, kind: .choice(pairs.map { Choice($0.0, description: $0.1) }))
+        case "score":
+            self.init(instructions: instructions, kind: .score(levels: pairs.map(\.0)))
+        case "noul":
+            let byLabel = Dictionary(pairs.map { ($0.0, $0.1) }, uniquingKeysWith: { first, _ in first })
+            self.init(
+                instructions: instructions,
+                kind: .noul(falseDescription: byLabel["false"] ?? nil, trueDescription: byLabel["true"] ?? nil))
+        default:
+            throw LayaError.unknownQuestionType(type)
+        }
+    }
+
     public var type: LayaQuestionType {
         switch kind {
         case .choice: return .choice
@@ -152,8 +175,10 @@ public struct LayaQuestion: Sendable, Equatable {
             guard (2...LayaManager.maximumOptions).contains(options.count) else {
                 throw LayaError.invalidOptionCount(options.count)
             }
-            for (index, option) in options.enumerated() where option.label.isEmpty {
-                throw LayaError.emptyOption(index)
+            var seen = Set<String>()
+            for (index, option) in options.enumerated() {
+                guard !option.label.isEmpty else { throw LayaError.emptyOption(index) }
+                guard seen.insert(option.label).inserted else { throw LayaError.duplicateOption(option.label) }
             }
         case .score(let levels):
             guard (2...LayaManager.maximumOptions).contains(levels.count) else {

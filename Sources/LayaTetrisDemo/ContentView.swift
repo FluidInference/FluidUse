@@ -1,3 +1,4 @@
+import LayaTetris
 import SwiftUI
 
 struct ContentView: View {

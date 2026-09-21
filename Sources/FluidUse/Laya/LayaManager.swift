@@ -5,8 +5,11 @@ import Foundation
 /// one encoder pass per question and no generated tokens.
 ///
 /// The Core ML conversion ships fixed-length buckets (128, 256, 512, 1024 tokens). A prompt runs on the
-/// smallest loaded bucket that fits; longer states are truncated on the right by the largest one,
-/// exactly as laya does for its own `max_len`. Calls on a manager are serialized by the actor.
+/// smallest loaded bucket that fits; longer states are truncated on the right by the largest loaded
+/// bucket, the way laya truncates at `max_len`. Upstream's `max_len` is 1024, so answers match the
+/// PyTorch reference exactly only for prompts that fit a loaded bucket: load `[128, 1024]` (or all
+/// four) when states can exceed ~480 tokens. The default `[128, 512]` trades that for 614 MB less
+/// resident weight. `stateWasTruncated` on the answer says when it happened. Calls are serialized by the actor.
 public actor LayaManager {
     /// Option slots in every exported bucket.
     public static let maximumOptions = 32
@@ -122,7 +125,8 @@ public actor LayaManager {
     /// Answer one typed question about a state.
     ///
     /// The state is plain text; serialize structured state to JSON yourself if needed. The prompt runs on the
-    /// smallest loaded bucket that holds it without truncation, otherwise on the largest with the state cut.
+    /// smallest loaded bucket that holds it without truncation, otherwise on the largest loaded bucket with
+    /// the state cut on the right (`stateWasTruncated` reports it).
     public func answer(state: String, question: LayaQuestion) throws -> LayaAnswer {
         try Task.checkCancellation()
         let parts = try builder.parts(state: state, question: question)

@@ -34,19 +34,7 @@ struct LayaBenchmarkCommand {
         let gold: Int
 
         var question: LayaQuestion {
-            switch type {
-            case "choice":
-                return .choice(
-                    instructions,
-                    options: options.map { LayaQuestion.Choice($0[0] ?? "", description: $0.count > 1 ? $0[1] : nil) })
-            case "score":
-                return .score(instructions, levels: options.map { $0[0] ?? "" })
-            default:
-                let byLabel = Dictionary(
-                    uniqueKeysWithValues: options.map { ($0[0] ?? "", $0.count > 1 ? $0[1] : nil) })
-                return .noul(
-                    instructions, falseDescription: byLabel["false"] ?? nil, trueDescription: byLabel["true"] ?? nil)
-            }
+            get throws { try LayaQuestion(type: type, instructions: instructions, options: options) }
         }
     }
 
@@ -157,7 +145,7 @@ struct LayaBenchmarkCommand {
             let t0 = DispatchTime.now().uptimeNanoseconds
             let answer: LayaAnswer
             do {
-                answer = try await manager.answer(state: row.state, question: row.question)
+                answer = try await manager.answer(state: row.state, question: try row.question)
             } catch {
                 suite.dropped += 1
                 stats[row.suite] = suite

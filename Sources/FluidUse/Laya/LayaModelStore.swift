@@ -4,7 +4,8 @@ import Foundation
 ///
 /// Each bucket is a compiled `.mlmodelc` directory of four files plus one shared `tokenizer.json`.
 /// Files are fetched straight from the Hub into `~/Library/Application Support/FluidUse/Models/laya-coreml`
-/// (or a caller-supplied cache root); existing files are kept, partial downloads are discarded.
+/// (or a caller-supplied cache root). Existing nonempty files are kept; a download is accepted only with
+/// a 2xx status, a non-HTML body, and the advertised Content-Length, and is moved into place atomically.
 public enum LayaModelStore {
     public static let repository = "FluidInference/laya-coreml"
     /// Fixed sequence lengths exported by the Mobius conversion.
@@ -56,7 +57,9 @@ public enum LayaModelStore {
         let manager = FileManager.default
         for relative in relativePaths {
             let destination = repoDirectory.appendingPathComponent(relative)
-            if manager.fileExists(atPath: destination.path) { continue }
+            if let size = try? manager.attributesOfItem(atPath: destination.path)[.size] as? Int64, size > 0 {
+                continue
+            }
             try manager.createDirectory(
                 at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             let encoded = relative.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? relative
@@ -64,15 +67,33 @@ public enum LayaModelStore {
                 throw LayaError.invalidAsset("Bad download URL for \(relative)")
             }
             progress?(relative, 0)
+            // Download next to the destination so the final move is a rename, never a cross-volume copy
+            // that could leave a truncated member behind if interrupted.
+            let partial = destination.appendingPathExtension("partial")
+            try? manager.removeItem(at: partial)
             let (temporary, response) = try await URLSession.shared.download(from: url)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 try? manager.removeItem(at: temporary)
                 throw LayaError.invalidAsset(
                     "Download of \(relative) failed (\((response as? HTTPURLResponse)?.statusCode ?? -1))")
             }
+            if let type = http.value(forHTTPHeaderField: "Content-Type"), type.contains("text/html") {
+                try? manager.removeItem(at: temporary)
+                throw LayaError.invalidAsset("Download of \(relative) returned an HTML page instead of the file")
+            }
+            let size = (try? manager.attributesOfItem(atPath: temporary.path)[.size] as? Int64) ?? 0
+            if http.expectedContentLength > 0, size != http.expectedContentLength {
+                try? manager.removeItem(at: temporary)
+                throw LayaError.invalidAsset(
+                    "Download of \(relative) is \(size) bytes, expected \(http.expectedContentLength)")
+            }
+            guard size > 0 else {
+                try? manager.removeItem(at: temporary)
+                throw LayaError.invalidAsset("Download of \(relative) is empty")
+            }
+            try manager.moveItem(at: temporary, to: partial)
             try? manager.removeItem(at: destination)
-            try manager.moveItem(at: temporary, to: destination)
-            let size = (try? manager.attributesOfItem(atPath: destination.path)[.size] as? Int64) ?? 0
+            try manager.moveItem(at: partial, to: destination)
             progress?(relative, size)
         }
         return repoDirectory

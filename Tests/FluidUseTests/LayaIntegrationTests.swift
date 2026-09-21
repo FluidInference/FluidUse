@@ -2,6 +2,7 @@ import Foundation
 import XCTest
 
 @testable import FluidUse
+import LayaTetris
 
 /// Opt-in checks against the converted checkpoint and fixtures from the Mobius laya toolkit
 /// (`models/computer-use/laya/coreml`): set `FLUIDUSE_LAYA_MODEL_DIR` to a directory holding the
@@ -29,15 +30,7 @@ final class LayaIntegrationTests: XCTestCase {
         }
 
         var layaQuestion: LayaQuestion {
-            switch type {
-            case "choice":
-                return .choice(
-                    instructions, options: options.map { .init($0[0] ?? "", description: $0.count > 1 ? $0[1] : nil) })
-            case "score":
-                return .score(instructions, levels: options.map { $0[0] ?? "" })
-            default:
-                return .noul(instructions)
-            }
+            get throws { try LayaQuestion(type: type, instructions: instructions, options: options) }
         }
     }
 
@@ -82,8 +75,7 @@ final class LayaIntegrationTests: XCTestCase {
         let flat =
             "The I piece dropped at column 0 leaves no holes, keeps the surface flat, keeps the stack low, "
             + "and clears one line."
-        // Same wording as the CLI Tetris demo.
-        let question = LayaQuestion.noul("Is this a clean placement?")
+        let question = LayaTetris.question
         let bad = try await manager.answer(state: hole, question: question)
         let good = try await manager.answer(state: flat, question: question)
         XCTAssertEqual(bad.bucketLength, 128)

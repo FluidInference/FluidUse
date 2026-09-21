@@ -118,7 +118,7 @@ struct LayaCommand {
             let payload: [String: Any] = [
                 "type": question.type.rawValue,
                 "selected": answer.selectedLabel,
-                "probabilities": Dictionary(uniqueKeysWithValues: zip(question.labels, answer.probabilities)),
+                "probabilities": zip(question.labels, answer.probabilities).map { ["label": $0.0, "p": $0.1] },
                 "confidence": answer.confidence,
                 "action_probability": answer.actionProbability,
                 "tokens": answer.tokenCount,
@@ -146,21 +146,12 @@ struct LayaCommand {
     }
 
     static func makeQuestion(type: String, instructions: String, options: [String]) throws -> LayaQuestion {
-        switch type {
-        case "choice":
-            return .choice(
-                instructions,
-                options: options.map { option -> LayaQuestion.Choice in
-                    let parts = option.split(separator: "=", maxSplits: 1).map(String.init)
-                    return LayaQuestion.Choice(parts[0], description: parts.count > 1 ? parts[1] : nil)
-                })
-        case "score":
-            return .score(instructions, levels: options)
-        case "noul":
-            return .noul(instructions)
-        default:
-            throw LayaError.invalidAsset("--type must be choice, score, or noul")
+        // `label=description` for choice options; score levels and noul descriptions are plain.
+        let pairs: [[String?]] = options.map { option in
+            let parts = option.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+            return [parts.first ?? "", parts.count > 1 ? parts[1] : nil]
         }
+        return try LayaQuestion(type: type, instructions: instructions, options: pairs)
     }
 
     // MARK: - Fixture parity
@@ -208,19 +199,7 @@ struct LayaCommand {
             [SequenceCase].self, from: Data(contentsOf: URL(fileURLWithPath: fixtures)))
         var failures = 0
         for item in cases {
-            let question: LayaQuestion
-            switch item.type {
-            case "choice":
-                question = .choice(
-                    item.instructions,
-                    options: item.options.map {
-                        LayaQuestion.Choice($0[0] ?? "", description: $0.count > 1 ? $0[1] : nil)
-                    })
-            case "score":
-                question = .score(item.instructions, levels: item.options.map { $0[0] ?? "" })
-            default:
-                question = .noul(item.instructions)
-            }
+            let question = try LayaQuestion(type: item.type, instructions: item.instructions, options: item.options)
             let sequence = try await manager.tokenSequence(state: item.state, question: question, length: item.length)
             if sequence.ids != item.ids || sequence.markers != item.markers {
                 failures += 1

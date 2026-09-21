@@ -82,8 +82,12 @@ final class LayaSequenceBuilderTests: XCTestCase {
         for pair in zip(shrunk.markers, shrunk.markers.dropFirst()) {
             XCTAssertEqual(pair.1 - pair.0, 6)
         }
-        // Instructions keep at least 8 ids when the option budget is exhausted.
-        XCTAssertEqual(shrunk.markers[0], 1 + 8 + 1)
+        // 16 ids of budget remain for the 18-id instructions: [cls] + 16 + [sep] puts the first marker at 18.
+        XCTAssertEqual(shrunk.markers[0], 1 + 16 + 1)
+        // With no budget left the instructions keep their 8-id floor.
+        let starved = try builder(headMaxLength: 40).sequence(
+            state: "s", question: .choice("q", options: options), maximumLength: 512)
+        XCTAssertEqual(starved.markers[0], 1 + 8 + 1)
     }
 
     func testQuestionThatCannotFitTheBucketIsRejected() throws {
@@ -108,6 +112,16 @@ final class LayaSequenceBuilderTests: XCTestCase {
         XCTAssertThrowsError(try LayaQuestion.choice("q", options: ["a", ""]).validate()) {
             XCTAssertEqual($0 as? LayaError, .emptyOption(1))
         }
+        XCTAssertThrowsError(try LayaQuestion.choice("q", options: ["yes", "no", "yes"]).validate()) {
+            XCTAssertEqual($0 as? LayaError, .duplicateOption("yes"))
+        }
+        XCTAssertEqual(
+            try LayaQuestion(type: "noul", instructions: "q", options: [["false", "nope"], ["true", "yep"]])
+                .renderedOptions,
+            ["false: nope", "true: yep"])
+        XCTAssertEqual(
+            try LayaQuestion(type: "score", instructions: "q", options: [["a", nil], ["b", nil]]).labels, ["0", "1"])
+        XCTAssertThrowsError(try LayaQuestion(type: "pick", instructions: "q", options: []))
         XCTAssertNoThrow(try LayaQuestion.noul("q").validate())
     }
 

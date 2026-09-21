@@ -23,15 +23,16 @@ let package = Package(
             dependencies: ["FluidUse", .product(name: "FluidAudio", package: "FluidAudio")],
             resources: [.copy("Resources")]
         ),
+        .target(name: "LayaTetris", dependencies: ["FluidUse"]),
         .executableTarget(
             name: "FluidUseLaya",
-            dependencies: ["FluidUse", .product(name: "FluidAudio", package: "FluidAudio")]
+            dependencies: ["FluidUse", "LayaTetris", .product(name: "FluidAudio", package: "FluidAudio")]
         ),
         .executableTarget(
             name: "LayaTetrisDemo",
-            dependencies: ["FluidUse"],
+            dependencies: ["FluidUse", "LayaTetris"],
             exclude: ["README.md"]
         ),
-        .testTarget(name: "FluidUseTests", dependencies: ["FluidUse"]),
+        .testTarget(name: "FluidUseTests", dependencies: ["FluidUse", "LayaTetris"]),
     ]
 )
