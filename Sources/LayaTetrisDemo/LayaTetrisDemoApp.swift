@@ -17,7 +17,7 @@ struct LayaTetrisDemoApp: App {
         WindowGroup("laya plays Tetris") {
             ContentView()
                 .environmentObject(model)
-                .frame(minWidth: 980, minHeight: 640)
+                .frame(minWidth: 1000, minHeight: 760)
                 .onAppear { model.applyEnvironment() }
         }
         .windowResizability(.contentSize)

@@ -8,7 +8,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 12) {
                 header
                 BoardView(board: model.board, chosen: model.chosen, evaluating: model.evaluating)
-                    .frame(width: 300, height: 600)
+                    .frame(width: 260, height: 520)
                 controls
             }
             VStack(alignment: .leading, spacing: 12) {
@@ -39,7 +39,7 @@ struct ContentView: View {
             Text(model.loadStatus).font(.caption.monospaced()).foregroundStyle(
                 model.manager == nil ? Color.secondary : Color.green)
         }
-        .frame(width: 300, alignment: .leading)
+        .frame(width: 260, alignment: .leading)
     }
 
     private var controls: some View {
@@ -69,7 +69,7 @@ struct ContentView: View {
                 Slider(value: $model.pieceDelayMs, in: 0...1000, step: 20)
             }
         }
-        .frame(width: 300)
+        .frame(width: 260)
     }
 
     private var statTiles: some View {
@@ -124,7 +124,7 @@ struct ContentView: View {
             }
             .background(Color(nsColor: .textBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 6))
-            .frame(minHeight: 300)
+            .frame(minHeight: 260)
         }
     }
 
@@ -136,7 +136,7 @@ struct ContentView: View {
                     Text(line).font(.caption.monospaced()).lineLimit(1)
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
             .padding(6)
             .background(Color(nsColor: .textBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 6))

@@ -56,6 +56,8 @@ final class GameModel: ObservableObject {
     private var game = TetrisGame(seed: 7)
     private var rng = SplitMix64(seed: 8)
     private var task: Task<Void, Never>?
+    /// Bumped by every reset/start so a cancelled run's late results are ignored.
+    private var generation = 0
     private var latencies: [Double] = []
     private var runStart = Date()
     private var runDecisionSeconds = 0.0
@@ -74,6 +76,16 @@ final class GameModel: ObservableObject {
             guard manager != nil else { return }
             reset()
             toggle()
+            if environment["LAYA_DEMO_STRESS"] == "1" {
+                // Pause / reset / play every second to shake out state bugs.
+                for _ in 0..<20 {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    if isRunning { toggle() }
+                    reset()
+                    toggle()
+                    print("stress: reset ok, pieces \(pieces)")
+                }
+            }
             if let quitText = environment["LAYA_DEMO_QUIT_AFTER"], let seconds = Double(quitText) {
                 try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 print(
@@ -119,6 +131,7 @@ final class GameModel: ObservableObject {
     func reset() {
         task?.cancel()
         task = nil
+        generation += 1
         isRunning = false
         game = TetrisGame(seed: seed)
         rng = SplitMix64(seed: seed &+ 1)
@@ -153,15 +166,17 @@ final class GameModel: ObservableObject {
             return
         }
         if isOver { reset() }
+        generation += 1
+        let run = generation
         isRunning = true
         runStart = Date()
         task = Task { [weak self] in
-            await self?.play()
+            await self?.play(run: run)
         }
     }
 
-    private func play() async {
-        while !Task.isCancelled, let piece = game.spawn() {
+    private func play(run: Int) async {
+        while !Task.isCancelled, run == generation, let piece = game.spawn() {
             currentPiece = piece.name
             let all = game.candidates(for: piece)
             guard !all.isEmpty else { break }
@@ -181,6 +196,8 @@ final class GameModel: ObservableObject {
                     let t0 = DispatchTime.now().uptimeNanoseconds
                     do {
                         let answer = try await manager.answer(state: sentence, question: Self.question)
+                        // Paused or reset while the model was busy: drop the result quietly.
+                        guard run == generation, !Task.isCancelled else { return }
                         let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
                         record(ms: ms, tokens: answer.tokenCount, bucket: answer.bucketLength)
                         let p = answer.noul ?? 0
@@ -189,9 +206,11 @@ final class GameModel: ObservableObject {
                                 id: candidate.id, candidate: candidate, sentence: sentence, probability: p,
                                 milliseconds: ms))
                         if best == nil || p > best!.0 { best = (p, candidate) }
+                    } catch is CancellationError {
+                        return
                     } catch {
                         errorMessage = error.localizedDescription
-                        isRunning = false
+                        if run == generation { isRunning = false }
                         return
                     }
                     if stepDelayMs > 0 {
@@ -211,6 +230,7 @@ final class GameModel: ObservableObject {
                 best = (0, pick)
             }
             evaluating = nil
+            guard run == generation else { return }
             guard let (score, pick) = best else { break }
             chosen = pick
             game.apply(pick)
@@ -223,12 +243,14 @@ final class GameModel: ObservableObject {
                 (policy == .laya ? "P(clean)" : "score") as NSString, score, lines)
             log.insert(placed, at: 0)
             if log.count > 12 { log.removeLast() }
+            board = game.board
+            if isOver { break }
             if pieceDelayMs > 0 {
                 try? await Task.sleep(nanoseconds: UInt64(pieceDelayMs * 1_000_000))
             }
-            board = game.board
-            if isOver { break }
+            guard run == generation else { return }
         }
+        guard run == generation else { return }
         isRunning = false
         if isOver { log.insert("Topped out after \(pieces) pieces, \(lines) lines.", at: 0) }
     }
