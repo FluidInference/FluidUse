@@ -11,9 +11,11 @@ converted to Core ML and served by [FluidAudio](https://github.com/FluidInferenc
 
 ## Demo video
 
-[Media/demo.mp4](Media/demo.mp4) (41 s, 9.9 MB): a 706K-parameter model filling a live job
-application in Safari, with every decision logged and asitop showing the
-Neural Engine barely moving.
+
+
+https://github.com/user-attachments/assets/a0b31285-05be-4bcf-a645-4283eb327c35
+
+
 
 ## Use
 
