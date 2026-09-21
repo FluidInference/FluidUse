@@ -140,6 +140,9 @@ final class LayaSequenceBuilderTests: XCTestCase {
         XCTAssertEqual(LayaModelStore.repository, "FluidInference/laya-coreml")
         XCTAssertEqual(try LayaModelStore.modelFile(length: 128), "laya_multilingual_fp16_L128_options32.mlmodelc")
         XCTAssertThrowsError(try LayaModelStore.modelFile(length: 96))
+        XCTAssertEqual(
+            try LayaModelStore.modelFile(length: 512, precision: "e8"), "laya_multilingual_e8_L512_options32.mlmodelc")
+        XCTAssertThrowsError(try LayaModelStore.modelFile(length: 128, precision: "w4"))
         XCTAssertEqual(LayaModelStore.lengths, [128, 256, 512, 1024])
     }
 }

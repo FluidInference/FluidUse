@@ -28,6 +28,7 @@ struct LayaTetrisCommand {
 
     private struct Options {
         var modelDirectory: String?
+        var precision = "fp16"
         var lengths: [Int] = [128]
         var maxPieces = 200
         var seed: UInt64 = 7
@@ -48,6 +49,7 @@ struct LayaTetrisCommand {
         while index < arguments.count {
             switch arguments[index] {
             case "--model-dir": options.modelDirectory = try value("--model-dir")
+            case "--precision": options.precision = try value("--precision")
             case "--lengths": options.lengths = try value("--lengths").split(separator: ",").compactMap { Int($0) }
             case "--pieces": options.maxPieces = Int(try value("--pieces")) ?? options.maxPieces
             case "--seed": options.seed = UInt64(try value("--seed")) ?? options.seed
@@ -73,7 +75,7 @@ struct LayaTetrisCommand {
         let options = try parse(arguments)
         var manager: LayaManager?
         if options.policy == "laya" {
-            let configuration = LayaManager.Configuration(lengths: options.lengths)
+            let configuration = LayaManager.Configuration(lengths: options.lengths, precision: options.precision)
             if let directory = options.modelDirectory {
                 manager = try await LayaManager.load(
                     from: URL(fileURLWithPath: directory), configuration: configuration)
@@ -157,7 +159,7 @@ struct LayaTetrisCommand {
     private static func printUsage() {
         print(
             """
-            Usage: swift run FluidUseLaya tetris [--model-dir DIR] [--lengths 128] [--pieces 200] [--seed 7]
+            Usage: swift run FluidUseLaya tetris [--model-dir DIR] [--precision fp16|e8] [--lengths 128] [--pieces 200] [--seed 7]
                                              [--policy laya|heuristic|random] [--show-every N] [--trace N] [--json]
 
             Plays headless 10x20 Tetris. With --policy laya (default) every legal landing is described in

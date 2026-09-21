@@ -26,6 +26,7 @@ struct LayaCommand {
 
     private struct Options {
         var modelDirectory: String?
+        var precision = "fp16"
         var lengths: [Int] = [128, 512]
         var state: String?
         var type = "noul"
@@ -48,6 +49,7 @@ struct LayaCommand {
         while index < arguments.count {
             switch arguments[index] {
             case "--model-dir": options.modelDirectory = try value("--model-dir")
+            case "--precision": options.precision = try value("--precision")
             case "--lengths": options.lengths = try value("--lengths").split(separator: ",").compactMap { Int($0) }
             case "--state": options.state = try value("--state")
             case "--type": options.type = try value("--type")
@@ -68,7 +70,7 @@ struct LayaCommand {
     }
 
     private static func loadManager(_ options: Options) async throws -> LayaManager {
-        let configuration = LayaManager.Configuration(lengths: options.lengths)
+        let configuration = LayaManager.Configuration(lengths: options.lengths, precision: options.precision)
         let started = Date()
         let manager: LayaManager
         if let directory = options.modelDirectory {
@@ -242,6 +244,7 @@ struct LayaCommand {
 
             Options:
               --model-dir DIR      Local directory with laya_*_L{N}_options32.mlmodelc/.mlpackage + tokenizer.json
+              --precision fp16|e8  Weight precision of the bundles (e8 = int8 embedding table, 30% smaller)
               --lengths 128,512    Buckets to load (default 128,512)
               --options a|b|c      Choice labels (label=description allowed) or score levels, lowest first
               --repeats N          Time N extra calls and report the median

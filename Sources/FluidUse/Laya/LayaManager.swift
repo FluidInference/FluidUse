@@ -18,10 +18,15 @@ public actor LayaManager {
         /// Compute units per bucket. Defaults: 128 → CPU+ANE (fastest measured), longer → all units,
         /// where the GPU wins because ANE attention cost grows quadratically with length.
         public var computeUnits: [Int: MLComputeUnits]
+        /// Weight precision of the bundles to load; see `LayaModelStore.precisions`.
+        public var precision: String
 
-        public init(lengths: [Int] = [128, 512], computeUnits: [Int: MLComputeUnits] = [:]) {
+        public init(
+            lengths: [Int] = [128, 512], computeUnits: [Int: MLComputeUnits] = [:], precision: String = "fp16"
+        ) {
             self.lengths = lengths
             self.computeUnits = computeUnits
+            self.precision = precision
         }
 
         func units(for length: Int) -> MLComputeUnits {
@@ -77,7 +82,8 @@ public actor LayaManager {
         progress: LayaModelStore.Progress? = nil
     ) async throws -> LayaManager {
         let repoDirectory = try await LayaModelStore.ensure(
-            lengths: configuration.lengths, cacheDirectory: cacheDirectory, progress: progress)
+            lengths: configuration.lengths, precision: configuration.precision, cacheDirectory: cacheDirectory,
+            progress: progress)
         return try await load(from: repoDirectory, configuration: configuration)
     }
 
@@ -95,7 +101,8 @@ public actor LayaManager {
         let tokenizer = try LayaTokenizer(tokenizerJsonURL: tokenizerURL)
         var models: [MLModel] = []
         for length in configuration.lengths {
-            let bundle = directory.appendingPathComponent(try LayaModelStore.modelFile(length: length))
+            let bundle = directory.appendingPathComponent(
+                try LayaModelStore.modelFile(length: length, precision: configuration.precision))
             let package = bundle.deletingPathExtension().appendingPathExtension("mlpackage")
             let compiledURL: URL
             if FileManager.default.fileExists(atPath: bundle.path) {

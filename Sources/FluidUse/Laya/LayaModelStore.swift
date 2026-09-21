@@ -14,12 +14,19 @@ public enum LayaModelStore {
     /// Members of a compiled Core ML bundle as published.
     static let bundleMembers = ["analytics/coremldata.bin", "coremldata.bin", "model.mil", "weights/weight.bin"]
 
-    /// Compiled bucket bundle for one sequence length.
-    public static func modelFile(length: Int) throws -> String {
+    /// Weight precisions published for every bucket. `fp16` is the reference; `e8` keeps the encoder in
+    /// fp16 and stores the 256k-row embedding table as int8 (30% smaller, same parity gates).
+    public static let precisions = ["fp16", "e8"]
+
+    /// Compiled bucket bundle for one sequence length and weight precision.
+    public static func modelFile(length: Int, precision: String = "fp16") throws -> String {
         guard lengths.contains(length) else {
             throw LayaError.invalidAsset("No laya bucket for length \(length); available: \(lengths)")
         }
-        return "laya_multilingual_fp16_L\(length)_options\(LayaManager.maximumOptions).mlmodelc"
+        guard precisions.contains(precision) else {
+            throw LayaError.invalidAsset("No laya precision \(precision); available: \(precisions)")
+        }
+        return "laya_multilingual_\(precision)_L\(length)_options\(LayaManager.maximumOptions).mlmodelc"
     }
 
     /// Default cache root; the repository directory lives underneath it.
@@ -37,13 +44,13 @@ public enum LayaModelStore {
     /// Ensure the buckets and tokenizer exist under `cacheDirectory/laya-coreml`, downloading what is missing.
     /// Returns the repository directory.
     public static func ensure(
-        lengths: [Int], cacheDirectory: URL? = nil, progress: Progress? = nil
+        lengths: [Int], precision: String = "fp16", cacheDirectory: URL? = nil, progress: Progress? = nil
     ) async throws -> URL {
         let root = cacheDirectory ?? defaultCacheDirectory()
         let repoDirectory = root.appendingPathComponent("laya-coreml", isDirectory: true)
         var relativePaths = [tokenizerFile]
         for length in lengths {
-            let bundle = try modelFile(length: length)
+            let bundle = try modelFile(length: length, precision: precision)
             relativePaths += bundleMembers.map { "\(bundle)/\($0)" }
         }
         let manager = FileManager.default
