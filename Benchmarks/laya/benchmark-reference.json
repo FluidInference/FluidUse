@@ -1,0 +1,95 @@
+{
+  "source_repo": "convaiinnovations/laya",
+  "source_revision": "1c5edc17a7acd8701df6fc341c0d179f1c62c982",
+  "variant": "multilingual",
+  "device": "cpu",
+  "torch": "2.7.0",
+  "threads": 4,
+  "seed": 13,
+  "n_per_task": 400,
+  "max_len": 1024,
+  "seconds": 240.0,
+  "ms_per_question": 61.55,
+  "suites": {
+    "app.email_spam": {
+      "n": 400,
+      "dropped": 0,
+      "accuracy": 0.9925,
+      "max_tokens": 1024,
+      "mean_tokens": 334.1,
+      "upstream_published": 0.993
+    },
+    "app.guardrails_jailbreak": {
+      "n": 400,
+      "dropped": 0,
+      "accuracy": 0.805,
+      "max_tokens": 588,
+      "mean_tokens": 124.9,
+      "upstream_published": 0.755
+    },
+    "app.model_routing_domain": {
+      "n": 399,
+      "dropped": 0,
+      "accuracy": 0.4411,
+      "max_tokens": 261,
+      "mean_tokens": 146.7,
+      "upstream_published": 0.123
+    },
+    "app.moderation_toxicity": {
+      "n": 400,
+      "dropped": 0,
+      "accuracy": 0.535,
+      "max_tokens": 587,
+      "mean_tokens": 111.2,
+      "upstream_published": 0.525
+    },
+    "app.phishing": {
+      "n": 400,
+      "dropped": 0,
+      "accuracy": 0.9925,
+      "max_tokens": 1024,
+      "mean_tokens": 363.9,
+      "upstream_published": 0.993
+    },
+    "app.rag_relevance": {
+      "n": 400,
+      "dropped": 0,
+      "accuracy": 0.6725,
+      "max_tokens": 269,
+      "mean_tokens": 147.5,
+      "upstream_published": 0.657
+    },
+    "app.support_triage": {
+      "n": 400,
+      "dropped": 0,
+      "accuracy": 0.54,
+      "max_tokens": 344,
+      "mean_tokens": 238.5,
+      "upstream_published": 0.522
+    },
+    "jev.ag_news": {
+      "n": 400,
+      "dropped": 0,
+      "accuracy": 0.935,
+      "max_tokens": 244,
+      "mean_tokens": 102.6,
+      "upstream_published": 0.93
+    },
+    "jev.emotion": {
+      "n": 400,
+      "dropped": 0,
+      "accuracy": 0.5375,
+      "max_tokens": 95,
+      "mean_tokens": 53.5,
+      "upstream_published": 0.53
+    },
+    "massive_intent.en": {
+      "n": 300,
+      "dropped": 0,
+      "accuracy": 0.6567,
+      "max_tokens": 236,
+      "mean_tokens": 199.7,
+      "upstream_published": 0.657
+    }
+  }
+}

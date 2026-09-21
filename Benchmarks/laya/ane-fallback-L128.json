@@ -1,0 +1,53 @@
+{
+  "hardware": {
+    "device": "arm64",
+    "chip": "Apple M5 Pro",
+    "ram": "24GB",
+    "os_version": "macOS 27.0",
+    "timestamp": "2026-09-21T03:58:43.638868+00:00"
+  },
+  "models": [
+    {
+      "model_path": "/Users/hanweng/Documents/mobius-laya/models/computer-use/laya/coreml/build/laya_multilingual_fp16_L128_options32.mlmodelc",
+      "model_name": "laya_multilingual_fp16_L128_options32",
+      "fallback": {
+        "compute_units": "cpu_and_neural_engine",
+        "total_ops": 978,
+        "ane_ops": 973,
+        "gpu_ops": 0,
+        "cpu_ops": 5,
+        "ane_percent": 99.5,
+        "reasons": [
+          {
+            "reason": "Unsupported tensor data type: int32",
+            "count": 4,
+            "estimated_cpu_runtime_ms": 5.7622,
+            "op_types": {
+              "ios17.cast": 1,
+              "ios17.add": 1,
+              "select": 1,
+              "ios17.gather": 1
+            },
+            "ops": [
+              "attention_mask_to_fp16",
+              "add_0",
+              "select_0",
+              "input_3_cast_fp16"
+            ]
+          },
+          {
+            "reason": "Unable to resolve operation input \"y\".",
+            "count": 1,
+            "estimated_cpu_runtime_ms": 0.001,
+            "op_types": {
+              "ios17.greater_equal": 1
+            },
+            "ops": [
+              "greater_equal_0"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

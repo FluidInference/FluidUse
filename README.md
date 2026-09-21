@@ -73,14 +73,15 @@ mmBERT/Gemma byte-fallback BPE and matches HuggingFace `tokenizers` on the conve
 On laya's own published suites (3,899 questions rebuilt from upstream's scripts) the Core ML
 buckets match the PyTorch reference's accuracy on every suite (AG News 0.935, Emotion 0.537,
 MASSIVE-20 0.657, spam/phishing 0.993, guardrails 0.805, …) at 5.2 ms median per question versus
-61.6 ms for PyTorch on the same Mac's CPU; reports and reproduction live in
+61.6 ms for PyTorch on the same Mac's CPU. The questions, reference answers, and reports are in
+[Benchmarks/laya](Benchmarks/laya); the conversion lives in
 [mobius `models/computer-use/laya/coreml`](https://github.com/FluidInference/mobius/tree/main/models/computer-use/laya/coreml).
 
 ```bash
 swift run -c release FluidUseLaya answer --state "…" --type choice \
     --instructions "What does the customer want?" --options "refund|order status|technical help"
 swift run -c release FluidUseLaya tetris --pieces 200            # headless Tetris, P(clean) per landing
-swift run -c release FluidUseLaya benchmark --suites suites.jsonl --reference reference-rows.jsonl
+swift run -c release FluidUseLaya benchmark --suites Benchmarks/laya/suites.jsonl --reference Benchmarks/laya/reference-rows.jsonl
 swift run -c release LayaTetrisDemo                              # SwiftUI: laya plays Tetris, live decisions
 ```
 
