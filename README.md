@@ -1,225 +1,57 @@
 # FluidUse
 
-Local computer use on Apple silicon. FluidUse observes a form in a running
-macOS app or browser through the Accessibility API, hands each field to a
-small on-device model that decides what goes in it, and executes the result
-the way a person would: typed into the real app, in milliseconds per decision,
-with nothing leaving the machine.
+Local computer use on Apple silicon. FluidUse reads a form in a running Mac
+app or browser through the Accessibility API, asks a small on-device model
+what belongs in each field, and types the answer into the real app. About
+1 ms per decision on the Neural Engine, nothing leaves the machine.
 
 The first model is [CUA-S1-FORMS](https://huggingface.co/FluidInference/cua-s1-forms-coreml),
-Cua's 706K-parameter form specialist converted to Core ML and served by
-[FluidAudio](https://github.com/FluidInference/FluidAudio) (`CuaS1FormsManager`).
-It runs on the Neural Engine at about 1 ms per decision.
+a 706K-parameter form specialist from [Cua](https://github.com/trycua/cua),
+converted to Core ML and served by [FluidAudio](https://github.com/FluidInference/FluidAudio).
 
-## Package
+## Use
 
 ```swift
 .package(url: "https://github.com/FluidInference/FluidUse.git", from: "0.1.0")
 ```
 
-The `FluidUse` library provides:
+```swift
+import FluidAudio
+import FluidUse
 
-- `AccessibilityFormDriver` — observe and drive any running app's window
-  (native apps, Safari, Chrome): roles mapped to the model's vocabulary, labels
-  from the app or from nearby text, values typed via `AXValue` or key events,
-  presses via `AXPress`, focus guarded so nothing is typed into the wrong window.
-- `WebFormDriver` — the same contract for a `WKWebView` you embed.
-- `FormSchema` — the model's exact context and option rendering, ported from
-  upstream `cua_s1.schema`; `DocumentEntities` — `Label: value` extraction
-  from PDFs and text; `PredeterminedAnswer` — an answer sheet the harness
-  applies to question-style fields the model does not decide.
+let model = try await CuaS1FormsManager.load()
+let driver = AccessibilityFormDriver(application: safari)   // any NSRunningApplication
+let page = try await driver.snapshot()                       // fields, labels, values
+let options = FormSchema.renderOptions(entities: profile)    // "fill Email: …", check, click, skip
 
-## Demo app
+for field in page.elements where field.isActionable {
+    let context = FormSchema.renderContext(formTitle: page.title, element: field)
+    let decision = try await model.score(context: context, options: options)
+    // decode with FormSchema.decode, then driver.type / driver.click
+}
+```
+
+`WebFormDriver` does the same for an embedded `WKWebView`. `DocumentEntities`
+turns a PDF or text file of `Label: value` lines into the profile; an optional
+`PredeterminedAnswer` sheet covers question-style fields the model does not decide.
+
+## Demo
 
 ```bash
 swift run -c release FluidUseDemo
 ```
 
-A SwiftUI app around the library: pick a target app or the embedded page,
-load a profile, fill the form, and watch every model call in a console.
-Accessibility access is required for the terminal that launches it.
+Pick a running app, load a profile, press **Fill form** (or **9** from any
+app). Every model call is logged with its input, ranked options, and time.
+Requires Accessibility access for the launching terminal.
 
-## Flow
+## Scope
 
+The model matches a field to a value it is given. It does not read résumés,
+reason about dropdown options, or write free text. The harness handles
+observation, typing, selection, and an answer sheet; uploads and essays are
+left to the person. Submit is never clicked unless enabled.
 
-1. **Sample profile** (or **Open…**) extracts `Label: value` lines from a PDF or
-   text file, the same way upstream's `cua_s1.pdf` does, and adds first/last
-   name variants. Each entity becomes one `fill Label: value` option; the model
-   scores at most 29 entities plus `check`, `click`, and `skip`.
-2. Pick a **Target**. *Embedded web page* observes the page in the app's own
-   web view (**Sample form** loads a bundled job-board style application; any
-   URL works). Any other entry is a running app: **Observe window** reads its
-   frontmost window's accessibility tree and draws the controls it found to
-   scale, with the labels the model will see. This needs Accessibility access
-   for the terminal that launched the demo (System Settings › Privacy &
-   Security › Accessibility).
-3. **Plan only** scores every actionable element and lists the decisions.
-   **Fill form** scores and acts as it goes: text fields are typed in through
-   the page's native value setter with `input`/`change` events, checkboxes are
-   clicked and re-read, and file inputs receive the source document.
-4. Button clicks are collected but never executed unless **Allow submit click**
-   is on, and then only one control whose label is a recognized submit label.
+## License
 
-The decision log shows the element role and label, the chosen action, the
-model's confidence, and the wall time of that `score` call including the actor
-hop. The overlay on the page repeats the last and median latency and the
-compute-plan placement.
-
-## Driving a real app
-
-With an app target, controls come from `AXTextField`, `AXTextArea`,
-`AXCheckBox`, `AXPopUpButton`/`AXComboBox`, and `AXButton` elements, mapped to
-the `Edit`, `CheckBox`, `ComboBox`, and `Button` roles the checkpoint was
-trained on. Labels use the element's own description or title when the app
-provides one (Safari web content, AppKit forms). PDF viewers expose fields
-without names, so the driver falls back to nearby page text: the caption
-directly above the box, else the row text to the left, and for checkboxes the
-text to their right; leading form numbering such as `(a)` is stripped. Values
-are typed through `AXValue`, checkboxes and buttons through `AXPress`, and a
-floating outline marks the element being acted on over the target window.
-
-**Sample PDF in Preview** copies the bundled `sample-application.pdf` (a
-fillable job application generated by `Tools/make_sample_pdf.py` with
-reportlab, so its widgets carry proper appearance streams) to a temporary file,
-opens it in Preview, and selects Preview as the target. With the sample profile
-the model fills 17 of 21 fields and checks the two required declarations,
-skipping the hard negatives (emergency contact phone, referral code, "how did
-you hear about us", newsletter); "Current employer" is skipped at 94%.
-
-## Browsers
-
-Safari and Chrome are driven the same way, with three differences the driver
-handles. Their web inputs ignore `AXValue` writes (WebKit applies the write to
-whichever field has focus, not the one addressed), so browsers are typed into
-with real key events after focusing the field through Accessibility; the driver
-refuses to type unless the addressed element is the focused element in the
-targeted window, so a stray click elsewhere aborts the run instead of typing
-into another window. Chrome enables web-content accessibility a couple of
-seconds after the first client query and clips element frames to the viewport,
-so the observer waits for the web area to populate, keeps zero-height frames,
-and scrolls each element into view before acting. Type part of the window
-title in the **Window title contains** field to pin a specific window rather
-than whichever one is in front.
-
-Verified with the sample page opened as a file in Safari and in Chrome: 17
-fields typed and both required declarations checked in each, labels taken from
-the pages' own accessibility titles. Firefox and Arc are untested.
-
-On a live Greenhouse application (a public job posting in Safari) the driver
-observed 52 controls and the model filled First Name, Last Name, Email, Phone
-(reformatted by the page's phone widget), LinkedIn, and Website correctly, chose
-United States in the Country select, and wanted to put the city into the
-Twitter and Github fields. Combo boxes are scored as text fields (or as
-checkboxes when their label is a consent statement) and a chosen value is
-typed into the control and confirmed with Return, the way react-select expects;
-the eligibility and demographic dropdowns have no answer in the document and
-are skipped. The résumé upload is a manual step on browsers: their file panel
-runs in a separate sandbox helper that synthetic key events do not reach
-reliably. Use
-**Plan only** on a real site, uncheck rows you do not want, then **Execute
-plan**. Click decisions on non-submit buttons are logged as ignored; the submit
-click stays behind **Allow submit click**. Typing stops if keyboard focus leaves
-the targeted window, for instance when you click another tab mid-run.
-
-Verified on Preview with the IRS W-4 (`https://www.irs.gov/pub/irs-pdf/fw4.pdf`,
-whose fields carry no tooltips): the driver observed 21 controls, labels came
-out as "First name and middle initial", "Last name", "Address", "City or
-town, state, and ZIP code", "Social security number", "Single or Married
-filing separately", and so on, and the model's fills landed in the document,
-which Preview marked edited and auto-saved. Safari web content is observed
-with its own labels. Chrome needs `AXManualAccessibility` enabled and was not
-tested.
-
-## Answer sheet
-
-The model only matches a form field to one of the values it is handed, and it
-was trained on short captions ("Phone number"), not on questions ("Will you
-require Visa Sponsorship now, or in the future?"). Even with the answers in the
-document it skips such questions. So predetermined answers are a separate,
-host-side input: **Answer sheet › Open…** loads a text file of
-`question text contains => answer` lines (see `Resources/sample-answers.txt`),
-and any element whose label contains the question text is handled by the
-harness without consulting the model, logged in green as `answer sheet`. Combo
-boxes get the answer typed and confirmed; affirmative answers (Yes, I agree, I
-acknowledge) take the first option, since consent lists word it their own way;
-text fields are typed; checkboxes are set. Where the answers come from, a saved
-sheet or an LLM run once per applicant, is outside this demo.
-
-On the live Greenhouse posting that leaves only the résumé upload for the
-person: the model fills the contact and profile fields, the answer sheet handles
-Country, Location, the eligibility questions, "where did you hear about us",
-and the two acknowledgments, and the demographic questions stay untouched.
-`CUA_DEMO_ANSWERS=/path/to/answers.txt` loads a sheet in autorun mode.
-
-## Console and utilization
-
-The lower right pane is a console of every model call: the exact context the
-model saw (TASK / FORM / ELEMENT lines), the option list, the top three choices
-with probabilities, and the call time. Answer-sheet rows appear there in green
-marked "model not consulted", so the split between the model's decisions and
-host rules is visible on screen.
-
-The overlay shows this process's CPU use, system CPU use, and the Neural
-Engine. macOS exposes no public ANE utilization counter and the private power
-counters are unreadable without root, so by default the ANE figure is the
-model's duty cycle (time inside model calls over wall time). For real hardware
-numbers, start powermetrics in a terminal before recording:
-
-```bash
-sudo powermetrics -i 500 --samplers cpu_power,ane_power -o /tmp/cua-powermetrics.log
-```
-
-The app tails that file (path override: `CUA_DEMO_POWERMETRICS`). With it
-live, the Neural Engine tile shows ANE % the way asitop defines it, ANE power
-over an assumed 8 W peak (`CUA_DEMO_ANE_MAX_MW` overrides), with the
-milliwatts and the model duty cycle as detail; CPU package power is shown too.
-
-## Recording
-
-Clicking the demo window steals focus from the target, so the run can be
-triggered without touching it: **Arm 5 s** shows a countdown in the overlay
-and then starts, and the hotkeys work from any app once Accessibility access is
-granted: a bare **9** runs (or executes a reviewed plan), ⌃⌥⌘F does the same,
-⌃⌥⌘A arms the countdown, ⌃⌥⌘S stops. Start the screen recording, arrange the windows, press the hotkey.
-
-## What is and is not the model
-
-The model sees exactly upstream's context string, for example:
-
-```
-TASK fill the form from the document, then submit
-FORM Senior Software Engineer, Perception - Example Robotics - Job Application
-ELEMENT Edit "Email address" value=""
-```
-
-Everything else is host code: DOM observation and label derivation
-(`WebFormDriver.swift`), document parsing (`DocumentEntities.swift`), ordering
-and authorization (`DemoModel.swift`). Attaching the document to a file input
-is a host rule because the model's vocabulary has no attach action; upstream
-trains "Upload file" buttons as `skip`. The log labels those rows `host rule`.
-
-## Observed behavior worth knowing
-
-- Placeholder text is passed as the `hint` field and shifts decisions. On the
-  sample page, `USD / year`, `YYYY-MM-DD`, and `https://linkedin.com/in/…`
-  placeholders made the model skip fields it fills without them, even though
-  the labels are in upstream's training catalogue. The sample page ships
-  without those placeholders; real sites with unusual hints will see the effect.
-- The model can fill a free-text field with an unrelated entity. On the sample
-  page it filled "Message to hiring manager" with the website entity at 88%,
-  above the default 0.5 threshold.
-- Re-running on a filled page skips every filled field; the current value is
-  part of the context.
-- Radio buttons, custom dropdowns, and inputs inside iframes are not observed.
-- On the W-4 the model skipped "First name and middle initial" at 93%, skipped
-  the combined "City or town, state, and ZIP code" field, and checked "Head of
-  household" at 100%. Government forms are well outside its synthetic training
-  distribution; treat app-target runs as a demonstration of the loop, and keep
-  **Allow submit click** off.
-
-Set `CUA_DEMO_AUTORUN=1` to load the model, the sample profile, and the sample
-form and fill it without clicking; add `CUA_DEMO_QUIT=1` to exit afterwards,
-`CUA_DEMO_DOCUMENT=/path/to/file.pdf` or `CUA_DEMO_URL=…` to substitute inputs,
-`CUA_DEMO_TARGET=Preview` (or `Safari`, `"Google Chrome"`) to drive a running
-app instead of the web view, `CUA_DEMO_WINDOW=<title substring>` to pick its
-window, and `CUA_DEMO_PLAN_ONLY=1` to score without acting.
+Apache 2.0. CUA-S1-FORMS is MIT, from Cua.
