@@ -9,6 +9,12 @@ The first model is [CUA-S1-FORMS](https://huggingface.co/FluidInference/cua-s1-f
 a 706K-parameter form specialist from [Cua](https://github.com/trycua/cua),
 converted to Core ML and served by [FluidAudio](https://github.com/FluidInference/FluidAudio).
 
+## Demo video
+
+[Media/demo.mp4](Media/demo.mp4): a 706K-parameter model filling a live job
+application in Safari, with every decision logged and asitop showing the
+Neural Engine barely moving.
+
 ## Use
 
 ```swift
