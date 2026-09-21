@@ -60,6 +60,12 @@ reason about dropdown options, or write free text. The harness handles
 observation, typing, selection, and an answer sheet; uploads and essays are
 left to the person. Submit is never clicked unless enabled.
 
+## Models
+
+[Documentation/Models.md](Documentation/Models.md) lists what runs today, what is converted
+but not wired in, and the open-weight candidates worth converting next, with sizes,
+licenses, and demo ideas.
+
 ## License
 
 Apache 2.0. CUA-S1-FORMS is MIT, from Cua.
