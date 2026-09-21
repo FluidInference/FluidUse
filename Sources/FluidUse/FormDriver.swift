@@ -3,7 +3,7 @@ import Foundation
 /// A UI surface the planner can observe and act on: the embedded web page or a
 /// running application's window through the Accessibility API.
 @MainActor
-protocol FormDriver: AnyObject {
+public protocol FormDriver: AnyObject {
     func snapshot() async throws -> PageSnapshot
     func highlight(_ token: String, on: Bool) async throws
     func type(_ value: String, into token: String, characterDelay: Duration) async throws
@@ -17,11 +17,11 @@ protocol FormDriver: AnyObject {
 }
 
 extension WebFormDriver: FormDriver {
-    func select(_ value: String, in token: String) async throws {
+    public func select(_ value: String, in token: String) async throws {
         try await type(value, into: token, characterDelay: .zero)
     }
 
-    func selectAffirmative(in token: String) async throws {
+    public func selectAffirmative(in token: String) async throws {
         for candidate in ["Yes", "I agree", "I acknowledge", "I accept", "Agree"] {
             if (try? await type(candidate, into: token, characterDelay: .zero)) != nil { return }
         }

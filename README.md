@@ -1,23 +1,46 @@
-# CUA-S1-FORMS Demo (macOS)
+# FluidUse
 
-SwiftUI app that drives a form with `CuaS1FormsManager` from the parent
-package: a source document on the left, a target on the right, and one
-on-device decision per form element. The target is either the embedded web
-page or another running application's window, driven through the macOS
-Accessibility API the way Cua's native driver and Codex computer use work.
+Local computer use on Apple silicon. FluidUse observes a form in a running
+macOS app or browser through the Accessibility API, hands each field to a
+small on-device model that decides what goes in it, and executes the result
+the way a person would: typed into the real app, in milliseconds per decision,
+with nothing leaving the machine.
 
-```bash
-cd Examples/CuaFormsDemo
-swift run -c release CuaFormsDemo
+The first model is [CUA-S1-FORMS](https://huggingface.co/FluidInference/cua-s1-forms-coreml),
+Cua's 706K-parameter form specialist converted to Core ML and served by
+[FluidAudio](https://github.com/FluidInference/FluidAudio) (`CuaS1FormsManager`).
+It runs on the Neural Engine at about 1 ms per decision.
+
+## Package
+
+```swift
+.package(url: "https://github.com/FluidInference/FluidUse.git", from: "0.1.0")
 ```
 
-No Xcode project is needed. **Load model** downloads the 1.5 MB FP16 Core ML
-package from `FluidInference/cua-s1-forms-coreml` on first use and reads its
-compute plan, so the Neural Engine badge reports measured op placement rather
-than an assumption. Use a release build for latency numbers; debug builds add
-several milliseconds of overhead per call.
+The `FluidUse` library provides:
+
+- `AccessibilityFormDriver` — observe and drive any running app's window
+  (native apps, Safari, Chrome): roles mapped to the model's vocabulary, labels
+  from the app or from nearby text, values typed via `AXValue` or key events,
+  presses via `AXPress`, focus guarded so nothing is typed into the wrong window.
+- `WebFormDriver` — the same contract for a `WKWebView` you embed.
+- `FormSchema` — the model's exact context and option rendering, ported from
+  upstream `cua_s1.schema`; `DocumentEntities` — `Label: value` extraction
+  from PDFs and text; `PredeterminedAnswer` — an answer sheet the harness
+  applies to question-style fields the model does not decide.
+
+## Demo app
+
+```bash
+swift run -c release FluidUseDemo
+```
+
+A SwiftUI app around the library: pick a target app or the embedded page,
+load a profile, fill the form, and watch every model call in a console.
+Accessibility access is required for the terminal that launches it.
 
 ## Flow
+
 
 1. **Sample profile** (or **Open…**) extracts `Label: value` lines from a PDF or
    text file, the same way upstream's `cua_s1.pdf` does, and adds first/last

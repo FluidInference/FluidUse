@@ -7,10 +7,10 @@ import Foundation
 /// elements are addressed by snapshot tokens, values are set through `AXValue`,
 /// and buttons and checkboxes are pressed with `AXPress`.
 @MainActor
-final class AccessibilityFormDriver: FormDriver {
-    let application: NSRunningApplication
+public final class AccessibilityFormDriver: FormDriver {
+    public let application: NSRunningApplication
     /// Substring of the window title to target; nil uses the app's focused window.
-    var windowTitleFilter: String?
+    public var windowTitleFilter: String?
     private let axApplication: AXUIElement
     private var targetWindow: AXUIElement?
 
@@ -29,10 +29,10 @@ final class AccessibilityFormDriver: FormDriver {
     private var observed: [String: FormElement] = [:]
     private let overlay = HighlightOverlay()
 
-    static var isTrusted: Bool { AXIsProcessTrusted() }
+    public static var isTrusted: Bool { AXIsProcessTrusted() }
 
     /// Running apps with a regular UI, excluding this process.
-    static func candidates() -> [NSRunningApplication] {
+    public static func candidates() -> [NSRunningApplication] {
         NSWorkspace.shared.runningApplications.filter {
             $0.activationPolicy == .regular && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
                 && $0.localizedName != nil
@@ -40,7 +40,7 @@ final class AccessibilityFormDriver: FormDriver {
         .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
     }
 
-    init(application: NSRunningApplication) {
+    public init(application: NSRunningApplication) {
         self.application = application
         axApplication = AXUIElementCreateApplication(application.processIdentifier)
         // Chromium browsers build their web-content accessibility tree only when asked.
@@ -49,7 +49,7 @@ final class AccessibilityFormDriver: FormDriver {
     }
 
     /// Brings the app and the targeted window to the front so key events reach it.
-    func activate() {
+    public func activate() {
         application.activate()
         guard let targetWindow else { return }
         AXUIElementSetAttributeValue(targetWindow, kAXMainAttribute as CFString, kCFBooleanTrue)
@@ -87,7 +87,7 @@ final class AccessibilityFormDriver: FormDriver {
     }
 
     /// Titles of the app's windows, for choosing a target.
-    func windowTitles() -> [String] {
+    public func windowTitles() -> [String] {
         ((attribute(axApplication, kAXWindowsAttribute) as? [AXUIElement]) ?? []).compactMap {
             attribute($0, kAXTitleAttribute) as? String
         }
@@ -95,7 +95,7 @@ final class AccessibilityFormDriver: FormDriver {
 
     // MARK: Observation
 
-    func snapshot() async throws -> PageSnapshot {
+    public func snapshot() async throws -> PageSnapshot {
         guard Self.isTrusted else { throw DriverError.notTrusted }
         guard let window = resolveWindow() else { throw DriverError.noWindow(application.localizedName ?? "app") }
         targetWindow = window
@@ -167,7 +167,7 @@ final class AccessibilityFormDriver: FormDriver {
 
     /// Scrolls the element into view. The outline overlay is off unless
     /// `CUA_DEMO_HIGHLIGHT` is set; on camera the typing itself is the cue.
-    func highlight(_ token: String, on: Bool) async throws {
+    public func highlight(_ token: String, on: Bool) async throws {
         guard let frame = frames[token] else { return }
         if on {
             if let element = elements[token] { AXUIElementPerformAction(element, "AXScrollToVisible" as CFString) }
@@ -188,7 +188,7 @@ final class AccessibilityFormDriver: FormDriver {
 
     /// Native apps take values through `AXValue`; browsers get key events. If a native
     /// app does not apply the first write, the driver falls back to key events too.
-    func type(_ value: String, into token: String, characterDelay: Duration) async throws {
+    public func type(_ value: String, into token: String, characterDelay: Duration) async throws {
         guard let element = elements[token] else { throw DriverError.elementMissing(token) }
         let characters = Array(value)
         let probe = String(characters.prefix(1))
@@ -303,27 +303,27 @@ final class AccessibilityFormDriver: FormDriver {
         attribute(element, kAXValueAttribute) as? String ?? ""
     }
 
-    func click(_ token: String) async throws {
+    public func click(_ token: String) async throws {
         guard let element = elements[token] else { throw DriverError.elementMissing(token) }
         AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
         let status = AXUIElementPerformAction(element, kAXPressAction as CFString)
         guard status == .success else { throw DriverError.actionFailed(token, status.rawValue) }
     }
 
-    func isChecked(_ token: String) async throws -> Bool? {
+    public func isChecked(_ token: String) async throws -> Bool? {
         guard let element = elements[token] else { return nil }
         return (attribute(element, kAXValueAttribute) as? NSNumber)?.intValue == 1
     }
 
     /// Browsers host their file panel in a separate sandbox helper; driving it with
     /// synthetic keys proved unreliable, so attaching stays a manual step on app targets.
-    func attach(_ fileURL: URL, to token: String) async throws {
+    public func attach(_ fileURL: URL, to token: String) async throws {
         throw DriverError.unsupported("File attachment through Accessibility")
     }
 
     /// Focuses the combo box, types to filter, and confirms the highlighted option.
     /// Works for react-select style controls and location typeaheads.
-    func select(_ value: String, in token: String) async throws {
+    public func select(_ value: String, in token: String) async throws {
         guard let element = elements[token] else { throw DriverError.elementMissing(token) }
         let typed = try await typeKeystrokes(value, into: element, token: token, characterDelay: .milliseconds(12))
         try await Task.sleep(for: .milliseconds(700))
@@ -339,7 +339,7 @@ final class AccessibilityFormDriver: FormDriver {
         }
     }
 
-    func selectAffirmative(in token: String) async throws {
+    public func selectAffirmative(in token: String) async throws {
         guard let element = elements[token] else { throw DriverError.elementMissing(token) }
         activate()
         AXUIElementPerformAction(element, "AXScrollToVisible" as CFString)
@@ -386,7 +386,7 @@ final class AccessibilityFormDriver: FormDriver {
     /// PDF viewers expose fields without names; take the nearest meaningful page text.
     /// Checkboxes read to the right, text fields read the caption directly above the
     /// box or the row text to the left, in that order.
-    static func nearbyLabel(for frame: CGRect, role: String, statics: [(CGRect, String)]) -> String {
+    public static func nearbyLabel(for frame: CGRect, role: String, statics: [(CGRect, String)]) -> String {
         func sameRow(_ rect: CGRect) -> Bool {
             let tolerance = max(frame.height, rect.height) * 0.75
             return abs(rect.midY - frame.midY) <= tolerance
@@ -412,7 +412,7 @@ final class AccessibilityFormDriver: FormDriver {
     }
 
     /// Form numbering such as "(a) ", "3a ", or "1. " is layout, not the field's name.
-    static func stripEnumerator(_ label: String) -> String {
+    public static func stripEnumerator(_ label: String) -> String {
         label.replacingOccurrences(
             of: #"^(\(?[a-z0-9]{1,2}\)|[0-9]{1,2}[a-z]?[.:)])\s+"#, with: "", options: .regularExpression)
     }
@@ -422,7 +422,7 @@ final class AccessibilityFormDriver: FormDriver {
         return letters >= 2 && text.count <= 200
     }
 
-    static func clean(_ text: String) -> String {
+    public static func clean(_ text: String) -> String {
         var result = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         for pattern in [#"\s*\*+\s*$"#, #"\s*\(required\)\s*$"#, #"\s+required$"#, #"\s*:\s*$"#] {
             result = result.replacingOccurrences(
@@ -431,7 +431,7 @@ final class AccessibilityFormDriver: FormDriver {
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static func normalizeWindowTitle(_ title: String) -> String {
+    public static func normalizeWindowTitle(_ title: String) -> String {
         var result = title
         let patterns = [
             #"\s+[–—-]\s+Page \d+ of \d+$"#, #"\s+[–—-]\s+\d+ pages?$"#, #"\s+[–—-]\s+Edited$"#, #"\s+[–—-]\s+Locked$"#,
@@ -541,7 +541,7 @@ final class AccessibilityFormDriver: FormDriver {
         guard status == .success else { throw DriverError.actionFailed(token, status.rawValue) }
     }
 
-    enum DriverError: Error, LocalizedError {
+    public enum DriverError: Error, LocalizedError {
         case notTrusted
         case noWindow(String)
         case elementMissing(String)
@@ -550,7 +550,7 @@ final class AccessibilityFormDriver: FormDriver {
         case focusLost(String)
         case unsupported(String)
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .notTrusted:
                 return
@@ -570,10 +570,10 @@ final class AccessibilityFormDriver: FormDriver {
 /// A click-through floating window that outlines the element being acted on,
 /// in screen coordinates, over whichever app owns it.
 @MainActor
-final class HighlightOverlay {
+public final class HighlightOverlay {
     private let panel: NSPanel
 
-    init() {
+    public init() {
         panel = NSPanel(
             contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         panel.level = .floating
@@ -591,7 +591,7 @@ final class HighlightOverlay {
     }
 
     /// `frame` uses Accessibility's top-left screen origin.
-    func show(around frame: CGRect) {
+    public func show(around frame: CGRect) {
         guard let screen = NSScreen.screens.first(where: { $0.frame.origin == .zero }) ?? NSScreen.main else { return }
         let padded = frame.insetBy(dx: -4, dy: -4)
         let flippedY = screen.frame.height - padded.maxY
@@ -599,7 +599,7 @@ final class HighlightOverlay {
         panel.orderFrontRegardless()
     }
 
-    func hide() {
+    public func hide() {
         panel.orderOut(nil)
     }
 }

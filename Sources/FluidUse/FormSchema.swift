@@ -2,7 +2,7 @@ import Foundation
 
 /// Swift port of upstream `cua_s1.schema`: the byte-level context and option
 /// rendering the checkpoint was trained on. Keep the strings identical.
-enum FormAction: String, Sendable {
+public enum FormAction: String, Sendable {
     case fill, check, click, skip
     /// Host rule, not a model option: attach the source document to a file input.
     case attach
@@ -13,13 +13,18 @@ enum FormAction: String, Sendable {
 /// A predetermined answer from a separate step (a saved answer sheet or an LLM run once per
 /// applicant), applied by the harness to any element whose label contains `question`.
 /// The model never sees these; it was trained on short captions, not questions.
-struct PredeterminedAnswer: Identifiable, Sendable {
-    let question: String
-    let value: String
-    var id: String { question }
+public struct PredeterminedAnswer: Identifiable, Sendable {
+    public let question: String
+    public let value: String
+    public var id: String { question }
+
+    public init(question: String, value: String) {
+        self.question = question
+        self.value = value
+    }
 
     /// Lines of the form `question text contains => answer`; `#` starts a comment.
-    static func parse(_ text: String) -> [PredeterminedAnswer] {
+    public static func parse(_ text: String) -> [PredeterminedAnswer] {
         text.components(separatedBy: .newlines).compactMap { line in
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty, !trimmed.hasPrefix("#"), let range = trimmed.range(of: "=>") else { return nil }
@@ -30,44 +35,62 @@ struct PredeterminedAnswer: Identifiable, Sendable {
         }
     }
 
-    static func match(_ label: String, in answers: [PredeterminedAnswer]) -> PredeterminedAnswer? {
+    public static func match(_ label: String, in answers: [PredeterminedAnswer]) -> PredeterminedAnswer? {
         answers.first { label.localizedCaseInsensitiveContains($0.question) }
     }
 }
 
 /// A labeled value from the source document; rendered as one `fill` option.
-struct Entity: Identifiable, Hashable, Sendable {
-    let label: String
-    let value: String
-    var enabled = true
-    var id: String { label + "\u{0}" + value }
+public struct Entity: Identifiable, Hashable, Sendable {
+    public let label: String
+    public let value: String
+    public var enabled = true
+    public var id: String { label + "\u{0}" + value }
 
-    var option: String { "fill \(label): \(value)" }
+    public init(label: String, value: String, enabled: Bool = true) {
+        self.label = label
+        self.value = value
+        self.enabled = enabled
+    }
+
+    public var option: String { "fill \(label): \(value)" }
 }
 
 /// One observed UI element. `token` is the stable action target inside the page.
-struct FormElement: Identifiable, Sendable {
-    let token: String
-    let role: String
-    let label: String
-    let value: String
-    let placeholder: String
-    let checked: Bool?
-    let frame: CGRect
+public struct FormElement: Identifiable, Sendable {
+    public let token: String
+    public let role: String
+    public let label: String
+    public let value: String
+    public let placeholder: String
+    public let checked: Bool?
+    public let frame: CGRect
 
-    var id: String { token }
+    public init(
+        token: String, role: String, label: String, value: String, placeholder: String, checked: Bool?, frame: CGRect
+    ) {
+        self.token = token
+        self.role = role
+        self.label = label
+        self.value = value
+        self.placeholder = placeholder
+        self.checked = checked
+        self.frame = frame
+    }
+
+    public var id: String { token }
 
     /// Roles the planner scores. Upstream: `filter_elements`.
-    var isActionable: Bool {
+    public var isActionable: Bool {
         ["button", "checkbox", "combobox", "edit", "textfield"].contains(normalizedRole)
     }
 
-    var isFileUpload: Bool { role == "FileUpload" }
+    public var isFileUpload: Bool { role == "FileUpload" }
 
     /// A combo box whose label is a statement to agree with is a consent control; the
     /// model knows those as checkboxes. Other combo boxes are scored as text fields so a
     /// matching entity can be chosen in them.
-    var scoringRole: String {
+    public var scoringRole: String {
         guard role == "ComboBox" else { return role }
         let lowered = label.lowercased()
         let consent = [
@@ -78,32 +101,38 @@ struct FormElement: Identifiable, Sendable {
     }
 
     /// The element as the model sees it.
-    var forScoring: FormElement {
+    public var forScoring: FormElement {
         guard role == "ComboBox" else { return self }
         return FormElement(
             token: token, role: scoringRole, label: label, value: value, placeholder: placeholder,
             checked: scoringRole == "CheckBox" ? (value.isEmpty ? false : true) : nil, frame: frame)
     }
 
-    var normalizedRole: String {
+    public var normalizedRole: String {
         role.replacingOccurrences(of: "_", with: "").replacingOccurrences(of: " ", with: "").lowercased()
     }
 }
 
-struct PageSnapshot: Sendable {
-    let title: String
-    let url: String
-    let elements: [FormElement]
+public struct PageSnapshot: Sendable {
+    public let title: String
+    public let url: String
+    public let elements: [FormElement]
+
+    public init(title: String, url: String, elements: [FormElement]) {
+        self.title = title
+        self.url = url
+        self.elements = elements
+    }
 }
 
-enum FormSchema {
-    static let fixedActions: [FormAction] = [.check, .click, .skip]
-    static let appSuffixes = [
+public enum FormSchema {
+    public static let fixedActions: [FormAction] = [.check, .click, .skip]
+    public static let appSuffixes = [
         " - Google Chrome", " - Microsoft Edge", " - Mozilla Firefox", " - Brave", " - Safari",
     ]
 
     /// `render_context` — one element, truncated exactly like upstream.
-    static func renderContext(formTitle: String, element: FormElement) -> String {
+    public static func renderContext(formTitle: String, element: FormElement) -> String {
         let state: String
         if element.role == "CheckBox" {
             state = element.checked == true ? "checked" : "unchecked"
@@ -117,17 +146,17 @@ enum FormSchema {
     }
 
     /// `render_options` — entity pointers followed by the fixed actions.
-    static func renderOptions(entities: [Entity]) -> [String] {
+    public static func renderOptions(entities: [Entity]) -> [String] {
         entities.map(\.option) + fixedActions.map(\.rawValue)
     }
 
     /// `decode` — option index to action and optional entity pointer.
-    static func decode(optionIndex: Int, entityCount: Int) -> (FormAction, Int?) {
+    public static func decode(optionIndex: Int, entityCount: Int) -> (FormAction, Int?) {
         if optionIndex < entityCount { return (.fill, optionIndex) }
         return (fixedActions[optionIndex - entityCount], nil)
     }
 
-    static func normalizeTitle(_ title: String) -> String {
+    public static func normalizeTitle(_ title: String) -> String {
         for suffix in appSuffixes where title.hasSuffix(suffix) {
             return String(title.dropLast(suffix.count))
         }
@@ -135,7 +164,7 @@ enum FormSchema {
     }
 
     /// Upstream only ever auto-clicks a control whose label normalizes to a submit label.
-    static func isSubmitControl(_ element: FormElement) -> Bool {
+    public static func isSubmitControl(_ element: FormElement) -> Bool {
         guard ["button", "axbutton"].contains(element.normalizedRole) else { return false }
         let words = element.label.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber })
         let normalized = words.joined(separator: " ")
@@ -144,14 +173,14 @@ enum FormSchema {
 
     /// Upstream's runtime set is {"submit", "submit form"}; the training catalogue is
     /// broader. The demo accepts the training set so a "Submit application" button counts.
-    static let submitLabels: Set<String> = [
+    public static let submitLabels: Set<String> = [
         "submit", "submit form", "submit registration", "submit application", "submit claim",
         "send", "continue", "register", "apply now", "save and continue", "complete registration",
         "next", "finish", "confirm and submit", "sign up", "book appointment", "create account", "done",
     ]
 
     /// `derive_entities` — conservative first/last/full-name variants.
-    static func deriveEntities(_ entities: [Entity]) -> [Entity] {
+    public static func deriveEntities(_ entities: [Entity]) -> [Entity] {
         var byLabel: [String: Entity] = [:]
         for entity in entities where byLabel[entity.label.lowercased()] == nil {
             byLabel[entity.label.lowercased()] = entity

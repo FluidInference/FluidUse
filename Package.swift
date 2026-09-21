@@ -2,18 +2,26 @@
 import PackageDescription
 
 let package = Package(
-    name: "CuaFormsDemo",
+    name: "FluidUse",
     platforms: [.macOS(.v14)],
+    products: [
+        .library(name: "FluidUse", targets: ["FluidUse"])
+    ],
     dependencies: [
-        .package(name: "FluidAudio", path: "../..")
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.15.8")
     ],
     targets: [
-        .executableTarget(
-            name: "CuaFormsDemo",
+        .target(
+            name: "FluidUse",
             dependencies: [
                 .product(name: "FluidAudio", package: "FluidAudio")
             ],
             resources: [.copy("Resources")]
-        )
+        ),
+        .executableTarget(
+            name: "FluidUseDemo",
+            dependencies: ["FluidUse", .product(name: "FluidAudio", package: "FluidAudio")],
+            resources: [.copy("Resources")]
+        ),
     ]
 )

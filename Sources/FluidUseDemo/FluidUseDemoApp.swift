@@ -1,8 +1,9 @@
 import AppKit
+import FluidUse
 import SwiftUI
 
 @main
-struct CuaFormsDemoApp: App {
+struct FluidUseDemoApp: App {
     @StateObject private var model = DemoModel()
 
     init() {
@@ -14,7 +15,7 @@ struct CuaFormsDemoApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("CUA-S1-FORMS on-device") {
+        WindowGroup("FluidUse · CUA-S1-FORMS on-device") {
             ContentView()
                 .environmentObject(model)
                 .frame(minWidth: 380, idealWidth: 760, minHeight: 280, idealHeight: 1000)

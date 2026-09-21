@@ -1,4 +1,5 @@
 @preconcurrency import CoreML
+import FluidUse
 import AppKit
 import FluidAudio
 import Foundation

@@ -1,4 +1,5 @@
 import Darwin
+import FluidUse
 import Foundation
 
 /// CPU load of this process and the whole machine, plus Neural Engine figures: real ANE

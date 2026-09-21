@@ -2,17 +2,17 @@ import Foundation
 import PDFKit
 
 /// Port of upstream `cua_s1.pdf`: `Label: value` lines become entities.
-enum DocumentEntities {
-    static let maxValueLength = 120
+public enum DocumentEntities {
+    public static let maxValueLength = 120
     // Same expression as upstream `LINE`, applied per line.
     private static let line = try? NSRegularExpression(
         pattern: #"^\s*([A-Za-z][A-Za-z0-9 .'/#&()-]{1,40}?)\s*[:\u2013-]\s+(.+?)\s*$"#)
 
-    enum Failure: Error, LocalizedError {
+    public enum Failure: Error, LocalizedError {
         case unreadable(URL)
         case unsupported(String)
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .unreadable(let url): return "Could not read \(url.lastPathComponent)"
             case .unsupported(let ext): return "Unsupported document type .\(ext); use PDF or plain text"
@@ -20,7 +20,7 @@ enum DocumentEntities {
         }
     }
 
-    static func extract(from url: URL) throws -> [Entity] {
+    public static func extract(from url: URL) throws -> [Entity] {
         let text: String
         switch url.pathExtension.lowercased() {
         case "pdf":
@@ -34,7 +34,7 @@ enum DocumentEntities {
         return FormSchema.deriveEntities(parse(text))
     }
 
-    static func parse(_ text: String) -> [Entity] {
+    public static func parse(_ text: String) -> [Entity] {
         guard let line else { return [] }
         var seen = Set<String>()
         var entities: [Entity] = []
