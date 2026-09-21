@@ -1,0 +1,196 @@
+{
+  "chip" : "Apple M5 Pro",
+  "elapsed_s" : 127.73304998874664,
+  "latency_ms" : {
+    "p50" : 5.3043329999999997,
+    "p95" : 18.064624999999999
+  },
+  "lengths" : [
+    128,
+    256,
+    512,
+    1024
+  ],
+  "load_s" : 30.526584982872009,
+  "questions" : 3899,
+  "suites" : {
+    "app.email_spam" : {
+      "accuracy" : 0.99250000000000005,
+      "buckets" : {
+        "L128" : 98,
+        "L256" : 117,
+        "L512" : 93,
+        "L1024" : 92
+      },
+      "dropped" : 0,
+      "latency_ms" : {
+        "p50" : 7.062875,
+        "p95" : 18.560207999999999
+      },
+      "max_probability_delta_vs_reference" : 0.024192176759243011,
+      "n" : 400,
+      "reference_argmax_agreement" : 1,
+      "reference_compared" : 400,
+      "state_truncated" : 9
+    },
+    "app.guardrails_jailbreak" : {
+      "accuracy" : 0.81000000000000005,
+      "buckets" : {
+        "L128" : 285,
+        "L256" : 59,
+        "L512" : 53,
+        "L1024" : 3
+      },
+      "dropped" : 0,
+      "latency_ms" : {
+        "p50" : 4.0982079999999996,
+        "p95" : 9.5879580000000004
+      },
+      "max_probability_delta_vs_reference" : 0.80097097158432007,
+      "n" : 400,
+      "reference_argmax_agreement" : 0.98999999999999999,
+      "reference_compared" : 400,
+      "state_truncated" : 0
+    },
+    "app.model_routing_domain" : {
+      "accuracy" : 0.45363408521303256,
+      "buckets" : {
+        "L128" : 137,
+        "L256" : 261,
+        "L512" : 1
+      },
+      "dropped" : 0,
+      "latency_ms" : {
+        "p50" : 5.6524590000000003,
+        "p95" : 6.3639999999999999
+      },
+      "max_probability_delta_vs_reference" : 0.077826619148254395,
+      "n" : 399,
+      "reference_argmax_agreement" : 0.97493734335839599,
+      "reference_compared" : 399,
+      "state_truncated" : 0
+    },
+    "app.moderation_toxicity" : {
+      "accuracy" : 0.53500000000000003,
+      "buckets" : {
+        "L128" : 306,
+        "L256" : 54,
+        "L512" : 37,
+        "L1024" : 3
+      },
+      "dropped" : 0,
+      "latency_ms" : {
+        "p50" : 4.0458749999999997,
+        "p95" : 10.238166
+      },
+      "max_probability_delta_vs_reference" : 0.016416072845458984,
+      "n" : 400,
+      "reference_argmax_agreement" : 1,
+      "reference_compared" : 400,
+      "state_truncated" : 0
+    },
+    "app.phishing" : {
+      "accuracy" : 0.99250000000000005,
+      "buckets" : {
+        "L128" : 76,
+        "L256" : 111,
+        "L512" : 104,
+        "L1024" : 109
+      },
+      "dropped" : 0,
+      "latency_ms" : {
+        "p50" : 9.062875,
+        "p95" : 19.319541999999998
+      },
+      "max_probability_delta_vs_reference" : 0.034952796995639801,
+      "n" : 400,
+      "reference_argmax_agreement" : 1,
+      "reference_compared" : 400,
+      "state_truncated" : 7
+    },
+    "app.rag_relevance" : {
+      "accuracy" : 0.67500000000000004,
+      "buckets" : {
+        "L128" : 135,
+        "L256" : 262,
+        "L512" : 3
+      },
+      "dropped" : 0,
+      "latency_ms" : {
+        "p50" : 5.865875,
+        "p95" : 9.0795840000000005
+      },
+      "max_probability_delta_vs_reference" : 0.030605673789978027,
+      "n" : 400,
+      "reference_argmax_agreement" : 0.99250000000000005,
+      "reference_compared" : 400,
+      "state_truncated" : 0
+    },
+    "app.support_triage" : {
+      "accuracy" : 0.53749999999999998,
+      "buckets" : {
+        "L256" : 377,
+        "L512" : 23
+      },
+      "dropped" : 0,
+      "latency_ms" : {
+        "p50" : 5.2802090000000002,
+        "p95" : 8.903041
+      },
+      "max_probability_delta_vs_reference" : 0.052110105752944946,
+      "n" : 400,
+      "reference_argmax_agreement" : 0.99750000000000005,
+      "reference_compared" : 400,
+      "state_truncated" : 0
+    },
+    "jev.ag_news" : {
+      "accuracy" : 0.93500000000000005,
+      "buckets" : {
+        "L128" : 368,
+        "L256" : 32
+      },
+      "dropped" : 0,
+      "latency_ms" : {
+        "p50" : 4.5663749999999999,
+        "p95" : 11.922083000000001
+      },
+      "max_probability_delta_vs_reference" : 0.055396914482116699,
+      "n" : 400,
+      "reference_argmax_agreement" : 1,
+      "reference_compared" : 400,
+      "state_truncated" : 0
+    },
+    "jev.emotion" : {
+      "accuracy" : 0.53500000000000003,
+      "buckets" : {
+        "L128" : 400
+      },
+      "dropped" : 0,
+      "latency_ms" : {
+        "p50" : 3.8882919999999999,
+        "p95" : 4.2419169999999999
+      },
+      "max_probability_delta_vs_reference" : 0.086301475763320923,
+      "n" : 400,
+      "reference_argmax_agreement" : 0.995,
+      "reference_compared" : 400,
+      "state_truncated" : 0
+    },
+    "massive_intent.en" : {
+      "accuracy" : 0.65333333333333332,
+      "buckets" : {
+        "L256" : 300
+      },
+      "dropped" : 0,
+      "latency_ms" : {
+        "p50" : 5.5202499999999999,
+        "p95" : 6.7780420000000001
+      },
+      "max_probability_delta_vs_reference" : 0.14386069774627686,
+      "n" : 300,
+      "reference_argmax_agreement" : 0.98666666666666669,
+      "reference_compared" : 300,
+      "state_truncated" : 0
+    }
+  }
+}

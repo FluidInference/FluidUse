@@ -48,6 +48,40 @@ triage, zh/ja/de, 20 options, prompt injection, a long meeting note) against the
 
 `LayaManager` therefore runs the 128 bucket on CPU+ANE and longer buckets on all units.
 
+## e8: int8 embedding table
+
+`laya_multilingual_e8_L*` stores the 256k × 768 embedding table as int8 per-channel and keeps the
+encoder and head in fp16 (448–453 MB per bucket instead of 644). `benchmark-coreml-e8.json` is the
+same 3,899-question run with `--precision e8`; `verification-multilingual-L*-e8.json` are its
+parity reports. Encoder int8 and 6-/4-bit palettes fail the parity gates (details in the mobius
+README), so only e8 is published.
+
+| Suite | fp16 | e8 | Row agreement with PyTorch |
+| --- | ---: | ---: | ---: |
+| jev.ag_news | 0.935 | **0.935** | 1.000 |
+| jev.emotion | 0.537 | **0.535** | 0.995 |
+| massive_intent.en | 0.657 | **0.653** | 0.987 |
+| app.support_triage | 0.542 | **0.537** | 0.998 |
+| app.email_spam | 0.993 | **0.993** | 1.000 |
+| app.phishing | 0.993 | **0.993** | 1.000 |
+| app.guardrails_jailbreak | 0.805 | **0.810** | 0.990 |
+| app.moderation_toxicity | 0.535 | **0.535** | 1.000 |
+| app.rag_relevance | 0.672 | **0.675** | 0.993 |
+| app.model_routing_domain | 0.441 | **0.454** | 0.975 |
+
+## ANE profile
+
+`ane-profile-L*.json` (`coreml-cli --ops -n 20`): median latency per compute-unit configuration.
+`all` runs 100% on the GPU for this graph; the Neural Engine only wins at 128 tokens, which is why
+`LayaManager` defaults the 128 bucket to CPU+ANE and longer buckets to all units.
+
+| Bucket | CPU only | CPU+GPU | CPU+ANE | All |
+| --- | ---: | ---: | ---: | ---: |
+| L128 | 14.1 ms | 4.6 ms | 3.9 ms | 4.1 ms |
+| L256 | 27.1 ms | 5.3 ms | 9.7 ms | 6.4 ms |
+| L512 | 58.9 ms | 8.8 ms | 28.0 ms | 8.8 ms |
+| L1024 | 149.6 ms | 18.1 ms | 80.4 ms | 17.9 ms |
+
 ## Reproduce
 
 ```bash
@@ -55,6 +89,9 @@ swift run -c release FluidUseLaya benchmark \
     --suites Benchmarks/laya/suites.jsonl \
     --reference Benchmarks/laya/reference-rows.jsonl \
     --report /tmp/benchmark-coreml.json
+# int8-embedding buckets
+swift run -c release FluidUseLaya benchmark --suites Benchmarks/laya/suites.jsonl \
+    --reference Benchmarks/laya/reference-rows.jsonl --precision e8
 ```
 
 The first run downloads the four buckets (about 2.5 GB). To regenerate `suites.jsonl` and the

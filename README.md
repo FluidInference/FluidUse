@@ -65,8 +65,9 @@ let answers = try await laya.answer(
 print(answers[0].selectedLabel, answers[1].expectedScore!, answers[2].noul!)
 ```
 
-`LayaManager.Configuration` picks the buckets to load and their compute units (128 → CPU+ANE,
-longer → all units); a prompt runs on the smallest loaded bucket that fits, and the largest one
+`LayaManager.Configuration` picks the buckets to load, their compute units (128 → CPU+ANE,
+longer → all units) and the weight precision (`fp16`, or `e8` with an int8 embedding table at 30%
+less weight and the same accuracy); a prompt runs on the smallest loaded bucket that fits, and the largest one
 truncates the state on the right like laya's `max_len`. The tokenizer is a Swift port of the
 mmBERT/Gemma byte-fallback BPE and matches HuggingFace `tokenizers` on the conversion fixtures.
 
