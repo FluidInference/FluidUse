@@ -36,9 +36,24 @@ struct ContentView: View {
                 }
                 Button("Reset") { model.reset() }.controlSize(.small)
             }
-            UtilizationTiles(
-                monitor: model.monitor, lastLatency: model.lastLatency, median: model.medianLatency,
-                scored: model.scoredCount, actions: model.actionCount, countdown: model.countdown)
+            HStack(spacing: 14) {
+                if let latency = model.lastLatency {
+                    Text("decision \(ContentView.format(latency))")
+                        .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(.orange)
+                }
+                if let median = model.medianLatency {
+                    Text(
+                        "median \(ContentView.format(median)) · \(model.scoredCount) scored · \(model.actionCount) actions"
+                    )
+                    .font(.system(.callout, design: .monospaced)).foregroundStyle(.secondary)
+                }
+                if let countdown = model.countdown {
+                    Text("starting in \(countdown)").font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(.red)
+                }
+                Spacer()
+                Text("usage: asitop in a terminal").font(.caption).foregroundStyle(.secondary)
+            }
             ConsoleView(lines: model.console).frame(maxHeight: .infinity)
             if let message = model.errorMessage {
                 Text(message).font(.callout).foregroundStyle(.red)
@@ -451,7 +466,11 @@ private struct ConsoleView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                         Text(line)
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(
+                                .system(
+                                    size: 11, weight: line.contains("model call") ? .bold : .regular,
+                                    design: .monospaced)
+                            )
                             .foregroundStyle(color(for: line))
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -468,6 +487,7 @@ private struct ConsoleView: View {
     }
 
     private func color(for line: String) -> Color {
+        if line.contains("model call") { return Color(red: 1, green: 0.3, blue: 0.3) }
         if line.hasPrefix("▶") { return Color(red: 0.55, green: 0.8, blue: 1) }
         if line.hasPrefix("$") { return Color(red: 0.75, green: 0.75, blue: 0.75) }
         if line.hasPrefix("■") { return Color(red: 0.55, green: 0.85, blue: 0.55) }
