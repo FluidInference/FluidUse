@@ -580,6 +580,22 @@ final class DemoModel: ObservableObject {
         monitor.resetActivity()
     }
 
+    /// Opens a Terminal window running asitop (needs sudo, so it must be a real terminal).
+    func openAsitop() {
+        let candidates = [
+            NSHomeDirectory() + "/.local/bin/asitop", "/opt/homebrew/bin/asitop", "/usr/local/bin/asitop",
+        ]
+        guard let path = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+            errorMessage = "asitop is not installed: run `uv tool install asitop` (or pip install asitop)"
+            return
+        }
+        let script = "tell application \"Terminal\"\nactivate\ndo script \"sudo \(path)\"\nend tell"
+        let task = Process()
+        task.launchPath = "/usr/bin/osascript"
+        task.arguments = ["-e", script]
+        try? task.run()
+    }
+
     func toggleApproval(_ row: DecisionRow) {
         guard let index = rows.firstIndex(where: { $0.id == row.id }) else { return }
         rows[index].approved.toggle()

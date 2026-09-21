@@ -52,7 +52,7 @@ struct ContentView: View {
                         .foregroundStyle(.red)
                 }
                 Spacer()
-                Text("usage: asitop in a terminal").font(.caption).foregroundStyle(.secondary)
+                Button("Open asitop") { model.openAsitop() }.controlSize(.small)
             }
             ConsoleView(lines: model.console).frame(maxHeight: .infinity)
             if let message = model.errorMessage {
