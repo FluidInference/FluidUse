@@ -114,6 +114,13 @@ Pick a running app, load a profile, press **Fill form** (or **9** from any
 app). Every model call is logged with its input, ranked options, and time.
 Requires Accessibility access for the launching terminal.
 
+## Benchmarks
+
+Both models, same Mac, every number with a checked-in report: [Benchmarks.md](Benchmarks.md).
+CUA-S1-FORMS: 0.9 ms per decision on the Neural Engine, accuracy identical to PyTorch on the
+24,370-row synthetic test. laya: 3.6 ms per short question, identical to PyTorch on laya's ten
+published suites, e8 buckets 30% smaller at the same accuracy.
+
 ## Scope
 
 The model matches a field to a value it is given. It does not read résumés,
