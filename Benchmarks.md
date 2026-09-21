@@ -125,11 +125,18 @@ table and re-ran the parity gates (L128):
 | **e8** int8 embedding table | **448 MB** | 16/16 · 0.014 | 16/16 · 0.015 | **published**, within 0.5 pt on every suite above |
 | int8 encoder + head linears | 519 MB | 11/16 · 0.666 | 16/16 · 0.029 | fails on the ANE |
 | int8 everything | 324 MB | 11/16 · 0.668 | 16/16 · 0.042 | fails on the ANE |
+| int8 encoder linears only (head fp16) | 534 MB | 11/16 · 0.665 | 16/16 · 0.032 | fails on the ANE |
+| int8 decision head + scorer only | 629 MB | 16/16 · 0.013 | 16/16 · 0.002 | passes, saves 15 MB, not worth a variant |
 | 6-bit k-means palette | 488 MB | 15/16 · 0.118 | 15/16 · 0.114 | fails |
 | 4-bit k-means palette | 456 MB | 12/16 · 0.728 | 12/16 · 0.727 | fails |
+| 6-bit palette + int8 embedding | 292 MB | 15/16 · 0.120 | 15/16 · 0.117 | fails |
+| **4-bit palette + int8 embedding (smallest)** | **261 MB** | 11/16 · 0.729 | 11/16 · 0.734 | fails |
 
-Only the embedding table tolerates compression; the encoder stays fp16 where it does its compute.
-Per-block int8 needs an iOS 18 deployment target and was not tried.
+The smallest build, 261 MB (2.5× smaller than fp16), gets 11 of 16 argmax right with probability
+errors of 0.73; nothing below 448 MB passes. Only the embedding table tolerates compression; the
+encoder stays fp16 where it does its compute. Per-block int8 needs an iOS 18 deployment target and
+was not tried; a calibrated or quantization-aware int8 encoder would be a training job, not a
+conversion one.
 
 ### Tetris demo
 
