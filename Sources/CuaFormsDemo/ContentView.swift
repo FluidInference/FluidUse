@@ -429,8 +429,11 @@ private struct UtilizationView: View {
         HStack(spacing: 10) {
             Text(String(format: "CPU app %.0f%%", monitor.processCPUPercent))
             Text(String(format: "system %.0f%%", monitor.systemCPUPercent))
-            Text(String(format: "ANE %.1f%%", monitor.aneDutyPercent))
-            if let ane = monitor.anePowerMilliwatts { Text("\(ane) mW") }
+            if let percent = monitor.anePowerPercent, let ane = monitor.anePowerMilliwatts {
+                Text(String(format: "ANE %.1f%% (%d mW)", percent, ane))
+            } else {
+                Text(String(format: "model duty %.1f%%", monitor.aneDutyPercent))
+            }
             if let cpu = monitor.cpuPowerMilliwatts { Text("CPU \(cpu) mW") }
         }
         .font(.system(.caption2, design: .monospaced))

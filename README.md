@@ -146,8 +146,10 @@ numbers, start powermetrics in a terminal before recording:
 sudo powermetrics -i 500 --samplers cpu_power,ane_power -o /tmp/cua-powermetrics.log
 ```
 
-The app tails that file (path override: `CUA_DEMO_POWERMETRICS`) and shows
-"ANE NN mW" and "CPU NN mW" from it while it is being written.
+The app tails that file (path override: `CUA_DEMO_POWERMETRICS`). With it
+live, the Neural Engine tile shows ANE % the way asitop defines it, ANE power
+over an assumed 8 W peak (`CUA_DEMO_ANE_MAX_MW` overrides), with the
+milliwatts and the model duty cycle as detail; CPU package power is shown too.
 
 ## Recording
 

@@ -15,6 +15,13 @@ final class SystemMonitor: ObservableObject {
 
     /// `sudo powermetrics -i 500 --samplers cpu_power,ane_power -o <this path>`
     let powerLogURL: URL
+    /// asitop's convention: ANE utilization = ANE power / an assumed 8 W peak.
+    let anePeakMilliwatts: Double
+
+    /// ANE power as a share of the assumed peak, when a powermetrics log is live.
+    var anePowerPercent: Double? {
+        anePowerMilliwatts.map { min(100, Double($0) / anePeakMilliwatts * 100) }
+    }
     private var task: Task<Void, Never>?
     private var lastRusage = rusage()
     private var lastWall = ContinuousClock.now
@@ -26,6 +33,8 @@ final class SystemMonitor: ObservableObject {
     init() {
         let path = ProcessInfo.processInfo.environment["CUA_DEMO_POWERMETRICS"] ?? "/tmp/cua-powermetrics.log"
         powerLogURL = URL(fileURLWithPath: path)
+        let peak = ProcessInfo.processInfo.environment["CUA_DEMO_ANE_MAX_MW"].flatMap(Double.init) ?? 8000
+        anePeakMilliwatts = peak
     }
 
     func start() {
