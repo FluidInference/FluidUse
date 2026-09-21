@@ -86,8 +86,6 @@ swift run -c release FluidUseLaya benchmark --suites <mobius>/benchmark/suites.j
 swift run -c release LayaTetrisDemo                              # SwiftUI: laya plays Tetris, live decisions
 ```
 
-![laya plays Tetris](Media/laya-tetris.png)
-
 `LayaTetrisDemo` ([Sources/LayaTetrisDemo](Sources/LayaTetrisDemo), [25 s clip](Media/laya-tetris.mp4))
 scores every legal landing of the current piece with *"Is this a clean placement?"* and plays the
 best one: the landing being scored is outlined in orange, the chosen one is green. The window is a
