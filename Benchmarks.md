@@ -25,17 +25,17 @@ as the checkpoint was trained.
 
 ### Accuracy
 
-| Test | Rows | Upstream PyTorch | Core ML fp16 | Core ML int8 weights | Core ML int4 weights |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Pinned demo (3 forms, 3 PDFs) | 196 | 196 / 196 | 196 / 196 | 196 / 196 | – |
-| Full published synthetic test | 24,370 | 24,359 (0.99955) | 24,359 (0.99955) | 24,359 (0.99955) | 24,353 (0.99930) |
+| Test | Rows | Upstream PyTorch | Core ML fp16 | Core ML int8 weights |
+| --- | ---: | ---: | ---: | ---: |
+| Pinned demo (3 forms, 3 PDFs) | 196 | 196 / 196 | 196 / 196 | 196 / 196 |
+| Full published synthetic test | 24,370 | 24,359 (0.99955) | 24,359 (0.99955) | 24,359 (0.99955) |
 
 The synthetic test is the complete released file with no filtering or resampling; the model card
 claims 0.9995 on "about 15,000 decisions" and the full file reproduces that. The upstream Cua
 evaluator reports 0 wrong actions and 0 wrong targets on the demo; its 23.5% coverage is because it
 counts `skip` as abstention (150 of the 196 decisions are skips). Max per-row probability error vs
-PyTorch: 0.020 (fp16), 0.068 (int8), 0.754 (int4); the fp32 export adapter alone is within 1.1e-6,
-so all of that is compute precision.
+PyTorch: 0.020 (fp16), 0.068 (int8); the fp32 export adapter alone is within 1.1e-6, so all of that
+is compute precision.
 
 ### Latency and placement
 
@@ -57,8 +57,8 @@ dispatched events, DOM readback) reproduced 100/100 of the original decisions ac
 
 ### Compression
 
-int8 weights keep accuracy identical (24,359 / 24,370) and int4 loses 6 rows, but at 1.5 MB there
-is nothing to gain; the shipped package stays fp16.
+int8 weights keep accuracy identical (24,359 / 24,370), but at 1.5 MB there is nothing to gain;
+the shipped package stays fp16.
 
 ## laya-multilingual
 
@@ -116,27 +116,16 @@ tokenization: 3.7 ms.
 
 ### Compression
 
-`quantize.py` applied post-training compression to the 2-D linear weights and/or the embedding
-table and re-ran the parity gates (L128):
+`quantize.py` applies post-training compression and `verify.py --precision <tag>` re-runs the
+parity gates. The published variants (L128; every bucket passes the same gates):
 
-| Variant | Package | CPU+ANE argmax · Δprob | ALL argmax · Δprob | Result |
+| Variant | Package | CPU+ANE argmax · Δprob | ALL argmax · Δprob | Full-suite accuracy |
 | --- | ---: | ---: | ---: | --- |
 | fp16 | 644 MB | 16/16 · 0.013 | 16/16 · 0.002 | reference |
-| **e8** int8 embedding table | **448 MB** | 16/16 · 0.014 | 16/16 · 0.015 | **published**, within 0.5 pt on every suite above |
-| int8 encoder + head linears | 519 MB | 11/16 · 0.666 | 16/16 · 0.029 | fails on the ANE |
-| int8 everything | 324 MB | 11/16 · 0.668 | 16/16 · 0.042 | fails on the ANE |
-| int8 encoder linears only (head fp16) | 534 MB | 11/16 · 0.665 | 16/16 · 0.032 | fails on the ANE |
-| int8 decision head + scorer only | 629 MB | 16/16 · 0.013 | 16/16 · 0.002 | passes, saves 15 MB, not worth a variant |
-| 6-bit k-means palette | 488 MB | 15/16 · 0.118 | 15/16 · 0.114 | fails |
-| 4-bit k-means palette | 456 MB | 12/16 · 0.728 | 12/16 · 0.727 | fails |
-| 6-bit palette + int8 embedding | 292 MB | 15/16 · 0.120 | 15/16 · 0.117 | fails |
-| **4-bit palette + int8 embedding (smallest)** | **261 MB** | 11/16 · 0.729 | 11/16 · 0.734 | fails |
+| **e8** int8 embedding table, fp16 encoder + head | **448 MB** | 16/16 · 0.014 | 16/16 · 0.015 | within 0.5 pt on every suite, same latency |
 
-The smallest build, 261 MB (2.5× smaller than fp16), gets 11 of 16 argmax right with probability
-errors of 0.73; nothing below 448 MB passes. Only the embedding table tolerates compression; the
-encoder stays fp16 where it does its compute. Per-block int8 needs an iOS 18 deployment target and
-was not tried; a calibrated or quantization-aware int8 encoder would be a training job, not a
-conversion one.
+e8 is 30% smaller per bucket (the default 128 + 512 download drops from 1.32 GB to 0.93 GB) and is
+selected with `Configuration.precision = "e8"` or `--precision e8`. The encoder stays fp16.
 
 ### Tetris demo
 
