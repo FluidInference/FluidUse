@@ -17,9 +17,11 @@ struct LayaTetrisDemoApp: App {
         WindowGroup("laya plays Tetris") {
             ContentView()
                 .environmentObject(model)
-                .frame(minWidth: 1000, minHeight: 760)
+                // Tall enough for header + 520 pt board + controls; still fits a
+                // 14" display with the menu and title bars.
+                .frame(minWidth: 300, minHeight: 880)
                 .onAppear { model.applyEnvironment() }
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
     }
 }

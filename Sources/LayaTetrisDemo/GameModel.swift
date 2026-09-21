@@ -64,11 +64,12 @@ final class GameModel: ObservableObject {
 
     static let question = LayaQuestion.noul("Is this a clean placement?")
 
-    /// `LAYA_DEMO_AUTORUN=1` loads the model and plays without clicks; `LAYA_DEMO_QUIT_AFTER=<s>`
+    /// `LAYA_DEMO_AUTOLOAD=1` loads the model on launch; `LAYA_DEMO_AUTORUN=1` loads and plays without clicks; `LAYA_DEMO_QUIT_AFTER=<s>`
     /// prints the stats and exits, which is how the demo is smoke-tested headlessly.
     func applyEnvironment() {
         let environment = ProcessInfo.processInfo.environment
         if let seedText = environment["LAYA_DEMO_SEED"], let value = UInt64(seedText) { seed = value }
+        if environment["LAYA_DEMO_AUTOLOAD"] == "1" { loadModel() }
         guard environment["LAYA_DEMO_AUTORUN"] == "1" else { return }
         loadModel()
         Task {
@@ -243,6 +244,7 @@ final class GameModel: ObservableObject {
                 (policy == .laya ? "P(clean)" : "score") as NSString, score, lines)
             log.insert(placed, at: 0)
             if log.count > 12 { log.removeLast() }
+            printConsole(piece: piece, chosen: pick, score: score)
             board = game.board
             if isOver { break }
             if pieceDelayMs > 0 {
@@ -255,7 +257,42 @@ final class GameModel: ObservableObject {
         if isOver { log.insert("Topped out after \(pieces) pieces, \(lines) lines.", at: 0) }
     }
 
+    /// Terminal console for presentations (tmux next to asitop): one block per placed piece,
+    /// the model-call line in red like the CUA-S1-FORMS demo.
+    private var pieceCallMs: [Double] = []
+
+    private func printConsole(piece: TetrisGame.Piece, chosen: TetrisGame.Candidate, score: Float) {
+        let cyan = "\u{1B}[36m"
+        let red = "\u{1B}[1;31m"
+        let yellow = "\u{1B}[33m"
+        let dim = "\u{1B}[2m"
+        let reset = "\u{1B}[0m"
+        print("\(cyan)▶ laya-multilingual\(reset) · \(piece.name) piece · \(candidates.count) landings scored")
+        if policy == .laya {
+            let sorted = candidates.sorted { $0.probability > $1.probability }
+            for scored in sorted.prefix(3) {
+                let marker = scored.candidate.id == chosen.id ? "→" : " "
+                print(
+                    "  \(marker) \(yellow)clean \(String(format: "%.1f%%", scored.probability * 100))\(reset)  \(scored.sentence)"
+                )
+            }
+            if !pieceCallMs.isEmpty {
+                let median = pieceCallMs.sorted()[pieceCallMs.count / 2]
+                print(
+                    "  \(red)model call \(String(format: "%.2f", median)) ms on Neural Engine\(reset) \(dim)(\(pieceCallMs.count) calls, \(String(format: "%.0f", pieceCallMs.reduce(0, +))) ms for this piece)\(reset)"
+                )
+            }
+        } else {
+            print("  → column \(chosen.column) rot \(chosen.rotation) · score \(String(format: "%.2f", score))")
+        }
+        print(
+            "  \(dim)lines \(lines) · pieces \(pieces) · \(String(format: "%.0f", decisionsPerMinute)) decisions/min\(reset)"
+        )
+        pieceCallMs.removeAll(keepingCapacity: true)
+    }
+
     private func record(ms: Double, tokens: Int, bucket: Int) {
+        pieceCallMs.append(ms)
         decisions += 1
         lastMs = ms
         latencies.append(ms)

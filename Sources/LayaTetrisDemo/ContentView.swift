@@ -4,20 +4,14 @@ struct ContentView: View {
     @EnvironmentObject private var model: GameModel
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 12) {
-                header
-                BoardView(board: model.board, chosen: model.chosen, evaluating: model.evaluating)
-                    .frame(width: 260, height: 520)
-                controls
-            }
-            VStack(alignment: .leading, spacing: 12) {
-                statTiles
-                consoleView
-                logView
-            }
-            .frame(minWidth: 560)
+        VStack(alignment: .leading, spacing: 12) {
+            header
+            BoardView(board: model.board, chosen: model.chosen, evaluating: model.evaluating)
+                .frame(width: 260, height: 520)
+            controls
         }
+        // Anchor at the top so an undersized window clips the controls, never the header.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(16)
         .alert(
             "laya",
@@ -72,111 +66,6 @@ struct ContentView: View {
         .frame(width: 260)
     }
 
-    private var statTiles: some View {
-        HStack(spacing: 10) {
-            StatTile(
-                title: "per decision", value: String(format: "%.2f ms", model.lastMs),
-                detail: String(format: "median %.2f ms", model.medianMs), accent: .orange)
-            StatTile(
-                title: "decisions / min", value: String(format: "%.0f", model.decisionsPerMinute),
-                detail: "\(model.decisions) total", accent: .blue)
-            StatTile(
-                title: "lines", value: "\(model.lines)", detail: "\(model.pieces) pieces · \(model.currentPiece)",
-                accent: .green)
-            StatTile(
-                title: "bucket", value: model.bucket > 0 ? "L\(model.bucket)" : "–",
-                detail: "≤ \(model.promptTokens) tokens · ANE", accent: .purple)
-        }
-    }
-
-    private var consoleView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Decisions for the current piece").font(.headline)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 3) {
-                    let best = model.candidates.map(\.probability).max() ?? 0
-                    ForEach(model.candidates) { scored in
-                        HStack(spacing: 8) {
-                            ProbabilityBar(
-                                value: scored.probability, isBest: scored.probability == best && model.policy == .laya
-                            )
-                            .frame(width: 90, height: 12)
-                            Text(
-                                model.policy == .laya
-                                    ? String(format: "%.3f", scored.probability)
-                                    : String(format: "%.1f", scored.probability)
-                            )
-                            .font(.caption.monospaced())
-                            .frame(width: 44, alignment: .trailing)
-                            Text(scored.sentence)
-                                .font(.caption)
-                                .lineLimit(1)
-                                .foregroundStyle(scored.probability == best ? .primary : .secondary)
-                            Spacer()
-                            if scored.milliseconds > 0 {
-                                Text(String(format: "%.1f ms", scored.milliseconds)).font(.caption2.monospaced())
-                                    .foregroundStyle(.red)
-                            }
-                        }
-                    }
-                }
-                .padding(6)
-            }
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .frame(minHeight: 260)
-        }
-    }
-
-    private var logView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Placed").font(.headline)
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(Array(model.log.enumerated()), id: \.offset) { _, line in
-                    Text(line).font(.caption.monospaced()).lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
-            .padding(6)
-            .background(Color(nsColor: .textBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-        }
-    }
-}
-
-struct StatTile: View {
-    let title: String
-    let value: String
-    let detail: String
-    let accent: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased()).font(.caption2).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 22, weight: .semibold, design: .rounded)).foregroundStyle(accent)
-            Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(accent.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-struct ProbabilityBar: View {
-    let value: Float
-    let isBest: Bool
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 3).fill(Color.secondary.opacity(0.15))
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(isBest ? Color.green : Color.blue.opacity(0.6))
-                    .frame(width: geometry.size.width * CGFloat(max(0, min(1, value))))
-            }
-        }
-    }
 }
 
 struct BoardView: View {
