@@ -76,6 +76,7 @@ final class DemoModel: ObservableObject {
         refreshApplications()
         installHotkeys()
         monitor.start()
+        Self.truncateLog()
         if ProcessInfo.processInfo.environment["CUA_DEMO_AUTORUN"] != nil { autorun() }
     }
 
@@ -195,9 +196,34 @@ final class DemoModel: ObservableObject {
         appendConsole(["▶ CUA-S1-FORMS"] + lines)
     }
 
+    /// Console lines are also appended, ANSI-colored, to `CUA_DEMO_LOG` (default
+    /// /tmp/cua-demo.log) so a terminal can `tail -f` them next to asitop.
+    private static let logURL = URL(
+        fileURLWithPath: ProcessInfo.processInfo.environment["CUA_DEMO_LOG"] ?? "/tmp/cua-demo.log")
+
     private func appendConsole(_ lines: [String]) {
         console.append(contentsOf: lines)
         if console.count > 600 { console.removeFirst(console.count - 600) }
+        let colored =
+            lines.map { line -> String in
+                if line.contains("model call") { return "\u{1B}[1;31m\(line)\u{1B}[0m" }
+                if line.hasPrefix("▶") { return "\u{1B}[1;36m\(line)\u{1B}[0m" }
+                if line.hasPrefix("■") { return "\u{1B}[32m\(line)\u{1B}[0m" }
+                if line.contains("→") { return "\u{1B}[33m\(line)\u{1B}[0m" }
+                return line
+            }.joined(separator: "\n") + "\n"
+        if let handle = try? FileHandle(forWritingTo: Self.logURL) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: Data(colored.utf8))
+        } else {
+            try? colored.write(to: Self.logURL, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// Clears the tailed log file at launch so a take starts clean.
+    static func truncateLog() {
+        try? "".write(to: logURL, atomically: true, encoding: .utf8)
     }
 
     /// Applies an answer-sheet entry without consulting the model and logs it as such.
@@ -572,6 +598,7 @@ final class DemoModel: ObservableObject {
     func reset() {
         disarm()
         stop()
+        Self.truncateLog()
         rows = []
         console = ["reset · press 9 in the target app to run"]
         lastLatency = nil
