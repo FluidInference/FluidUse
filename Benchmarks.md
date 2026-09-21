@@ -98,16 +98,19 @@ artefact (their own script gives 0.441 here).
 (`ane-profile-L*.json`, 20 iterations). Argmax agreement is 16/16 everywhere; Δprob is the max
 per-row probability error.
 
-| Bucket | CPU only | CPU + GPU | CPU + ANE | All units | Δprob ANE / ALL | Cold compile |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| L128 | 14.1 ms | 4.6 ms | **3.6 ms** | 3.9 ms | 0.013 / 0.002 | 4.9 s |
-| L256 | 27.1 ms | 5.3 ms | 9.9 ms | **5.2 ms** | 0.013 / 0.002 | 5.5 s |
-| L512 | 58.9 ms | 8.8 ms | 27.5 ms | **9.0 ms** | 0.013 / 0.002 | 6.0 s |
-| L1024 | 149.6 ms | 18.1 ms | 80.1 ms | **17.9 ms** | 0.013 / 0.002 | 8.5 s |
+| Bucket | CPU only | CPU + GPU | CPU + ANE | ANE / CPU runtime share | All units | Δprob ANE / ALL | Cold compile |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| L128 | 14.1 ms | 4.6 ms | **3.6 ms** | 33% / 67% | 3.9 ms | 0.013 / 0.002 | 4.9 s |
+| L256 | 27.1 ms | 5.3 ms | 9.9 ms | 52% / 48% | **5.2 ms** | 0.013 / 0.002 | 5.5 s |
+| L512 | 58.9 ms | 8.8 ms | 27.5 ms | 71% / 29% | **9.0 ms** | 0.013 / 0.002 | 6.0 s |
+| L1024 | 149.6 ms | 18.1 ms | 80.1 ms | 87% / 13% | **17.9 ms** | 0.013 / 0.002 | 8.5 s |
 
-973 of 978 ops are placed on the ANE for every bucket (the five CPU ops are int32 casts and the
-embedding gather), but `all` runs 100% on the GPU and the ANE only wins at 128 tokens because the
-L×L attention cost grows faster on it. `LayaManager` therefore defaults the 128 bucket to CPU+ANE
+973 of 978 ops (99.5%) are placed on the ANE for every bucket; the five CPU ops are the int32
+casts and the embedding gather. The runtime share is the profiler's estimate for the CPU+ANE
+configuration: at 128 tokens the ANE finishes its ops fast enough that the CPU-side gather and
+casts are the larger slice, and the share only climbs with length because the ANE's attention
+gets slower, not because it does more useful work. `all` runs 100% on the GPU, and the ANE only
+wins at 128 tokens because the L×L attention cost grows faster on it. `LayaManager` therefore defaults the 128 bucket to CPU+ANE
 and longer buckets to all units. A single short question from Swift, release build, including
 tokenization: 3.7 ms.
 
