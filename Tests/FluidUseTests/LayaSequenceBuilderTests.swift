@@ -99,6 +99,13 @@ final class LayaSequenceBuilderTests: XCTestCase {
         }
     }
 
+    func testNonpositiveSequenceLengthsThrowInsteadOfTrapping() {
+        for length in [0, -1, Int.min] {
+            XCTAssertThrowsError(
+                try builder().sequence(state: "s", question: .noul("q"), maximumLength: length))
+        }
+    }
+
     func testValidation() {
         XCTAssertThrowsError(try LayaQuestion.noul("").validate()) {
             XCTAssertEqual($0 as? LayaError, .emptyInstructions)

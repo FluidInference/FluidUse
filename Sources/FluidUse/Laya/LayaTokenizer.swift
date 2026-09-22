@@ -364,7 +364,12 @@ enum LayaTokenizerFile {
             var value = 0
             var digits = 0
             while let byte = peek, byte >= 0x30, byte <= 0x39 {
-                value = value * 10 + Int(byte - 0x30)
+                let (scaled, multiplyOverflow) = value.multipliedReportingOverflow(by: 10)
+                let (next, addOverflow) = scaled.addingReportingOverflow(Int(byte - 0x30))
+                guard !multiplyOverflow, !addOverflow else {
+                    throw LayaError.invalidAsset("tokenizer.json: integer overflow at \(index)")
+                }
+                value = next
                 digits += 1
                 index += 1
             }
@@ -413,6 +418,9 @@ enum LayaTokenizerFile {
                         index += 1
                         try expect(UInt8(ascii: "u"))
                         let low = try hex4()
+                        guard (0xDC00...0xDFFF).contains(low) else {
+                            throw LayaError.invalidAsset("tokenizer.json: invalid low surrogate at \(index)")
+                        }
                         value = 0x10000 + ((value - 0xD800) << 10) + (low - 0xDC00)
                     }
                     guard let scalar = Unicode.Scalar(value) else {

@@ -86,6 +86,9 @@ struct LayaSequenceBuilder: Sendable {
 
     /// Fit the parts into `maximumLength` tokens the way laya does for its `max_len`.
     func sequence(from parts: Parts, maximumLength: Int) throws -> Sequence {
+        guard maximumLength > 0 else {
+            throw LayaError.invalidAsset("The sequence length must be positive")
+        }
         let room = max(0, maximumLength - parts.head.count - 1)
         let state = Array(parts.state.prefix(room))
         var ids = parts.head + state + [sepTokenId]

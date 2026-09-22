@@ -18,5 +18,5 @@ jobs:
         run: swift test
       - name: Release build
         run: swift build -c release
-      - name: CLI control-policy regression checks
-        run: python3 Tools/test_tetris.py .build/release/FluidUseLaya
+      - name: CLI regression checks
+        run: python3 Tools/test_laya_cli.py .build/release/FluidUseLaya

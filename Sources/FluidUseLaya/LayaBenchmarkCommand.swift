@@ -73,7 +73,11 @@ struct LayaBenchmarkCommand {
             case "--precision": options.precision = try value("--precision")
             case "--lengths": options.lengths = try value("--lengths").split(separator: ",").compactMap { Int($0) }
             case "--report": options.report = try value("--report")
-            case "--limit": options.limit = Int(try value("--limit"))
+            case "--limit":
+                guard let limit = Int(try value("--limit")), limit > 0 else {
+                    throw LayaError.invalidAsset("--limit must be a positive integer")
+                }
+                options.limit = limit
             case "--only": options.only = Set(try value("--only").split(separator: ",").map(String.init))
             default: throw LayaError.invalidAsset("Unknown argument \(arguments[index])")
             }
@@ -102,6 +106,7 @@ struct LayaBenchmarkCommand {
                 return seen[row.suite]! <= limit
             }
         }
+        guard !rows.isEmpty else { throw LayaError.invalidAsset("No benchmark rows selected") }
         var reference: [String: ReferenceRow] = [:]
         if let path = options.reference {
             for item in try loadLines(path, as: ReferenceRow.self) {
@@ -147,6 +152,7 @@ struct LayaBenchmarkCommand {
             do {
                 answer = try await manager.answer(state: row.state, question: try row.question)
             } catch {
+                logger.error("Failed \(row.suite)#\(row.index): \(error.localizedDescription)")
                 suite.dropped += 1
                 stats[row.suite] = suite
                 continue
@@ -175,8 +181,11 @@ struct LayaBenchmarkCommand {
             let sorted = values.sorted()
             return sorted[min(sorted.count - 1, Int(Double(sorted.count) * q))]
         }
+        let dropped = stats.values.reduce(0) { $0 + $1.dropped }
         var report: [String: Any] = [
             "lengths": manager.lengths, "questions": rows.count, "elapsed_s": elapsed, "load_s": loadSeconds,
+            "precision": options.precision, "completed": allLatencies.count, "dropped": dropped,
+            "complete": dropped == 0,
             "latency_ms": ["p50": percentile(allLatencies, 0.5), "p95": percentile(allLatencies, 0.95)],
             "chip": chipName(),
         ]
@@ -215,6 +224,9 @@ struct LayaBenchmarkCommand {
             let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
             try data.write(to: URL(fileURLWithPath: path))
             print("wrote \(path)")
+        }
+        guard dropped == 0 else {
+            throw LayaError.invalidOutput("Incomplete benchmark: \(dropped) of \(rows.count) questions failed")
         }
     }
 

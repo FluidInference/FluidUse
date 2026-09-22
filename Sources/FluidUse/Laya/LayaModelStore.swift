@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// File names and download of the `FluidInference/laya-coreml` artifacts.
@@ -67,11 +68,8 @@ public enum LayaModelStore {
                 throw LayaError.invalidAsset("Bad download URL for \(relative)")
             }
             progress?(relative, 0)
-            // Download next to the destination so the final move is a rename, never a cross-volume copy
-            // that could leave a truncated member behind if interrupted.
-            let partial = destination.appendingPathExtension("partial")
-            try? manager.removeItem(at: partial)
             let (temporary, response) = try await URLSession.shared.download(from: url)
+            defer { try? manager.removeItem(at: temporary) }
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 try? manager.removeItem(at: temporary)
                 throw LayaError.invalidAsset(
@@ -91,11 +89,21 @@ public enum LayaModelStore {
                 try? manager.removeItem(at: temporary)
                 throw LayaError.invalidAsset("Download of \(relative) is empty")
             }
-            try manager.moveItem(at: temporary, to: partial)
-            try? manager.removeItem(at: destination)
-            try manager.moveItem(at: partial, to: destination)
+            try installDownloadedFile(temporary, at: destination)
             progress?(relative, size)
         }
         return repoDirectory
+    }
+
+    /// Stage on the destination volume, then atomically replace the cache entry. Concurrent loads
+    /// use separate staging files and never remove another load's completed file.
+    static func installDownloadedFile(_ temporary: URL, at destination: URL) throws {
+        let manager = FileManager.default
+        let partial = destination.appendingPathExtension("\(UUID().uuidString).partial")
+        defer { try? manager.removeItem(at: partial) }
+        try manager.moveItem(at: temporary, to: partial)
+        guard rename(partial.path, destination.path) == 0 else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
     }
 }
