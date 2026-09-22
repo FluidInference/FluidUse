@@ -17,6 +17,7 @@ and distinguishes text-state models from vision models.
 | Next | **Minesweeper** | Open or flag a cell. | Decision-making under uncertainty. | Revealed grid and legal cells; show mine probabilities only if actually computed. |
 | Next | **Wordle-style word game** | Choose the next valid guess. | Information gathering versus an immediate attempt to solve. | Previous guesses, color feedback, and a fixed candidate-word list. |
 | Next | **Frogger-style crossing** | Move up, down, left, right, or wait. | Timing around moving hazards and choosing safe windows. | Player, lane hazards, speeds, and goal positions; or a rendered frame. |
+| Next | **Subway Surfers-style runner** | Switch lane, jump, slide, or hold. | Fast obstacle recognition, action timing, and choosing between survival and coins. | Current lane, speed, nearby obstacles and distances; or a rendered frame. |
 | Next | **Connect Four** | Choose a non-full column. | Short tactical lookahead with only a few legal actions. | Board, player to move, and legal columns. |
 | Later | **Pac-Man** | Direction at each junction. | Reward versus moving hazards. | Map, player, ghosts, pellets, and power timer. |
 | Later | **Codenames** | Choose a clue or a guess from a fixed set. | Semantic association under constraints. | Visible words, team, prior clues, and legal choices. |
@@ -64,6 +65,29 @@ and [Gymnasium FrozenLake](https://gymnasium.farama.org/main/environments/toy_te
 provide configurable tasks with small discrete action spaces. Start each model
 from the same puzzle or seeded map, and keep its observations limited to what
 the game rules permit.
+
+## Reuse existing games
+
+The goal is to adapt playable games, not rebuild their physics, visuals, and
+controls. A demo adapter should expose `reset(seed)`, `observe()`, `legalActions()`,
+`step(action)`, `score()`, and `done()`. It can call an existing game's input
+functions or simulate its keyboard controls. Keep gameplay and assets upstream
+where possible; record the upstream revision and changes to the adapter.
+
+| Source | Good for | Reuse notes |
+| --- | --- | --- |
+| [PlayJev game harness](https://github.com/OmniJev/PlayJev) | Tetris, Snake, Pac-Man, Racer, Space Invaders, Sokoban, Infinite Mario, Floppy Bird, Breakout, 2048. | Already exposes seeded `start`, `step`, `frame`, `score`, `done`, and actions. Each vendored game has its own license; check art and levels separately before publishing. |
+| [Neon Cyberpunk Runner](https://github.com/markstent/runner) | First Subway Surfers-style demo. | MIT-licensed Three.js browser game with three lanes, jump, slide, seedable track generation, and game logic separated from rendering. Add a thin adapter for observations and model actions. |
+| [Cave Runner](https://github.com/tope-olajide/cave-runner) | Alternate 3D runner. | MIT-licensed, but its online score path uses Netlify and PlanetScale; assess whether a local-only demo can bypass that path. |
+| [MiniGrid](https://minigrid.farama.org/environments/minigrid/) and [Gymnasium](https://gymnasium.farama.org/main/environments/) | DoorKey, FrozenLake, and other compact decision tasks. | Existing reset/step environments; add a viewer and a model input adapter. |
+
+For the runner, use the same generated track seeds, action interval, and speed
+curve for every model. Report distance, obstacles cleared, coins, collisions,
+and missed decision deadlines. An unlicensed [Subway Surfers clone](https://github.com/eeshadutta/Subway-Surfers)
+exists, but its repository does not declare a reuse license, so it is not the
+recommended source for a published demo. Call the result an endless runner and
+use the upstream game's own art and name unless rights to the Subway Surfers
+branding and assets are available.
 
 ## Flappy Bird comparison specification
 
