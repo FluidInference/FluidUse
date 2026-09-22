@@ -28,6 +28,12 @@ LAYA_DEMO_AUTORUN=1 LAYA_DEMO_STRESS=1 LAYA_DEMO_QUIT_AFTER=30 swift run -c rele
 `LAYA_DEMO_AUTOLOAD=1` loads the model on launch without playing, `LAYA_DEMO_SEED=<n>` fixes the
 piece sequence.
 
+Set `GLICLASS_PRECISION=lut8` or `lut6` to load the matching palettized package from the same model
+directory. FP16 remains the default. LUT8 is the recommended compact package: 33.0 MB, 97.1% FP16
+choice agreement on the L128 application-suite rows, and 4.92 ms average median Tetris-call latency.
+LUT6 is an aggressive 24.8 MB option; LUT4 is intentionally not documented as deployable because it
+lost 15.75 accuracy points.
+
 The simulation (`Sources/LayaTetris`) is shared with `swift run FluidUseLaya tetris`.
 
 ## Controls

@@ -24,16 +24,86 @@
       "mean_heuristic_top_agreement": 0.9819464559
     },
     "runs": [
-      { "seed": 1, "pieces": 5000, "lines": 1998, "game_over": false, "median_ms": 4.94975, "heuristic_top_agreement": 0.9792790848 },
-      { "seed": 2, "pieces": 1840, "lines": 726, "game_over": true, "median_ms": 4.747416, "heuristic_top_agreement": 0.9821958457 },
-      { "seed": 3, "pieces": 5000, "lines": 1997, "game_over": false, "median_ms": 4.74375, "heuristic_top_agreement": 0.9831497084 },
-      { "seed": 4, "pieces": 4103, "lines": 1628, "game_over": true, "median_ms": 4.838417, "heuristic_top_agreement": 0.9824973877 },
-      { "seed": 5, "pieces": 1863, "lines": 734, "game_over": true, "median_ms": 4.962542, "heuristic_top_agreement": 0.9819557625 },
-      { "seed": 6, "pieces": 2377, "lines": 939, "game_over": true, "median_ms": 4.935708, "heuristic_top_agreement": 0.9821755027 },
-      { "seed": 7, "pieces": 860, "lines": 333, "game_over": true, "median_ms": 4.877875, "heuristic_top_agreement": 0.9821882952 },
-      { "seed": 8, "pieces": 5000, "lines": 1998, "game_over": false, "median_ms": 4.833083, "heuristic_top_agreement": 0.9815924658 },
-      { "seed": 9, "pieces": 3780, "lines": 1502, "game_over": true, "median_ms": 4.927875, "heuristic_top_agreement": 0.9834616481 },
-      { "seed": 10, "pieces": 5000, "lines": 1999, "game_over": false, "median_ms": 4.824125, "heuristic_top_agreement": 0.9809688581 }
+      {
+        "seed": 1,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 4.94975,
+        "heuristic_top_agreement": 0.9792790848
+      },
+      {
+        "seed": 2,
+        "pieces": 1840,
+        "lines": 726,
+        "game_over": true,
+        "median_ms": 4.747416,
+        "heuristic_top_agreement": 0.9821958457
+      },
+      {
+        "seed": 3,
+        "pieces": 5000,
+        "lines": 1997,
+        "game_over": false,
+        "median_ms": 4.74375,
+        "heuristic_top_agreement": 0.9831497084
+      },
+      {
+        "seed": 4,
+        "pieces": 4103,
+        "lines": 1628,
+        "game_over": true,
+        "median_ms": 4.838417,
+        "heuristic_top_agreement": 0.9824973877
+      },
+      {
+        "seed": 5,
+        "pieces": 1863,
+        "lines": 734,
+        "game_over": true,
+        "median_ms": 4.962542,
+        "heuristic_top_agreement": 0.9819557625
+      },
+      {
+        "seed": 6,
+        "pieces": 2377,
+        "lines": 939,
+        "game_over": true,
+        "median_ms": 4.935708,
+        "heuristic_top_agreement": 0.9821755027
+      },
+      {
+        "seed": 7,
+        "pieces": 860,
+        "lines": 333,
+        "game_over": true,
+        "median_ms": 4.877875,
+        "heuristic_top_agreement": 0.9821882952
+      },
+      {
+        "seed": 8,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 4.833083,
+        "heuristic_top_agreement": 0.9815924658
+      },
+      {
+        "seed": 9,
+        "pieces": 3780,
+        "lines": 1502,
+        "game_over": true,
+        "median_ms": 4.927875,
+        "heuristic_top_agreement": 0.9834616481
+      },
+      {
+        "seed": 10,
+        "pieces": 5000,
+        "lines": 1999,
+        "game_over": false,
+        "median_ms": 4.824125,
+        "heuristic_top_agreement": 0.9809688581
+      }
     ]
   },
   "heuristic_control": {
@@ -43,16 +113,162 @@
       "seeds_reaching_cap": 3
     },
     "runs": [
-      { "seed": 1, "pieces": 1969, "lines": 775 },
-      { "seed": 2, "pieces": 5000, "lines": 1997 },
-      { "seed": 3, "pieces": 2540, "lines": 1004 },
-      { "seed": 4, "pieces": 3275, "lines": 1296 },
-      { "seed": 5, "pieces": 5000, "lines": 1998 },
-      { "seed": 6, "pieces": 959, "lines": 371 },
-      { "seed": 7, "pieces": 460, "lines": 173 },
-      { "seed": 8, "pieces": 5000, "lines": 1998 },
-      { "seed": 9, "pieces": 1014, "lines": 392 },
-      { "seed": 10, "pieces": 3527, "lines": 1398 }
+      {
+        "seed": 1,
+        "pieces": 1969,
+        "lines": 775
+      },
+      {
+        "seed": 2,
+        "pieces": 5000,
+        "lines": 1997
+      },
+      {
+        "seed": 3,
+        "pieces": 2540,
+        "lines": 1004
+      },
+      {
+        "seed": 4,
+        "pieces": 3275,
+        "lines": 1296
+      },
+      {
+        "seed": 5,
+        "pieces": 5000,
+        "lines": 1998
+      },
+      {
+        "seed": 6,
+        "pieces": 959,
+        "lines": 371
+      },
+      {
+        "seed": 7,
+        "pieces": 460,
+        "lines": 173
+      },
+      {
+        "seed": 8,
+        "pieces": 5000,
+        "lines": 1998
+      },
+      {
+        "seed": 9,
+        "pieces": 1014,
+        "lines": 392
+      },
+      {
+        "seed": 10,
+        "pieces": 3527,
+        "lines": 1398
+      }
+    ]
+  },
+  "model_variants": {
+    "fp16": {
+      "coreml_package": "gliclass_edge_apps_fp16_L128_options25.mlpackage",
+      "coreml_package_bytes": 65675264
+    },
+    "lut8": {
+      "coreml_package": "gliclass_edge_apps_lut8_kmeans_per_tensor_L128_options25.mlpackage",
+      "coreml_package_bytes": 32959320,
+      "fp16_argmax_agreement": 0.9710182098,
+      "l128_micro_accuracy": 0.7217235189
+    },
+    "lut6": {
+      "coreml_package": "gliclass_edge_apps_lut6_kmeans_per_tensor_L128_options25.mlpackage",
+      "coreml_package_bytes": 24753633,
+      "fp16_argmax_agreement": 0.9169017697,
+      "l128_micro_accuracy": 0.7137727622
+    },
+    "lut4_rejected": {
+      "coreml_package_bytes": 16564321,
+      "fp16_argmax_agreement": 0.6347781482,
+      "l128_micro_accuracy": 0.5619389587
+    }
+  },
+  "gliclass_lut8": {
+    "command": "FluidUseLaya tetris --policy gliclass --precision lut8 --gliclass-choice --gliclass-candidates 2 --lengths 128 --pieces 5000 --shortlist --describe graded --agreement --json",
+    "summary": {
+      "mean_pieces": 3666.7,
+      "median_pieces": 4802.5,
+      "mean_lines": 1459.2,
+      "seeds_reaching_cap": 5,
+      "mean_of_run_median_ms": 4.9186873,
+      "mean_heuristic_top_agreement": 0.98387596057
+    },
+    "runs": [
+      {
+        "seed": 1,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 4.851333
+      },
+      {
+        "seed": 2,
+        "pieces": 1840,
+        "lines": 726,
+        "game_over": true,
+        "median_ms": 4.796208
+      },
+      {
+        "seed": 3,
+        "pieces": 5000,
+        "lines": 1997,
+        "game_over": false,
+        "median_ms": 4.7985
+      },
+      {
+        "seed": 4,
+        "pieces": 3196,
+        "lines": 1264,
+        "game_over": true,
+        "median_ms": 4.882208
+      },
+      {
+        "seed": 5,
+        "pieces": 4605,
+        "lines": 1828,
+        "game_over": true,
+        "median_ms": 4.809708
+      },
+      {
+        "seed": 6,
+        "pieces": 338,
+        "lines": 122,
+        "game_over": true,
+        "median_ms": 4.908542
+      },
+      {
+        "seed": 7,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 4.823458
+      },
+      {
+        "seed": 8,
+        "pieces": 1688,
+        "lines": 663,
+        "game_over": true,
+        "median_ms": 5.413958
+      },
+      {
+        "seed": 9,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 4.871
+      },
+      {
+        "seed": 10,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 5.031958
+      }
     ]
   }
 }

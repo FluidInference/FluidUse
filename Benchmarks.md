@@ -216,7 +216,8 @@ Seeds 1–10, with a 5,000-piece cap:
 | Policy | Mean pieces | Mean lines | Seeds reaching cap | Model calls / non-forced piece |
 | --- | ---: | ---: | ---: | ---: |
 | Corrected Dellacherie heuristic | 2,874.4 | 1,140.2 | 3/10 | 0 |
-| **GLiClass, heuristic top-two** | **3,482.3** | **1,385.4** | **4/10** | **1** |
+| **GLiClass FP16, heuristic top-two** | **3,482.3** | **1,385.4** | **4/10** | **1** |
+| **GLiClass LUT8, heuristic top-two** | **3,666.7** | **1,459.2** | **5/10** | **1** |
 
 GLiClass's per-seed piece counts were 5,000, 1,840, 5,000, 4,103, 1,863, 2,377, 860,
 5,000, 3,780, and 5,000. The capped mean is therefore a lower bound. It chose the heuristic's first
@@ -224,6 +225,12 @@ candidate 98.2% of the time; the remaining choices improved mean survival by 21.
 heuristic control. End-to-end model-call latency averaged 4.86 ms median across the ten runs. That is
 slower per call than laya's historical 3.8 ms, but GLiClass makes about one call per piece instead of
 laya's 5.6 calls, so the complete decision loop is substantially faster.
+
+The 8-bit per-tensor LUT package is 33.0 MB instead of 65.7 MB. It preserves 97.1% of FP16 choices
+on the L128 application-suite rows and averages 4.92 ms per Tetris model call. Its different choices
+produce a higher capped Tetris mean, but the game is path-sensitive and that result should be read as
+survival parity rather than an accuracy gain. Six-bit is 24.8 MB with 91.7% choice agreement; four-bit
+is rejected after application accuracy fell by 15.75 points.
 
 The historical laya mean above is 568.3 pieces, but its per-seed artifacts are unavailable. Treat the
 GLiClass comparison to that number as directional; the GLiClass and corrected heuristic rows were run

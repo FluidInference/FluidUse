@@ -72,4 +72,14 @@ final class GLiClassIntegrationTests: XCTestCase {
         XCTAssertEqual(good.probabilities.reduce(0, +), 1, accuracy: 1e-5)
         XCTAssertEqual(good.bucketLength, 128)
     }
+
+    func testModelNamesCoverPublishedPrecisions() throws {
+        XCTAssertEqual(
+            try GLiClassManager.modelName(length: 128, precision: "fp16"),
+            "gliclass_edge_apps_fp16_L128_options25")
+        XCTAssertEqual(
+            try GLiClassManager.modelName(length: 128, precision: "lut8"),
+            "gliclass_edge_apps_lut8_kmeans_per_tensor_L128_options25")
+        XCTAssertThrowsError(try GLiClassManager.modelName(length: 128, precision: "int8"))
+    }
 }

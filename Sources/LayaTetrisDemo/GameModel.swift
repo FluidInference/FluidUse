@@ -160,16 +160,18 @@ final class GameModel: ObservableObject {
                     guard let directory = ProcessInfo.processInfo.environment["GLICLASS_MODEL_DIR"],
                         !directory.isEmpty
                     else { throw GLiClassError.invalidAsset("Set GLICLASS_MODEL_DIR for the GLiClass demo") }
+                    let precision = ProcessInfo.processInfo.environment["GLICLASS_PRECISION"] ?? "fp16"
                     let loaded = try await GLiClassManager.load(
-                        from: URL(fileURLWithPath: directory), configuration: .init(lengths: [128]))
+                        from: URL(fileURLWithPath: directory),
+                        configuration: .init(lengths: [128], precision: precision))
                     _ = try await loaded.classify(
                         text: "The piece buries nothing and keeps the stack low.",
                         labels: ["a poor Tetris placement", "a clean Tetris placement"],
                         prompt: "Choose the better placement.")
                     gliClassManager = loaded
                     loadStatus = String(
-                        format: "GLiClass Edge Apps v2 · L128 · CPU + ANE · loaded in %.1f s",
-                        Date().timeIntervalSince(started))
+                        format: "GLiClass Edge Apps v2 · %@ · L128 · CPU + ANE · loaded in %.1f s",
+                        precision as NSString, Date().timeIntervalSince(started))
                 case .laya:
                     let configuration = LayaManager.Configuration(lengths: [128])
                     let loaded: LayaManager

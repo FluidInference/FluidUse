@@ -127,7 +127,8 @@ struct LayaTetrisCommand {
                 throw GLiClassError.invalidAsset("--policy gliclass currently requires --model-dir")
             }
             gliClassManager = try await GLiClassManager.load(
-                from: URL(fileURLWithPath: directory), configuration: .init(lengths: options.lengths))
+                from: URL(fileURLWithPath: directory),
+                configuration: .init(lengths: options.lengths, precision: options.precision))
         }
         let gliClassLabels = [
             "a poor Tetris placement that creates holes or a dangerous tall stack",
@@ -350,7 +351,7 @@ struct LayaTetrisCommand {
     private static func printUsage() {
         print(
             """
-            Usage: swift run FluidUseLaya tetris [--model-dir DIR] [--precision fp16|e8] [--lengths 128]
+            Usage: swift run FluidUseLaya tetris [--model-dir DIR] [--precision fp16|e8|lut8|lut6] [--lengths 128]
                                              [--pieces 200] [--seed 7] [--policy laya|gliclass|heuristic|random]
                                              [--shortlist] [--describe plain|graded] [--lookahead N]
                                              [--combine product|min|next] [--agreement] [--question TEXT]

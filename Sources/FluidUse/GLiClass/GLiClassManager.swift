@@ -8,10 +8,15 @@ public actor GLiClassManager {
     public struct Configuration: Sendable {
         public var lengths: [Int]
         public var computeUnits: [Int: MLComputeUnits]
+        /// Weight representation: `fp16`, `lut8`, `lut6`, or `lut4`.
+        public var precision: String
 
-        public init(lengths: [Int] = [128], computeUnits: [Int: MLComputeUnits] = [:]) {
+        public init(
+            lengths: [Int] = [128], computeUnits: [Int: MLComputeUnits] = [:], precision: String = "fp16"
+        ) {
             self.lengths = lengths
             self.computeUnits = computeUnits
+            self.precision = precision
         }
 
         func units(for length: Int) -> MLComputeUnits {
@@ -55,7 +60,7 @@ public actor GLiClassManager {
         let tokenizer = try GLiClassTokenizer(tokenizerJsonURL: tokenizerURL)
         var models: [MLModel] = []
         for length in configuration.lengths {
-            let name = "gliclass_edge_apps_fp16_L\(length)_options\(maximumOptions)"
+            let name = try modelName(length: length, precision: configuration.precision)
             let compiled = directory.appendingPathComponent(name).appendingPathExtension("mlmodelc")
             let package = directory.appendingPathComponent(name).appendingPathExtension("mlpackage")
             let modelURL: URL
@@ -71,6 +76,16 @@ public actor GLiClassManager {
             models.append(try await MLModel.load(contentsOf: modelURL, configuration: modelConfiguration))
         }
         return try GLiClassManager(models: models, tokenizer: tokenizer)
+    }
+
+    static func modelName(length: Int, precision: String) throws -> String {
+        let representation: String
+        switch precision {
+        case "fp16": representation = "fp16"
+        case "lut8", "lut6", "lut4": representation = "\(precision)_kmeans_per_tensor"
+        default: throw GLiClassError.invalidAsset("Unknown GLiClass precision \(precision)")
+        }
+        return "gliclass_edge_apps_\(representation)_L\(length)_options\(maximumOptions)"
     }
 
     /// Score all labels in one encoder call. `prompt` describes the classification task.
