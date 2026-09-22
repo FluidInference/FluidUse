@@ -9,9 +9,10 @@ milliseconds per move, and calls.
 swift run -c release LayaTetrisDemo
 ```
 
-No Xcode project is needed. Set `GLICLASS_MODEL_DIR` to a directory holding `tokenizer.json` and
-`gliclass_edge_apps_fp16_L128_options25.mlpackage`, or select laya and let it download from
-`FluidInference/laya-coreml` (`LAYA_MODEL_DIR` skips that download). **Play** scores flat out with
+No Xcode project is needed. GLiClass downloads its L128 FP16 package and tokenizer from
+`FluidInference/gliclass-edge-apps-coreml` on first use. Set `GLICLASS_MODEL_DIR` to a local asset
+directory to skip that download. Laya downloads from `FluidInference/laya-coreml` unless
+`LAYA_MODEL_DIR` selects a local directory. **Play** scores flat out with
 Core ML on CPU + ANE and continues on the next seed after a top-out. SwiftUI presents the evolving board at
 the display refresh rate while the model stays hot. The *pause per piece* slider can expose individual
 moves, but long pauses let the Neural Engine idle and raise measured latency. The *delay per scored
@@ -19,8 +20,8 @@ landing* slider slows laya's candidate-by-candidate scoring so it can be watched
 outline); the chosen landing is drawn in green.
 
 The GLiClass training, Core ML conversion, compression, and parity reports are in
-[mobius PR #101](https://github.com/FluidInference/mobius/pull/101). The GLiClass packages are not yet
-auto-downloaded, so build or obtain those assets before running this policy.
+[mobius PR #101](https://github.com/FluidInference/mobius/pull/101). The published GLiClass packages
+and runtime config are at [Hugging Face](https://huggingface.co/FluidInference/gliclass-edge-apps-coreml).
 
 **Policy** switches among GLiClass, laya, a feature-weighted heuristic, and random play. The harness
 toggle applies to every policy. See [Benchmarks.md](../../Benchmarks.md) for the reported runs.

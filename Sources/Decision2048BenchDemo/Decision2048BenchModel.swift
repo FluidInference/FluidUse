@@ -94,13 +94,15 @@ final class Decision2048BenchModel: ObservableObject {
         Task {
             do {
                 let environment = ProcessInfo.processInfo.environment
-                guard let gliClassDirectory = environment["GLICLASS_MODEL_DIR"], !gliClassDirectory.isEmpty else {
-                    throw GLiClassError.invalidAsset("Set GLICLASS_MODEL_DIR for the 2048 benchmark")
+                let gliClassConfiguration = GLiClassManager.Configuration(
+                    lengths: [128], precision: environment["GLICLASS_PRECISION"] ?? "lut8")
+                let loadedGLiClass: GLiClassManager
+                if let directory = environment["GLICLASS_MODEL_DIR"], !directory.isEmpty {
+                    loadedGLiClass = try await GLiClassManager.load(
+                        from: URL(fileURLWithPath: directory), configuration: gliClassConfiguration)
+                } else {
+                    loadedGLiClass = try await GLiClassManager.load(configuration: gliClassConfiguration)
                 }
-                let loadedGLiClass = try await GLiClassManager.load(
-                    from: URL(fileURLWithPath: gliClassDirectory),
-                    configuration: .init(
-                        lengths: [128], precision: environment["GLICLASS_PRECISION"] ?? "lut8"))
                 loadStatus = "Loading Laya E8…"
                 let layaConfiguration = LayaManager.Configuration(
                     lengths: [128], precision: environment["LAYA_PRECISION"] ?? "e8")

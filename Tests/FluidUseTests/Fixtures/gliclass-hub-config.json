@@ -1,0 +1,46 @@
+{
+  "format": "coreml",
+  "library_name": "coreml",
+  "pipeline": "dynamic-label-classification",
+  "source": {
+    "repo": "knowledgator/gliclass-edge-v3.0",
+    "revision": "df03993a2ed98e5e4a0d2dd7efbbd105abe874cf",
+    "license": "apache-2.0"
+  },
+  "variant": "FluidUse application-tuned v2",
+  "parameters": 32705154,
+  "max_options": 25,
+  "sequence_format": "[CLS] (<<LABEL>><option>)* <<SEP>> <prompt><serialized state> [SEP]",
+  "tokenizer": "tokenizer.json",
+  "buckets": [
+    {
+      "length": 128,
+      "fp16": "gliclass_edge_apps_fp16_L128_options25.mlpackage",
+      "lut8": "gliclass_edge_apps_lut8_kmeans_per_tensor_L128_options25.mlpackage"
+    },
+    {
+      "length": 256,
+      "fp16": "gliclass_edge_apps_fp16_L256_options25.mlpackage"
+    },
+    {
+      "length": 512,
+      "fp16": "gliclass_edge_apps_fp16_L512_options25.mlpackage"
+    }
+  ],
+  "precisions": {
+    "fp16": "Float16 weights and compute",
+    "lut8": "8-bit per-tensor k-means weight palettization; L128 only"
+  },
+  "inputs": {
+    "input_ids": "int32 [1, L]",
+    "attention_mask": "int32 [1, L]",
+    "class_marker_map": "float32 [1, 25, L]"
+  },
+  "outputs": {
+    "logits": "float32 [1, 25]",
+    "probabilities": "float32 [1, 25]"
+  },
+  "minimum_deployment_target": "iOS 17 / macOS 14",
+  "runtime": "https://github.com/FluidInference/FluidUse",
+  "conversion": "https://github.com/FluidInference/mobius/pull/101"
+}
