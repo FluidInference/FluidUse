@@ -15,9 +15,16 @@ and distinguishes text-state models from vision models.
 | Next | **Mario-style platformer** | Choose left, right, jump, or a legal combination at each tick. | Jump timing, momentum, obstacle anticipation, and longer action sequences. | Player position and velocity, nearby platforms, enemies, and camera offset; or a rendered frame. |
 | Next | **Chess** | Choose or rank legal moves. | Tactical judgment, position evaluation, and planning across turns. | FEN, side to move, legal moves, and remaining time; a board image only for vision models. |
 | Next | **Minesweeper** | Open or flag a cell. | Decision-making under uncertainty. | Revealed grid and legal cells; show mine probabilities only if actually computed. |
+| Next | **Wordle-style word game** | Choose the next valid guess. | Information gathering versus an immediate attempt to solve. | Previous guesses, color feedback, and a fixed candidate-word list. |
+| Next | **Frogger-style crossing** | Move up, down, left, right, or wait. | Timing around moving hazards and choosing safe windows. | Player, lane hazards, speeds, and goal positions; or a rendered frame. |
+| Next | **Connect Four** | Choose a non-full column. | Short tactical lookahead with only a few legal actions. | Board, player to move, and legal columns. |
 | Later | **Pac-Man** | Direction at each junction. | Reward versus moving hazards. | Map, player, ghosts, pellets, and power timer. |
 | Later | **Codenames** | Choose a clue or a guess from a fixed set. | Semantic association under constraints. | Visible words, team, prior clues, and legal choices. |
 | Later | **Hanabi** | Play, discard, or give a legal hint. | Cooperation with incomplete information. | Only what the acting player may observe. |
+| Later | **MiniGrid DoorKey** | Turn, move, pick up, or open. | Multi-step planning when a key must be found before reaching the goal. | Partial grid observation, carried item, and door state. |
+| Later | **FrozenLake** | Choose one of four directions. | Planning under uncertain movement when the lake is slippery. | Map, position, goal, holes, and known movement rules. |
+| Later | **Battleship** | Choose an untried target square. | Search under hidden information and using feedback from earlier turns. | Hits, misses, sunk ships, and remaining legal squares. |
+| Later | **Tower defense** | Place, upgrade, sell, or wait. | Resource allocation with delayed effects. | Map, waves, towers, budget, and legal placements. |
 | Later | **MiniWoB-style web tasks** | Choose an element and operation. | Practical computer use with a clear success condition. | Accessibility element table and task goal; screenshots for vision models. |
 | Later | **Breakout / Pong** | Move paddle left, right, or stay. | Ball prediction and control latency. | Ball/paddle positions and velocities. |
 | Later | **Space Invaders** | Move, fire, or combine actions. | Avoidance and aiming under continuous pressure. | Player, projectiles, enemies, and cooldowns. |
@@ -49,6 +56,14 @@ A **full-game demo** pairs models against the same opponent at the same clock
 setting and starting positions. Record legal-move rate, move time, game result,
 and engine evaluation loss per move. Supply legal moves from a chess rules engine
 so the model is judged on choosing among them, not on formatting notation.
+
+Wordle and Battleship add information-gathering decisions; Frogger adds moving
+hazards; Connect Four is a compact turn-based duel. For reusable planning
+environments, [MiniGrid DoorKey](https://minigrid.farama.org/environments/minigrid/DoorKeyEnv/)
+and [Gymnasium FrozenLake](https://gymnasium.farama.org/main/environments/toy_text/frozen_lake/)
+provide configurable tasks with small discrete action spaces. Start each model
+from the same puzzle or seeded map, and keep its observations limited to what
+the game rules permit.
 
 ## Flappy Bird comparison specification
 
