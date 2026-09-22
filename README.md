@@ -63,8 +63,10 @@ left to the person. Submit is never clicked unless enabled.
 ## Models
 
 [Documentation/Models.md](Documentation/Models.md) lists what runs today, what is converted
-but not wired in, and the open-weight candidates worth converting next, with sizes,
-licenses, and demo ideas.
+but not wired in, and the open-weight candidates worth converting next, including
+sub-1B-parameter candidates from the Jev Decision Index.
+[Documentation/GameDemos.md](Documentation/GameDemos.md) lists game demos and specifies
+a matched-seed Flappy Bird model comparison.
 
 ## License
 

@@ -2,7 +2,9 @@
 
 What FluidUse runs today, what is converted but not wired in, and the open-weight
 candidates worth converting next. Sizes are fp16 on disk. Traction was checked on
-2026-09-21; licenses were read from each model card.
+2026-09-21; licenses were read from each model card. The [Decision Index 0.1](https://huggingface.co/spaces/multimodalart/jev-decision-index)
+snapshot below was checked on 2026-09-22. Its scores measure a frozen set of static
+decision tasks, not game play.
 
 ## Shipped
 
@@ -69,6 +71,45 @@ encoder. Closed-vocabulary tasks that fit the shape, each 1 to 5 MB:
 | Florence-2-base | Screenshot of an app with no accessibility tree | Icons and buttons labeled in place, then a decision made on those labels. |
 | mind2web-candidate-ranker | "Where would you click next" overlay | Top five elements highlighted with scores, no action taken. |
 | system-one-distilled | Routing benchmark | Hundreds of tickets classified per second with latency per call. |
+
+### Game decisions
+
+See [Decision game demos](GameDemos.md) for the game list, the Flappy Bird
+comparison specification, and the matched-seed evaluation protocol.
+
+### Promising Index models below 1B parameters
+
+These are **parameter-count** candidates from the [Index data](https://huggingface.co/spaces/multimodalart/jev-decision-index/blob/main/data/index.json),
+not models already converted for FluidUse. The Index score is its balanced static
+score out of 100; it is included to identify candidates, not to predict game
+performance. License and input type come from the linked model cards. Approximate
+fp16 sizes include only weights (2 bytes per parameter), before runtime overhead.
+
+| Model | Params / fp16 | Index score | Input and best demo role | Status |
+| --- | ---: | ---: | --- | --- |
+| [Kev-0.6B](https://huggingface.co/jaredpalmer/kev-0.6b) | 596M / ~1.19 GB | 31.30 | Text state, typed `choice` / `score` / `noul`; first generic Flappy Bird decision candidate. | Apache-2.0; LoRA and pointer head require its Qwen3 base and a new runtime port. |
+| [LFM2.5-350M-RLCD](https://huggingface.co/notnotsamuel/LFM2.5-350M-RLCD) | 354M / ~709 MB | 25.79 | Text decision baseline for Flappy Bird or routing. | `lfm1.0` custom license: review terms before conversion or redistribution. |
+| [GLiNER2.5-base](https://huggingface.co/fastino/gliner2.5-base-v1) | 194M / ~387 MB | 24.70 | Text extraction and classification; best fit for form/document decisions. | Apache-2.0; needs a separate GLiNER runtime, not a direct game controller. |
+| [GLiNER2.5-small](https://huggingface.co/fastino/gliner2.5-small-v1) | 74M / ~148 MB | 23.93 | Smaller text extraction/classification baseline. | Apache-2.0; different from the GLiNER small v2.1 candidate above. |
+| [GLiNER2.5-multi](https://huggingface.co/fastino/gliner2.5-multi-v1) | 287M / ~575 MB | 22.42 | Multilingual form/document decisions. | Apache-2.0; separate GLiNER runtime. |
+| [Decision-1.0-Lex](https://huggingface.co/llm-semantic-router/decision-1.0-lex) | 308M served in Index / ~616 MB | 19.57 | Text choices and scores; operational tasks and a Flappy Bird text-state trial. | Apache-2.0; card describes a 572M full checkpoint, so verify the artifact before sizing a port. |
+| [Decision-1.0-Kai](https://huggingface.co/llm-semantic-router/decision-1.0-kai) | 308M served in Index / ~616 MB | 18.37 | General text decision comparator for Lex. | Apache-2.0; card calls it 0.6B, so confirm the exact artifact before conversion. |
+| [Laya](https://huggingface.co/convaiinnovations/laya) | 421M / ~843 MB | 16.39 | Text typed decisions; comparison with the existing multilingual Core ML port. | Apache-2.0; the Index tests the English checkpoint, not `laya-multilingual`. |
+
+The Index also includes [NanoJev](https://huggingface.co/C-Tianyu/NanoJev)
+(596M, 26.19), but its Hub card does not declare a license; keep it out of the
+conversion shortlist until terms are clear. [Kev-0.5B](https://huggingface.co/jaredpalmer/kev-0.5b)
+(494M, 30.34) is explicitly described by its author as a superseded prototype.
+Neither is a first-choice port. All Index models in this table take text input;
+there is no evidence in the Index that they can read Flappy Bird screenshots.
+
+[PlayJev-0.8B](https://huggingface.co/OmniJev/PlayJev-0.8B) is a separate,
+Apache-2.0 **vision** candidate under 1B parameters, not a scored Index entrant.
+It has a published Flappy Bird run and can take rendered frames, making it the
+most direct visual comparator. Its fp16 weights are roughly 1.6 GB, above the
+1 GB fp16 limit used for the main FluidUse conversion shortlist. Its published
+Flappy Bird score must not be compared directly with a new harness run; use the
+same physics, seeds, action timing, and scoring for every model in the demo.
 
 ## Ruled out
 
