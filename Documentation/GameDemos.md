@@ -6,30 +6,66 @@ and Snake are the starting examples from the discussion; Flappy Bird is the next
 demo to build. The [model inventory](Models.md) identifies possible sub-1B models
 and distinguishes text-state models from vision models.
 
+## Recommended build order
+
+This is a judgment about **new demo value for FluidUse**, not a measured model
+ranking. It favors visible differences between models, a clear score, distinct
+decision types, and reusable game code. Tetris, 2048, and Snake rank last only
+because they are already the starting examples. [PlayJev](https://github.com/OmniJev/PlayJev)
+reduces the work for ten browser games; the three-lane
+[Neon Cyberpunk Runner](https://github.com/markstent/runner) is the reuse path
+for a Subway Surfers-style demo.
+
+| Rank | Game | Main reason to demo it |
+| ---: | --- | --- |
+| 1 | Flappy Bird | Two choices make latency and model differences immediately visible. |
+| 2 | Sokoban / Boxoban | Clear planning failures; reusable PlayJev game. |
+| 3 | Subway Surfers-style runner | High visual appeal and distinct lane, jump, and slide choices; reusable runner exists. |
+| 4 | Mario-style platformer | Familiar, varied actions and long action sequences; PlayJev has a game harness. |
+| 5 | Chess | Recognizable tactics and a static-position mode that is easy to compare. |
+| 6 | Wordle-style word game | Adds information-gathering decisions with a compact state. |
+| 7 | Minesweeper | Shows risk-sensitive choices and uncertainty. |
+| 8 | Frogger-style crossing | Shows timing around moving hazards with simple actions. |
+| 9 | Connect Four | Small, legal move set and easy human-versus-model play. |
+| 10 | Pac-Man | Visually engaging risk/reward decisions; PlayJev has a game harness. |
+| 11 | Space Invaders | Fast aiming and dodging; PlayJev has a game harness. |
+| 12 | MiniWoB-style web tasks | Closest to FluidUse's computer-use purpose, with objective task success. |
+| 13 | Breakout / Pong | Simple control and visible prediction errors; PlayJev includes Breakout. |
+| 14 | MiniGrid DoorKey | Multi-step planning with an existing environment. |
+| 15 | Codenames | Semantic association, distinct from movement games. |
+| 16 | Racer | Fast steering decisions; PlayJev has a game harness. |
+| 17 | Battleship | Hidden-information search, but slower to watch. |
+| 18 | Hanabi | Cooperative partial information, but harder to explain at a glance. |
+| 19 | Tower defense | Resource allocation, but a large action and state space. |
+| 20 | FrozenLake | Useful stochastic baseline, but visually less compelling. |
+| 21 | Tetris | Already a starting example. |
+| 22 | 2048 | Already a starting example. |
+| 23 | Snake | Already a starting example. |
+
 ## Demo list
 
-| Priority | Game | Model's decision | What it reveals | Suggested state |
+| Status | Game | Model's decision | What it reveals | Suggested state |
 | --- | --- | --- | --- | --- |
-| Next | **Flappy Bird** | `FLAP` or `COAST` each decision tick. | Reaction timing, latency, and costly one-step mistakes. | Bird height and velocity; next pipe distance and gap, or a rendered frame for a vision model. |
-| Next | **Sokoban / Boxoban** | Pick a legal move or push. | Planning and irreversible traps. | Grid, player, crates, goals, and legal moves. |
-| Next | **Mario-style platformer** | Choose left, right, jump, or a legal combination at each tick. | Jump timing, momentum, obstacle anticipation, and longer action sequences. | Player position and velocity, nearby platforms, enemies, and camera offset; or a rendered frame. |
-| Next | **Chess** | Choose or rank legal moves. | Tactical judgment, position evaluation, and planning across turns. | FEN, side to move, legal moves, and remaining time; a board image only for vision models. |
-| Next | **Minesweeper** | Open or flag a cell. | Decision-making under uncertainty. | Revealed grid and legal cells; show mine probabilities only if actually computed. |
-| Next | **Wordle-style word game** | Choose the next valid guess. | Information gathering versus an immediate attempt to solve. | Previous guesses, color feedback, and a fixed candidate-word list. |
-| Next | **Frogger-style crossing** | Move up, down, left, right, or wait. | Timing around moving hazards and choosing safe windows. | Player, lane hazards, speeds, and goal positions; or a rendered frame. |
-| Next | **Subway Surfers-style runner** | Switch lane, jump, slide, or hold. | Fast obstacle recognition, action timing, and choosing between survival and coins. | Current lane, speed, nearby obstacles and distances; or a rendered frame. |
-| Next | **Connect Four** | Choose a non-full column. | Short tactical lookahead with only a few legal actions. | Board, player to move, and legal columns. |
-| Later | **Pac-Man** | Direction at each junction. | Reward versus moving hazards. | Map, player, ghosts, pellets, and power timer. |
-| Later | **Codenames** | Choose a clue or a guess from a fixed set. | Semantic association under constraints. | Visible words, team, prior clues, and legal choices. |
-| Later | **Hanabi** | Play, discard, or give a legal hint. | Cooperation with incomplete information. | Only what the acting player may observe. |
-| Later | **MiniGrid DoorKey** | Turn, move, pick up, or open. | Multi-step planning when a key must be found before reaching the goal. | Partial grid observation, carried item, and door state. |
-| Later | **FrozenLake** | Choose one of four directions. | Planning under uncertain movement when the lake is slippery. | Map, position, goal, holes, and known movement rules. |
-| Later | **Battleship** | Choose an untried target square. | Search under hidden information and using feedback from earlier turns. | Hits, misses, sunk ships, and remaining legal squares. |
-| Later | **Tower defense** | Place, upgrade, sell, or wait. | Resource allocation with delayed effects. | Map, waves, towers, budget, and legal placements. |
-| Later | **MiniWoB-style web tasks** | Choose an element and operation. | Practical computer use with a clear success condition. | Accessibility element table and task goal; screenshots for vision models. |
-| Later | **Breakout / Pong** | Move paddle left, right, or stay. | Ball prediction and control latency. | Ball/paddle positions and velocities. |
-| Later | **Space Invaders** | Move, fire, or combine actions. | Avoidance and aiming under continuous pressure. | Player, projectiles, enemies, and cooldowns. |
-| Later | **Racer** | Steer left, right, or straight. | Lookahead and fast corrections. | Track geometry, position, speed, and obstacles. |
+| Candidate | **Flappy Bird** | `FLAP` or `COAST` each decision tick. | Reaction timing, latency, and costly one-step mistakes. | Bird height and velocity; next pipe distance and gap, or a rendered frame for a vision model. |
+| Candidate | **Sokoban / Boxoban** | Pick a legal move or push. | Planning and irreversible traps. | Grid, player, crates, goals, and legal moves. |
+| Candidate | **Mario-style platformer** | Choose left, right, jump, or a legal combination at each tick. | Jump timing, momentum, obstacle anticipation, and longer action sequences. | Player position and velocity, nearby platforms, enemies, and camera offset; or a rendered frame. |
+| Candidate | **Chess** | Choose or rank legal moves. | Tactical judgment, position evaluation, and planning across turns. | FEN, side to move, legal moves, and remaining time; a board image only for vision models. |
+| Candidate | **Minesweeper** | Open or flag a cell. | Decision-making under uncertainty. | Revealed grid and legal cells; show mine probabilities only if actually computed. |
+| Candidate | **Wordle-style word game** | Choose the next valid guess. | Information gathering versus an immediate attempt to solve. | Previous guesses, color feedback, and a fixed candidate-word list. |
+| Candidate | **Frogger-style crossing** | Move up, down, left, right, or wait. | Timing around moving hazards and choosing safe windows. | Player, lane hazards, speeds, and goal positions; or a rendered frame. |
+| Candidate | **Subway Surfers-style runner** | Switch lane, jump, slide, or hold. | Fast obstacle recognition, action timing, and choosing between survival and coins. | Current lane, speed, nearby obstacles and distances; or a rendered frame. |
+| Candidate | **Connect Four** | Choose a non-full column. | Short tactical lookahead with only a few legal actions. | Board, player to move, and legal columns. |
+| Candidate | **Pac-Man** | Direction at each junction. | Reward versus moving hazards. | Map, player, ghosts, pellets, and power timer. |
+| Candidate | **Codenames** | Choose a clue or a guess from a fixed set. | Semantic association under constraints. | Visible words, team, prior clues, and legal choices. |
+| Candidate | **Hanabi** | Play, discard, or give a legal hint. | Cooperation with incomplete information. | Only what the acting player may observe. |
+| Candidate | **MiniGrid DoorKey** | Turn, move, pick up, or open. | Multi-step planning when a key must be found before reaching the goal. | Partial grid observation, carried item, and door state. |
+| Candidate | **FrozenLake** | Choose one of four directions. | Planning under uncertain movement when the lake is slippery. | Map, position, goal, holes, and known movement rules. |
+| Candidate | **Battleship** | Choose an untried target square. | Search under hidden information and using feedback from earlier turns. | Hits, misses, sunk ships, and remaining legal squares. |
+| Candidate | **Tower defense** | Place, upgrade, sell, or wait. | Resource allocation with delayed effects. | Map, waves, towers, budget, and legal placements. |
+| Candidate | **MiniWoB-style web tasks** | Choose an element and operation. | Practical computer use with a clear success condition. | Accessibility element table and task goal; screenshots for vision models. |
+| Candidate | **Breakout / Pong** | Move paddle left, right, or stay. | Ball prediction and control latency. | Ball/paddle positions and velocities. |
+| Candidate | **Space Invaders** | Move, fire, or combine actions. | Avoidance and aiming under continuous pressure. | Player, projectiles, enemies, and cooldowns. |
+| Candidate | **Racer** | Steer left, right, or straight. | Lookahead and fast corrections. | Track geometry, position, speed, and obstacles. |
 | Existing example | **Tetris** | Choose a placement or movement. | Long-term board management. | Board, current piece, next piece if allowed, and legal placements. |
 | Existing example | **2048** | Choose a legal slide. | Repeated choices with random future tiles. | Board and each legal resulting board before the random spawn. |
 | Existing example | **Snake** | Choose direction. | Path planning while avoiding self-traps. | Grid, body, food, and current direction. |
