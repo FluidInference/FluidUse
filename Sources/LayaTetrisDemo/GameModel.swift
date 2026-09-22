@@ -517,7 +517,7 @@ final class GameModel: ObservableObject {
             if !pieceCallMs.isEmpty {
                 let median = pieceCallMs.sorted()[pieceCallMs.count / 2]
                 print(
-                    "  \(red)model call \(String(format: "%.2f", median)) ms on Neural Engine\(reset) \(dim)(\(pieceCallMs.count) calls, \(String(format: "%.0f", pieceCallMs.reduce(0, +))) ms for this piece)\(reset)"
+                    "  \(red)model call \(String(format: "%.2f", median)) ms on CPU + ANE\(reset) \(dim)(\(pieceCallMs.count) calls, \(String(format: "%.0f", pieceCallMs.reduce(0, +))) ms for this piece)\(reset)"
                 )
             }
         } else {

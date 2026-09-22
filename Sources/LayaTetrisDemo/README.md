@@ -11,8 +11,8 @@ swift run -c release LayaTetrisDemo
 
 No Xcode project is needed. Set `GLICLASS_MODEL_DIR` to a directory holding `tokenizer.json` and
 `gliclass_edge_apps_fp16_L128_options25.mlpackage`, or select laya and let it download from
-`FluidInference/laya-coreml` (`LAYA_MODEL_DIR` skips that download). **Play** scores flat out on the
-Neural Engine and continues on the next seed after a top-out. SwiftUI presents the evolving board at
+`FluidInference/laya-coreml` (`LAYA_MODEL_DIR` skips that download). **Play** scores flat out with
+Core ML on CPU + ANE and continues on the next seed after a top-out. SwiftUI presents the evolving board at
 the display refresh rate while the model stays hot. The *pause per piece* slider can expose individual
 moves, but long pauses let the Neural Engine idle and raise measured latency. The *delay per scored
 landing* slider slows laya's candidate-by-candidate scoring so it can be watched on the board (orange
