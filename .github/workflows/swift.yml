@@ -11,6 +11,7 @@ permissions:
 jobs:
   build-and-test:
     runs-on: macos-15
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Unit tests
