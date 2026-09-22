@@ -118,8 +118,16 @@ public struct TetrisGame {
         candidates(for: piece, on: board)
     }
 
+    /// Apply the harness constraint consistently to model and control policies.
+    public static func shortlist(_ candidates: [Candidate]) -> [Candidate] {
+        let clean = candidates.filter { $0.features.newHoles == 0 }
+        return clean.isEmpty ? candidates : clean
+    }
+
     /// Legal landings of `piece` on any board, used to evaluate the follow-up move.
     public func candidates(for piece: Piece, on board: [[Bool]]) -> [Candidate] {
+        // A board that would end the current game cannot have a playable follow-up.
+        guard !board[0].contains(true), !board[1].contains(true) else { return [] }
         var result: [Candidate] = []
         let heightsBefore = columnHeights(board)
         let bumpinessBefore = bumpiness(heightsBefore)

@@ -64,7 +64,11 @@ struct LayaTetrisCommand {
             case "--question": options.question = try value("--question")
             case "--shortlist": options.shortlist = true
             case "--agreement": options.agreement = true
-            case "--lookahead": options.lookahead = Int(try value("--lookahead")) ?? 0
+            case "--lookahead":
+                guard let count = Int(try value("--lookahead")), count >= 0 else {
+                    throw LayaError.invalidAsset("--lookahead must be a nonnegative integer")
+                }
+                options.lookahead = count
             case "--combine": options.combine = try value("--combine")
             case "--describe":
                 guard let style = TetrisGame.DescriptionStyle(rawValue: try value("--describe")) else {
@@ -81,18 +85,15 @@ struct LayaTetrisCommand {
         guard ["laya", "heuristic", "random"].contains(options.policy) else {
             throw LayaError.invalidAsset("--policy must be laya, heuristic, or random")
         }
+        guard ["product", "min", "next"].contains(options.combine) else {
+            throw LayaError.invalidAsset("--combine must be product, min, or next")
+        }
         return options
     }
 
     // MARK: - Game
 
     static let question = LayaTetris.question
-
-    /// Keep only landings that bury nothing, when any such landing exists.
-    private static func shortlist(_ candidates: [TetrisGame.Candidate]) -> [TetrisGame.Candidate] {
-        let clean = candidates.filter { $0.features.newHoles == 0 }
-        return clean.isEmpty ? candidates : clean
-    }
 
     private static func play(arguments: [String]) async throws {
         let options = try parse(arguments)
@@ -120,8 +121,12 @@ struct LayaTetrisCommand {
         let started = Date()
         var pieces = 0
         while pieces < options.maxPieces, let piece = game.spawn() {
-            let candidates = game.candidates(for: piece)
+            let legal = game.candidates(for: piece)
+            let candidates = options.shortlist ? TetrisGame.shortlist(legal) : legal
             guard !candidates.isEmpty else { break }
+            beforeFilter.append(legal.count)
+            offered.append(candidates.count)
+            if candidates.count == 1 { forced += 1 }
             var chosen: TetrisGame.Candidate
             switch options.policy {
             case "laya":
@@ -131,10 +136,7 @@ struct LayaTetrisCommand {
                 // --shortlist: the harness enforces the hard constraint (never bury a cell when a
                 // hole-free landing exists) and laya chooses among what survives, which is how a
                 // System One model is meant to sit in a harness.
-                let scored = options.shortlist ? shortlist(candidates) : candidates
-                beforeFilter.append(candidates.count)
-                offered.append(scored.count)
-                if scored.count == 1 { forced += 1 }
+                let scored = candidates
                 for candidate in scored {
                     let state = game.describe(candidate, piece: piece, style: options.describeStyle)
                     let t0 = DispatchTime.now().uptimeNanoseconds
@@ -157,7 +159,7 @@ struct LayaTetrisCommand {
                     var bestPair: (Float, TetrisGame.Candidate)?
                     for (candidate, own) in top {
                         var follow = game.candidates(for: next, on: candidate.board)
-                        if options.shortlist { follow = shortlist(follow) }
+                        if options.shortlist { follow = TetrisGame.shortlist(follow) }
                         guard !follow.isEmpty else { continue }
                         var bestNext: Float = 0
                         for option in follow.prefix(12) {
@@ -211,12 +213,16 @@ struct LayaTetrisCommand {
         let perMinute = elapsed > 0 ? Double(decisionTimes.count) / elapsed * 60 : 0
         if options.json {
             let payload: [String: Any] = [
+                "seed": options.seed, "shortlist": options.shortlist, "describe": options.describeStyle.rawValue,
+                "lookahead": options.lookahead, "combine": options.combine, "agreement": options.agreement,
                 "policy": options.policy, "pieces": pieces, "lines": game.linesCleared, "game_over": game.isOver,
                 "decisions": decisionTimes.count, "median_ms": median, "p95_ms": p95, "decisions_per_minute": perMinute,
                 "elapsed_s": elapsed, "max_tokens": tokenCounts.max() ?? 0,
                 "landings_before_filter_mean": beforeFilter.isEmpty
                     ? 0 : Double(beforeFilter.reduce(0, +)) / Double(beforeFilter.count),
-                "landings_offered_to_model_mean": offered.isEmpty
+                "landings_after_filter_mean": offered.isEmpty
+                    ? 0 : Double(offered.reduce(0, +)) / Double(offered.count),
+                "landings_offered_to_model_mean": options.policy != "laya" || offered.isEmpty
                     ? 0 : Double(offered.reduce(0, +)) / Double(offered.count),
                 "forced_single_option_fraction": offered.isEmpty
                     ? 0 : Double(forced) / Double(offered.count),
@@ -233,6 +239,14 @@ struct LayaTetrisCommand {
         print(
             "policy \(options.policy) · pieces \(pieces) · lines cleared \(game.linesCleared) · \(game.isOver ? "topped out" : "stopped at piece cap")"
         )
+        if options.agreement, options.policy == "laya" {
+            let top = agreementPieces == 0 ? 0 : Double(agreements) / Double(agreementPieces)
+            let percentile = percentiles.isEmpty ? 0 : percentiles.reduce(0, +) / Double(percentiles.count)
+            print(
+                String(
+                    format: "heuristic agreement: %.1f%% top choice · %.3f mean percentile · %d unforced pieces",
+                    top * 100, percentile, agreementPieces))
+        }
         if !decisionTimes.isEmpty {
             print(
                 String(
@@ -250,7 +264,7 @@ struct LayaTetrisCommand {
             Usage: swift run FluidUseLaya tetris [--model-dir DIR] [--precision fp16|e8] [--lengths 128]
                                              [--pieces 200] [--seed 7] [--policy laya|heuristic|random]
                                              [--shortlist] [--describe plain|graded] [--lookahead N]
-                                             [--combine product|min|next] [--agreement]
+                                             [--combine product|min|next] [--agreement] [--question TEXT]
                                              [--show-every N] [--trace N] [--json]
 
             Plays headless 10x20 Tetris. With --policy laya (default) every legal landing is described in
@@ -261,13 +275,16 @@ struct LayaTetrisCommand {
               --describe graded  wording that stays discriminative on a tall board; `plain` is the
                                  original, where every option read alike past 15 rows
 
-            Measured alone, each is a regression: graded wording 48 pieces, shortlist 87, baseline 76.
+            Graded wording alone regresses (48 pieces); shortlist alone improves modestly (87 vs 76).
+            --shortlist applies to all policies, including the random and heuristic controls.
 
               --lookahead N      also score the board each of the top N landings leaves for the next
-                                 piece. Worse on average (445 vs 581) but ~4x the calls per piece
+                                 piece (up to 12 follow-up landings per board, in enumeration order).
+                                 Worse on average (445 vs 581) but ~4x the calls per piece
               --combine          how lookahead ranks: own score x best follow-up (default), min, or
                                  the follow-up alone
               --agreement        report where laya's pick sits in a Dellacherie ranking
+              --question TEXT    override the model's clean-placement question
             """)
     }
 }

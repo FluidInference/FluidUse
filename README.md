@@ -20,7 +20,7 @@ https://github.com/user-attachments/assets/a0b31285-05be-4bcf-a645-4283eb327c35
 ## Use
 
 ```swift
-.package(url: "https://github.com/FluidInference/FluidUse.git", from: "0.2.0")
+.package(url: "https://github.com/FluidInference/FluidUse.git", from: "0.2.1")
 ```
 
 ```swift
@@ -81,7 +81,7 @@ questions, reference answers, reports and conversion live in
 ```bash
 swift run -c release FluidUseLaya answer --state "…" --type choice \
     --instructions "What does the customer want?" --options "refund|order status|technical help"
-swift run -c release FluidUseLaya tetris --pieces 200            # headless Tetris, P(clean) per landing
+swift run -c release FluidUseLaya tetris --shortlist --describe graded --pieces 200  # headless Tetris, P(clean) per landing
 swift run -c release FluidUseLaya benchmark --suites <mobius>/benchmark/suites.jsonl --reference <mobius>/benchmark/reference-rows.jsonl
 swift run -c release LayaTetrisDemo                              # SwiftUI: laya plays Tetris, live decisions
 ```

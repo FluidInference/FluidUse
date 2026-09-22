@@ -76,6 +76,7 @@ final class GameModel: ObservableObject {
 
     private var game = TetrisGame(seed: 7)
     private var rng = SplitMix64(seed: 8)
+    private var pendingPiece: TetrisGame.Piece?
     private var task: Task<Void, Never>?
     /// Bumped by every reset/start so a cancelled run's late results are ignored.
     private var generation = 0
@@ -172,6 +173,7 @@ final class GameModel: ObservableObject {
         generation += 1
         isRunning = false
         game = TetrisGame(seed: seed)
+        pendingPiece = nil
         rng = SplitMix64(seed: seed &+ 1)
         board = game.board
         candidates = []
@@ -203,13 +205,10 @@ final class GameModel: ObservableObject {
 
     func toggle() {
         if isRunning {
+            generation += 1
             task?.cancel()
             task = nil
-            clock?.cancel()
-            clock = nil
-            accumulatedSeconds += Date().timeIntervalSince(runStart)
-            elapsedSeconds = accumulatedSeconds
-            isRunning = false
+            finishRun()
             return
         }
         guard policy != .laya || manager != nil else {
@@ -227,7 +226,7 @@ final class GameModel: ObservableObject {
         clock = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 100_000_000)
-                guard let self, self.isRunning else { return }
+                guard !Task.isCancelled, let self, self.isRunning, self.generation == run else { return }
                 self.elapsedSeconds = self.accumulatedSeconds + Date().timeIntervalSince(self.runStart)
             }
         }
@@ -236,13 +235,28 @@ final class GameModel: ObservableObject {
         }
     }
 
+    private func finishRun() {
+        guard isRunning else { return }
+        accumulatedSeconds += Date().timeIntervalSince(runStart)
+        elapsedSeconds = accumulatedSeconds
+        clock?.cancel()
+        clock = nil
+        isRunning = false
+        evaluating = nil
+    }
+
     private func play(run: Int) async {
-        while !Task.isCancelled, run == generation, let piece = game.spawn() {
+        defer {
+            if run == generation { finishRun() }
+        }
+        while !Task.isCancelled, run == generation {
+            // Resume scoring the same piece if Pause interrupted an inference call.
+            if pendingPiece == nil { pendingPiece = game.spawn() }
+            guard let piece = pendingPiece else { break }
             currentPiece = piece.name
             var all = game.candidates(for: piece)
             if harness {
-                let clean = all.filter { $0.features.newHoles == 0 }
-                if !clean.isEmpty { all = clean }
+                all = TetrisGame.shortlist(all)
             }
             guard !all.isEmpty else { break }
             candidates = []
@@ -273,8 +287,8 @@ final class GameModel: ObservableObject {
                     } catch is CancellationError {
                         return
                     } catch {
+                        guard run == generation, !Task.isCancelled else { return }
                         errorMessage = error.localizedDescription
-                        if run == generation { isRunning = false }
                         return
                     }
                     if stepDelayMs > 0 {
@@ -295,7 +309,7 @@ final class GameModel: ObservableObject {
                 best = (0, pick)
             }
             evaluating = nil
-            guard run == generation else { return }
+            guard run == generation, !Task.isCancelled else { return }
             guard var (score, pick) = best else { break }
             if policy == .laya, lookahead > 0, let manager, let next = game.nextPiece, scoredPairs.count > 1 {
                 let top = scoredPairs.sorted { $0.1 > $1.1 }.prefix(lookahead)
@@ -303,8 +317,7 @@ final class GameModel: ObservableObject {
                 for (candidate, own) in top {
                     var follow = game.candidates(for: next, on: candidate.board)
                     if harness {
-                        let clean = follow.filter { $0.features.newHoles == 0 }
-                        if !clean.isEmpty { follow = clean }
+                        follow = TetrisGame.shortlist(follow)
                     }
                     guard !follow.isEmpty else { continue }
                     var bestNext: Float = 0
@@ -312,12 +325,20 @@ final class GameModel: ObservableObject {
                         if Task.isCancelled || run != generation { return }
                         let sentence = game.describe(option, piece: next, style: harness ? .graded : .plain)
                         let t0 = DispatchTime.now().uptimeNanoseconds
-                        guard let reply = try? await manager.answer(state: sentence, question: Self.question)
-                        else { continue }
-                        record(
-                            ms: Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6,
-                            tokens: reply.tokenCount, bucket: reply.bucketLength)
-                        bestNext = max(bestNext, reply.noul ?? 0)
+                        do {
+                            let reply = try await manager.answer(state: sentence, question: Self.question)
+                            guard run == generation, !Task.isCancelled else { return }
+                            record(
+                                ms: Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6,
+                                tokens: reply.tokenCount, bucket: reply.bucketLength)
+                            bestNext = max(bestNext, reply.noul ?? 0)
+                        } catch is CancellationError {
+                            return
+                        } catch {
+                            guard run == generation, !Task.isCancelled else { return }
+                            errorMessage = error.localizedDescription
+                            return
+                        }
                     }
                     let combined = own * bestNext
                     if bestPair == nil || combined > bestPair!.0 { bestPair = (combined, candidate) }
@@ -327,8 +348,10 @@ final class GameModel: ObservableObject {
                     score = bestPair.0
                 }
             }
+            guard run == generation, !Task.isCancelled else { return }
             chosen = pick
             game.apply(pick)
+            pendingPiece = nil
             pieces += 1
             lines = game.linesCleared
             totalPieces += 1
@@ -347,7 +370,9 @@ final class GameModel: ObservableObject {
                 gamesPlayed += 1
                 carriedLines = totalLines
                 log.insert("game \(gamesPlayed) ended at \(pieces) pieces, \(lines) lines", at: 0)
-                game = TetrisGame(seed: seed &+ UInt64(gamesPlayed))
+                let nextSeed = seed &+ UInt64(gamesPlayed)
+                game = TetrisGame(seed: nextSeed)
+                rng = SplitMix64(seed: nextSeed &+ 1)
                 board = game.board
                 pieces = 0
                 lines = 0
@@ -358,14 +383,12 @@ final class GameModel: ObservableObject {
             if pieceDelayMs > 0 {
                 try? await Task.sleep(nanoseconds: UInt64(pieceDelayMs * 1_000_000))
             }
-            guard run == generation else { return }
+            // Control policies have no inference await. Yield even at zero delay so Pause,
+            // Reset and the clock remain responsive during a marathon.
+            await Task.yield()
+            guard run == generation, !Task.isCancelled else { return }
         }
-        guard run == generation else { return }
-        accumulatedSeconds += Date().timeIntervalSince(runStart)
-        elapsedSeconds = accumulatedSeconds
-        clock?.cancel()
-        clock = nil
-        isRunning = false
+        guard run == generation, !Task.isCancelled else { return }
         if isOver { log.insert("Topped out after \(pieces) pieces, \(lines) lines.", at: 0) }
     }
 

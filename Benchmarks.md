@@ -1,11 +1,12 @@
 # Benchmarks
 
 Both decision models FluidUse runs on device, measured on the same machine: **Apple M5 Pro,
-24 GB, macOS 27.0**, September 2026. Every number below has a checked-in report; the conversion
-pipelines, verification harnesses and raw reports live in
+24 GB, macOS 27.0**, September 2026. Model benchmark reports, conversion pipelines and verification
+harnesses live in
 [mobius `models/computer-use/`](https://github.com/FluidInference/mobius/tree/main/models/computer-use)
 (`cua-s1-forms/coreml/reports`, `laya/coreml/reports`; the laya suites and PyTorch reference rows
-are in `laya/coreml/benchmark`).
+are in `laya/coreml/benchmark`). The Tetris gameplay measurements below are historical PR reports
+and do not have checked-in per-seed artifacts.
 
 | | CUA-S1-FORMS | laya-multilingual |
 | --- | --- | --- |
@@ -155,12 +156,13 @@ selected with `Configuration.precision = "e8"` or `--precision e8`. The encoder 
 
 ### Tetris demo
 
-`LayaTetrisDemo` / `FluidUseLaya tetris` score every legal landing with one `noul` question.
+`LayaTetrisDemo` / `FluidUseLaya tetris` score each offered landing with one `noul` question.
+The demo enables the harness by default; the CLI enables it with `--shortlist --describe graded`.
 
-The first version topped out at 76 pieces. Two changes fixed it, and the measured surprise is that
-neither works alone: the harness withholds landings that bury a cell when a clean one exists, and
+The original configuration averaged 75.8 pieces. Two changes together substantially improve survival:
+the harness withholds landings that bury a cell when a clean one exists, and
 the wording stays discriminative on a tall board, where the original clause read identically for
-every option once the stack passed 15 rows. Ten seeds, uncapped:
+every option once the stack passed 15 rows. Reported results over ten seeds, uncapped:
 
 | Configuration | Mean pieces | Mean lines |
 | --- | ---: | ---: |
@@ -169,15 +171,20 @@ every option once the stack passed 15 rows. Ten seeds, uncapped:
 | Harness filter only | 87.3 | 22.5 |
 | **Both** | **568.3** | **214.5** |
 | Dellacherie heuristic | 582.8 | 217.9 |
-| Random among the filtered moves | 17.2 | 0.0 |
 
-That last row is the control: the filter alone plays terribly, so the play quality is the model's.
+Wording alone regresses; filtering alone improves modestly from 75.8 to 87.3 pieces. Neither
+approaches the combined result. The PR also reported 17.2 pieces for random choice among filtered
+moves, but its CLI ignored `--shortlist` for random and heuristic policies. That control is excluded
+from the table until it is rerun with the corrected CLI and the original seed manifest; it cannot
+currently support a claim about how much of the gain comes from model ranking.
 Per piece the model is offered 5.6 of 23.1 legal landings and is left a single forced option 5% of
 the time. It picks the heuristic's exact best landing 64–71% of the time, up from 41–52% before.
 
 One-piece lookahead (`--lookahead 4`) was tried and is worse on average, 444.5 pieces against 581.5
-over six seeds, in all three combine modes; ranking on the follow-up alone collapses to 73.7, which
-says the model judges a hypothetical future board far less well than the move in front of it. It is
+over six seeds for product scoring; all three combine modes performed worse than greedy play.
+Ranking on the follow-up alone reaches 73.7. The search scores at most the first 12 follow-up
+landings in enumeration order, so these results do not isolate the model's ability to judge future
+boards. It is
 off by default and kept as a control. It does spend about four times the calls per piece, so on a
 seed that suits it a single game runs much longer: seed 24 gives 2,263 pieces over 50,487 calls.
 
@@ -189,8 +196,13 @@ from 5.9 ms back to 3.8. The model answers each question in 3.8 ms either way, a
 
 Sustained rate on the 128 bucket: **~15,800 decisions per minute at 3.8 ms median** (seeds 1, 2,
 3, 7), against the 1,799 per minute in the original laya Tetris post (~27 ms on an M1 Max GPU).
-Zero-shot laya clears 13–32 lines before topping out; the feature-weighted heuristic policy clears
-71–77 in 200 pieces. It is a latency demo, not a Tetris player.
+In the earlier, unfiltered 200-piece runs, zero-shot laya cleared 13–32 lines before topping out;
+the feature-weighted heuristic cleared 71–77 lines. Those capped runs use a different configuration
+from the uncapped table above.
+
+The Tetris figures above are the PR author's historical measurements, not a new v0.2.1 benchmark.
+Per-seed Tetris reports are not checked into this repository. Release verification covers logic,
+controls and build correctness; the historical lookahead results predate the terminal-board fix.
 
 ## Reproduce
 

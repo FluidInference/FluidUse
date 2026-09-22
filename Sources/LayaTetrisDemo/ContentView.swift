@@ -37,7 +37,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("laya plays Tetris").font(.title2.bold())
             Text(
-                "Every legal landing is described in one sentence; laya answers “Is this a clean placement?” and the highest P(true) is played."
+                "Each offered landing is described in one sentence; laya answers “Is this a clean placement?” and the highest P(true) is played."
             )
             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
@@ -57,9 +57,9 @@ struct ContentView: View {
         HStack(spacing: 0) {
             readout(model.elapsedText, model.isOver ? "topped out" : "time", model.isOver ? .red : .primary)
             Divider().frame(height: 26)
-            readout("\(model.pieces)", "pieces", .secondary)
+            readout("\(model.totalPieces)", "pieces", .secondary)
             Divider().frame(height: 26)
-            readout("\(model.lines)", "lines", .green)
+            readout("\(model.totalLines)", "lines", .green)
             Divider().frame(height: 26)
             readout(model.lastMs > 0 ? String(format: "%.1f", model.lastMs) : "–", "ms", .orange)
             Divider().frame(height: 26)
