@@ -34,6 +34,10 @@ choice agreement on the L128 application-suite rows, and 4.92 ms average median 
 LUT6 is an aggressive 24.8 MB option; LUT4 is intentionally not documented as deployable because it
 lost 15.75 accuracy points.
 
+`GLICLASS_PRECISION=fp16-mask` selects the experimental float-mask FP16 package. It moves one more
+operation from CPU to ANE with exact application-suite parity, but improved a paired three-seed
+Tetris run by only 0.62%; FP16 remains the production default pending broader device testing.
+
 The simulation (`Sources/LayaTetris`) is shared with `swift run FluidUseLaya tetris`.
 
 ## Controls

@@ -351,7 +351,7 @@ struct LayaTetrisCommand {
     private static func printUsage() {
         print(
             """
-            Usage: swift run FluidUseLaya tetris [--model-dir DIR] [--precision fp16|e8|lut8|lut6] [--lengths 128]
+            Usage: swift run FluidUseLaya tetris [--model-dir DIR] [--precision fp16|fp16-mask|e8|lut8|lut6] [--lengths 128]
                                              [--pieces 200] [--seed 7] [--policy laya|gliclass|heuristic|random]
                                              [--shortlist] [--describe plain|graded] [--lookahead N]
                                              [--combine product|min|next] [--agreement] [--question TEXT]

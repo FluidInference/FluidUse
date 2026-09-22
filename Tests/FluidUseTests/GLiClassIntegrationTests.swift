@@ -80,6 +80,9 @@ final class GLiClassIntegrationTests: XCTestCase {
         XCTAssertEqual(
             try GLiClassManager.modelName(length: 128, precision: "lut8"),
             "gliclass_edge_apps_lut8_kmeans_per_tensor_L128_options25")
+        XCTAssertEqual(
+            try GLiClassManager.modelName(length: 128, precision: "fp16-mask"),
+            "gliclass_edge_apps_float_mask_fp16_L128_options25")
         XCTAssertThrowsError(try GLiClassManager.modelName(length: 128, precision: "int8"))
     }
 }

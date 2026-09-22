@@ -8,7 +8,7 @@ public actor GLiClassManager {
     public struct Configuration: Sendable {
         public var lengths: [Int]
         public var computeUnits: [Int: MLComputeUnits]
-        /// Weight representation: `fp16`, `lut8`, `lut6`, or `lut4`.
+        /// Weight representation: `fp16`, `fp16-mask`, `lut8`, `lut6`, or `lut4`.
         public var precision: String
 
         public init(
@@ -27,6 +27,7 @@ public actor GLiClassManager {
     private struct Bucket: Sendable {
         let length: Int
         let model: MLModel
+        let usesAttentionBias: Bool
     }
 
     private let buckets: [Bucket]
@@ -38,8 +39,8 @@ public actor GLiClassManager {
         var buckets: [Bucket] = []
         for model in models {
             let length = try Self.modelLength(model.modelDescription)
-            try Self.validate(model.modelDescription, length: length)
-            buckets.append(Bucket(length: length, model: model))
+            let usesAttentionBias = try Self.validate(model.modelDescription, length: length)
+            buckets.append(Bucket(length: length, model: model, usesAttentionBias: usesAttentionBias))
         }
         self.buckets = buckets.sorted { $0.length < $1.length }
         self.lengths = self.buckets.map(\.length)
@@ -82,6 +83,7 @@ public actor GLiClassManager {
         let representation: String
         switch precision {
         case "fp16": representation = "fp16"
+        case "fp16-mask": representation = "float_mask_fp16"
         case "lut8", "lut6", "lut4": representation = "\(precision)_kmeans_per_tensor"
         default: throw GLiClassError.invalidAsset("Unknown GLiClass precision \(precision)")
         }
@@ -126,21 +128,32 @@ public actor GLiClassManager {
     {
         let length = bucket.length
         let inputIds = try MLMultiArray(shape: [1, NSNumber(value: length)], dataType: .int32)
-        let attention = try MLMultiArray(shape: [1, NSNumber(value: length)], dataType: .int32)
         let markerMap = try MLMultiArray(
             shape: [1, NSNumber(value: Self.maximumOptions), NSNumber(value: length)], dataType: .float32)
         let idPointer = inputIds.dataPointer.assumingMemoryBound(to: Int32.self)
-        let maskPointer = attention.dataPointer.assumingMemoryBound(to: Int32.self)
         for index in 0..<length {
             idPointer[index] = Int32(index < ids.count ? ids[index] : tokenizer.padTokenId)
-            maskPointer[index] = index < ids.count ? 1 : 0
         }
         let markerPointer = markerMap.dataPointer.assumingMemoryBound(to: Float.self)
         markerPointer.initialize(repeating: 0, count: Self.maximumOptions * length)
         for (row, position) in markers.enumerated() { markerPointer[row * length + position] = 1 }
-        let features = try MLDictionaryFeatureProvider(dictionary: [
-            "input_ids": inputIds, "attention_mask": attention, "class_marker_map": markerMap,
-        ])
+        var inputs: [String: MLFeatureValue] = [
+            "input_ids": MLFeatureValue(multiArray: inputIds),
+            "class_marker_map": MLFeatureValue(multiArray: markerMap),
+        ]
+        if bucket.usesAttentionBias {
+            let bias = try MLMultiArray(
+                shape: [1, 1, 1, NSNumber(value: length)], dataType: .float32)
+            let pointer = bias.dataPointer.assumingMemoryBound(to: Float.self)
+            for index in 0..<length { pointer[index] = index < ids.count ? 0 : -10_000 }
+            inputs["attention_bias"] = MLFeatureValue(multiArray: bias)
+        } else {
+            let attention = try MLMultiArray(shape: [1, NSNumber(value: length)], dataType: .int32)
+            let pointer = attention.dataPointer.assumingMemoryBound(to: Int32.self)
+            for index in 0..<length { pointer[index] = index < ids.count ? 1 : 0 }
+            inputs["attention_mask"] = MLFeatureValue(multiArray: attention)
+        }
+        let features = try MLDictionaryFeatureProvider(dictionary: inputs)
         let prediction = try bucket.model.prediction(from: features)
         let logits = try read("logits", output: prediction)
         let probabilities = try read("probabilities", output: prediction)
@@ -167,10 +180,9 @@ public actor GLiClassManager {
         return shape[1].intValue
     }
 
-    private static func validate(_ description: MLModelDescription, length: Int) throws {
+    private static func validate(_ description: MLModelDescription, length: Int) throws -> Bool {
         let expected: [String: ([Int], MLMultiArrayDataType)] = [
             "input_ids": ([1, length], .int32),
-            "attention_mask": ([1, length], .int32),
             "class_marker_map": ([1, maximumOptions, length], .float32),
         ]
         for (name, requirement) in expected {
@@ -178,5 +190,15 @@ public actor GLiClassManager {
                 constraint.shape.map(\.intValue) == requirement.0, constraint.dataType == requirement.1
             else { throw GLiClassError.invalidModel("\(name) has the wrong shape or type") }
         }
+        if let constraint = description.inputDescriptionsByName["attention_bias"]?.multiArrayConstraint {
+            guard constraint.shape.map(\.intValue) == [1, 1, 1, length], constraint.dataType == .float32 else {
+                throw GLiClassError.invalidModel("attention_bias has the wrong shape or type")
+            }
+            return true
+        }
+        guard let constraint = description.inputDescriptionsByName["attention_mask"]?.multiArrayConstraint,
+            constraint.shape.map(\.intValue) == [1, length], constraint.dataType == .int32
+        else { throw GLiClassError.invalidModel("attention_mask has the wrong shape or type") }
+        return false
     }
 }

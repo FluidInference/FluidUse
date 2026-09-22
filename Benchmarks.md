@@ -239,6 +239,13 @@ or 20.96 ms per piece. GLiClass therefore ran the complete simulation **4.33× f
 47.7 pieces/second). Its individual Swift model call was slower—4.87 ms versus laya's 3.76 ms—but it
 made 0.92 calls per piece instead of 5.44 because it ranks the top two landings jointly.
 
+An ANE placement experiment replaces the integer attention mask with a ready-to-add floating-point
+bias. It removes one CPU cast, raises operation placement from 98.9% to 99.1% ANE and exactly preserves
+all 3,899 application-suite choices. Alternating FP16 and `fp16-mask` on seeds 1–3 reduced aggregate
+Tetris time from 14.585 to 14.495 seconds for 3,000 pieces, a **0.62% speedup**. A second experiment
+reached 100% ANE by gathering token embeddings on the host, but its larger input made median complete
+calls 2–3% slower, so it is not exposed by FluidUse.
+
 The historical laya mean above is 568.3 pieces, but its per-seed artifacts are unavailable. Treat the
 GLiClass comparison to that number as directional; the GLiClass and corrected heuristic rows were run
 together with the current terminal-board fix and are the controlled comparison. The complete run data,
