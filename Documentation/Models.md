@@ -1,33 +1,26 @@
 # Models
 
-What FluidUse runs today, what is converted but not wired in, and the open-weight
-candidates worth converting next. Sizes are fp16 on disk. Traction was checked on
+What FluidUse runs today and the open-weight candidates worth converting next.
+Sizes are fp16 on disk unless stated otherwise. Traction was checked on
 2026-09-21; licenses were read from each model card. The [Decision Index 0.1](https://huggingface.co/spaces/multimodalart/jev-decision-index)
 snapshot below was checked on 2026-09-22. Its scores measure a frozen set of static
 decision tasks, not game play.
 
-## Shipped
+## Converted and integrated
 
 | Model | Params / fp16 | License | Role in FluidUse |
 | --- | ---: | --- | --- |
 | [cua-ai/cua-s1-forms](https://huggingface.co/cua-ai/cua-s1-forms) → [FluidInference/cua-s1-forms-coreml](https://huggingface.co/FluidInference/cua-s1-forms-coreml) | 706K / 1.4 MB | MIT | Matches each form field to a value from the document: `fill`, `check`, `click`, or `skip`. ~1 ms per decision on the Neural Engine. |
+| [convaiinnovations/laya-multilingual](https://huggingface.co/convaiinnovations/laya-multilingual) → [FluidInference/laya-coreml](https://huggingface.co/FluidInference/laya-coreml) | 322M / ~644 MB | Apache-2.0 | `LayaManager` answers text-state `choice`, `score`, and `noul` questions. Core ML buckets at 128/256/512/1024 tokens; Tetris and 2048 demos. |
+| [knowledgator/gliclass-edge-v3.0](https://huggingface.co/knowledgator/gliclass-edge-v3.0) → [FluidInference/gliclass-edge-apps-coreml](https://huggingface.co/FluidInference/gliclass-edge-apps-coreml) | 32.7M / 65.7 MB (33.0 MB LUT8 L128) | Apache-2.0 | Application-tuned `GLiClassManager` compares 2–25 supplied labels in one pass; Tetris, 2048, and GLiClass-vs-Laya demos. FP16 buckets at 128/256/512 tokens. |
 
 CUA-S1-FORMS is a one-pass option scorer (a "System One" model in TypeSafe's terms), not an
 LLM. It is a byte-level 2-layer Transformer with the option-attention head from
 [jevlike](https://github.com/vinnylarouge/jevlike), trained by Cua on 10,000 synthetic forms.
-It does not read goals, write text, or reason about dropdown options; those are the gaps the
-rest of this page is about.
-
-## Converted, not yet wired in
-
-| Model | Params / fp16 | License | Where |
-| --- | ---: | --- | --- |
-| [convaiinnovations/laya-multilingual](https://huggingface.co/convaiinnovations/laya-multilingual) → [FluidInference/laya-coreml](https://huggingface.co/FluidInference/laya-coreml) | 322M / 644 MB | Apache-2.0 | `LayaManager` on FluidAudio branch `feat/laya-coreml` (PR #946). Four token buckets, 32 option slots. Answers `choice` / `score` / `noul` questions over a text state in one pass. |
-
-On macOS 26 and newer, the on-device Apple Intelligence model covers entity extraction,
-question answers, and dropdown choice through `FoundationModelsAssistant` with no conversion
-at all. The candidates below matter for macOS 14 and 15, and for the one thing Apple's model
-does not do: choosing an element on a page.
+It does not read goals, write text, or reason about dropdown options. Laya and
+GLiClass handle more general decisions but the form-filling app still uses CUA-S1-FORMS.
+Apple's built-in Foundation Models are not a FluidUse conversion and are not
+included in this inventory.
 
 ## Candidates to convert
 

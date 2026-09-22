@@ -121,7 +121,9 @@ The on-device models, measured on the same Mac with checked-in reports: [Benchma
 CUA-S1-FORMS: 0.9 ms per decision on the Neural Engine, accuracy identical to PyTorch on the
 24,370-row synthetic test. laya: 3.6 ms per short question, identical to PyTorch on laya's ten
 published suites, e8 buckets 30% smaller at the same accuracy. GLiClass Edge Apps v2: 1.61 ms FP16
-or 1.81 ms LUT8 for a two-option L128 decision, with its conversion pipeline in
+or 1.81 ms LUT8 for a two-option L128 decision. Its
+[Core ML packages and config](https://huggingface.co/FluidInference/gliclass-edge-apps-coreml)
+are on Hugging Face, with the conversion pipeline in
 [mobius PR #101](https://github.com/FluidInference/mobius/pull/101).
 
 ## Scope
@@ -133,8 +135,8 @@ left to the person. Submit is never clicked unless enabled.
 
 ## Models
 
-[Documentation/Models.md](Documentation/Models.md) lists what runs today, what is converted
-but not wired in, and the open-weight candidates worth converting next, including
+[Documentation/Models.md](Documentation/Models.md) lists the three converted models and
+open-weight candidates worth converting next, including
 sub-1B-parameter candidates from the Jev Decision Index.
 [Documentation/GameDemos.md](Documentation/GameDemos.md) lists game demos and specifies
 a matched-seed Flappy Bird model comparison. [PlayJev](https://github.com/OmniJev/PlayJev)
