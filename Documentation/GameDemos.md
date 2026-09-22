@@ -8,9 +8,9 @@ and distinguishes text-state models from vision models.
 
 ## Recommended build order
 
-This is a judgment about **new demo value for FluidUse**, not a measured model
-ranking. It favors visible differences between models, a clear score, distinct
-decision types, and reusable game code. Tetris, 2048, and Snake rank last only
+This is a judgment about **solo and side-by-side demo value for FluidUse**, not
+a measured model ranking. It favors visible differences between models, a clear
+score, distinct decision types, and reusable game code. Tetris, 2048, and Snake rank last only
 because they are already the starting examples. [PlayJev](https://github.com/OmniJev/PlayJev)
 reduces the work for ten browser games; the three-lane
 [Neon Cyberpunk Runner](https://github.com/markstent/runner) is the reuse path
@@ -55,6 +55,7 @@ for a Subway Surfers-style demo.
 | Candidate | **Frogger-style crossing** | Move up, down, left, right, or wait. | Timing around moving hazards and choosing safe windows. | Player, lane hazards, speeds, and goal positions; or a rendered frame. |
 | Candidate | **Subway Surfers-style runner** | Switch lane, jump, slide, or hold. | Fast obstacle recognition, action timing, and choosing between survival and coins. | Current lane, speed, nearby obstacles and distances; or a rendered frame. |
 | Candidate | **Connect Four** | Choose a non-full column. | Short tactical lookahead with only a few legal actions. | Board, player to move, and legal columns. |
+| Candidate | **Multiplayer Snake arena** | Choose direction while several snakes move simultaneously. | Direct competition, collisions, and survival under pressure. | Board, all visible snakes, food, and legal directions. |
 | Candidate | **Pac-Man** | Direction at each junction. | Reward versus moving hazards. | Map, player, ghosts, pellets, and power timer. |
 | Candidate | **Codenames** | Choose a clue or a guess from a fixed set. | Semantic association under constraints. | Visible words, team, prior clues, and legal choices. |
 | Candidate | **Hanabi** | Play, discard, or give a legal hint. | Cooperation with incomplete information. | Only what the acting player may observe. |
@@ -89,30 +90,44 @@ Chess has two useful modes. A **position challenge** gives every model the same
 FEN and legal move list, then compares its ranked moves with published reference
 values. The Decision Index already includes this kind of static test as
 [ChessBench](https://huggingface.co/spaces/multimodalart/jev-decision-index/blob/main/data/index.json).
-A **full-game demo** pairs models against the same opponent at the same clock
-setting and starting positions. Record legal-move rate, move time, game result,
+A **full-game demo** pairs models against each other at the same clock setting
+and matched starting positions. Record legal-move rate, move time, game result,
 and engine evaluation loss per move. Supply legal moves from a chess rules engine
 so the model is judged on choosing among them, not on formatting notation.
 
-## Two-player games
+## Competitive games
 
-Offer three viewer modes, but keep the benchmark mode separate from the show match:
+Make **model vs model** the main viewer mode. The following modes use the same
+decision interface, with fixed-opponent runs retained as a diagnostic:
 
 | Mode | Purpose | How it works |
 | --- | --- | --- |
-| Human vs model | Interactive demo. | The person picks a side and a legal move; show the model's top choices, probabilities when available, and response time. Do not count these self-selected games in model rankings. |
-| Model vs fixed opponent | Primary comparison. | Each candidate faces the same version and settings of a reference policy. Run paired games from the same starting positions with colors or first turn swapped. |
-| Model vs model | Spectator match. | Run a round robin with paired colors and matched opening positions. Show wins, draws, losses, illegal or timed-out decisions, and move time; do not infer a global ranking from one head-to-head game. |
+| Model vs model | Main spectator match. | Run a round robin with paired colors and matched opening positions. Show wins, draws, losses, illegal or timed-out decisions, and move time. |
+| Same model vs itself | Self-play showcase. | Launch two independent instances of the same checkpoint. Swap colors across paired games and vary openings. If choices are sampled, give each instance an independent random seed and show the sampling setting. |
+| Multi-model arena | Actual battle royale. | Put three or more models in one simultaneous-action game, such as multiplayer Snake. Give every model the same board snapshot each tick, collect actions independently, then resolve them together at the deadline. Rotate spawn positions across matches. |
+| Human vs model | Interactive side mode. | The person picks a side and a legal move; show the model's top choices, probabilities when available, and response time. Do not count these self-selected games in model rankings. |
+| Model vs fixed opponent | Diagnostic. | Each candidate faces the same version and settings of a reference policy. Run paired games from the same starting positions with colors or first turn swapped. |
 
-Start with **Connect Four**: it has a small action set, short games, and no clock
-pressure. Use a rules engine to provide legal columns, then a fixed search policy
-as the reference opponent. Add **chess** second. [chess.js](https://github.com/jhlywa/chess.js)
+For competitive demos, start with **Connect Four** for two-player self-play and
+cross-model matches, then **multiplayer Snake** for a true arena, then **chess**.
+An existing [MIT-licensed multiplayer Snake game](https://github.com/simondiep/node-multiplayer-snake)
+has spectator mode, bots, and adjustable speed; evaluate it as a reusable base
+instead of expanding PlayJev's single-player Snake from scratch. Connect Four
+has a small action set and short games. Use a rules engine to provide legal
+columns and a fixed search policy only for diagnostics. [chess.js](https://github.com/jhlywa/chess.js)
 can provide legal moves, validation, and game-end detection in a browser demo;
 [Stockfish](https://github.com/official-stockfish/Stockfish) can be the fixed
-reference opponent at a stated strength and time budget. Models see the same FEN,
+reference opponent for diagnostics at a stated strength and time budget. Models see the same FEN,
 move history limit, legal move list, and clock information. Rotate colors and
 use a fixed set of opening positions. Keep any engine evaluation out of the
 model's input; calculate it afterward for the viewer.
+
+In self-play, identical deterministic policies can repeat the same line or draw
+often. Vary the opening positions and show that behavior honestly; optional
+sampling makes matches more varied, but its temperature must be declared and
+held fixed across models. For rankings, use many paired matches and record the
+model version, side or spawn, opening or map seed, action deadline, and full
+move log. A single spectacular match is a demo clip, not a performance estimate.
 
 For hidden-information games, keep roles and observations honest. In Battleship,
 each player sees only its own ships and prior shots. In Codenames, score clue
@@ -142,6 +157,7 @@ where possible; record the upstream revision and changes to the adapter.
 | --- | --- | --- |
 | [PlayJev game harness](https://github.com/OmniJev/PlayJev) | Tetris, Snake, Pac-Man, Racer, Space Invaders, Sokoban, Infinite Mario, Floppy Bird, Breakout, 2048. | Already exposes seeded `start`, `step`, `frame`, `score`, `done`, and actions. Each vendored game has its own license; check art and levels separately before publishing. |
 | [Neon Cyberpunk Runner](https://github.com/markstent/runner) | First Subway Surfers-style demo. | MIT-licensed Three.js browser game with three lanes, jump, slide, seedable track generation, and game logic separated from rendering. Add a thin adapter for observations and model actions. |
+| [Node Multiplayer Snake](https://github.com/simondiep/node-multiplayer-snake) | Multi-model survival arena. | MIT-licensed browser game with spectator mode, bots, and adjustable speed. Adapt its player controllers to model actions and add seeded resets. |
 | [Cave Runner](https://github.com/tope-olajide/cave-runner) | Alternate 3D runner. | MIT-licensed, but its online score path uses Netlify and PlanetScale; assess whether a local-only demo can bypass that path. |
 | [MiniGrid](https://minigrid.farama.org/environments/minigrid/) and [Gymnasium](https://gymnasium.farama.org/main/environments/) | DoorKey, FrozenLake, and other compact decision tasks. | Existing reset/step environments; add a viewer and a model input adapter. |
 
