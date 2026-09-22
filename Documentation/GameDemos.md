@@ -12,6 +12,8 @@ and distinguishes text-state models from vision models.
 | --- | --- | --- | --- | --- |
 | Next | **Flappy Bird** | `FLAP` or `COAST` each decision tick. | Reaction timing, latency, and costly one-step mistakes. | Bird height and velocity; next pipe distance and gap, or a rendered frame for a vision model. |
 | Next | **Sokoban / Boxoban** | Pick a legal move or push. | Planning and irreversible traps. | Grid, player, crates, goals, and legal moves. |
+| Next | **Mario-style platformer** | Choose left, right, jump, or a legal combination at each tick. | Jump timing, momentum, obstacle anticipation, and longer action sequences. | Player position and velocity, nearby platforms, enemies, and camera offset; or a rendered frame. |
+| Next | **Chess** | Choose or rank legal moves. | Tactical judgment, position evaluation, and planning across turns. | FEN, side to move, legal moves, and remaining time; a board image only for vision models. |
 | Next | **Minesweeper** | Open or flag a cell. | Decision-making under uncertainty. | Revealed grid and legal cells; show mine probabilities only if actually computed. |
 | Later | **Pac-Man** | Direction at each junction. | Reward versus moving hazards. | Map, player, ghosts, pellets, and power timer. |
 | Later | **Codenames** | Choose a clue or a guess from a fixed set. | Semantic association under constraints. | Visible words, team, prior clues, and legal choices. |
@@ -28,6 +30,25 @@ Flappy Bird is the clearest first comparison: two actions, immediate outcomes,
 and a visible cost when a decision arrives late. Sokoban adds planning, and
 Minesweeper adds uncertainty. Together, those three test different strengths
 than the existing Tetris, 2048, and Snake examples.
+
+Mario is a strong follow-up to Flappy Bird: both expose late decisions, while a
+platformer also requires direction and jump choices across several frames.
+Track distance reached, obstacles cleared, deaths, completed levels, and decision
+latency on the same seeded levels. Define how many frames each action lasts so a
+slower model is not silently given more game time. PlayJev already includes an
+[Infinite Mario](https://github.com/OmniJev/PlayJev) environment, which is useful
+as a reference. For a new public demo, use original or clearly licensed art;
+the PlayJev repository notes that the Mario sprites in its vendored game belong
+to Nintendo, despite the game's code being under the Unlicense.
+
+Chess has two useful modes. A **position challenge** gives every model the same
+FEN and legal move list, then compares its ranked moves with published reference
+values. The Decision Index already includes this kind of static test as
+[ChessBench](https://huggingface.co/spaces/multimodalart/jev-decision-index/blob/main/data/index.json).
+A **full-game demo** pairs models against the same opponent at the same clock
+setting and starting positions. Record legal-move rate, move time, game result,
+and engine evaluation loss per move. Supply legal moves from a chess rules engine
+so the model is judged on choosing among them, not on formatting notation.
 
 ## Flappy Bird comparison specification
 
