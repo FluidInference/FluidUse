@@ -81,6 +81,24 @@ where possible; record the upstream revision and changes to the adapter.
 | [Cave Runner](https://github.com/tope-olajide/cave-runner) | Alternate 3D runner. | MIT-licensed, but its online score path uses Netlify and PlanetScale; assess whether a local-only demo can bypass that path. |
 | [MiniGrid](https://minigrid.farama.org/environments/minigrid/) and [Gymnasium](https://gymnasium.farama.org/main/environments/) | DoorKey, FrozenLake, and other compact decision tasks. | Existing reset/step environments; add a viewer and a model input adapter. |
 
+### Start with PlayJev
+
+Use [OmniJev/PlayJev](https://github.com/OmniJev/PlayJev) as the first game
+harness to evaluate, rather than implementing its ten games again. Its browser
+hook provides `window.pj.start(seed)`, `step(action)`, `frame()`, `score()`,
+`done()`, and an action list. The repository also includes random and teacher
+policies, recorded runs, and a [0.8B vision model](https://huggingface.co/OmniJev/PlayJev-0.8B)
+that can serve as a visual reference. Keep the game, seed, tick rate, and action
+list fixed while swapping the decision provider. For text-only models, add a
+state extractor for each game and report text-state and pixel-input results in
+separate tracks. Re-run all compared models in the same harness; PlayJev's
+published scores are background context, not directly comparable results.
+
+Before vendoring or publishing a game, review its own license and bundled art.
+PlayJev documents the licenses of its ten vendored games and notes that some
+sprites are owned by third parties. The runner above fills a gap in its current
+game list; it is not one of PlayJev's ten games.
+
 For the runner, use the same generated track seeds, action interval, and speed
 curve for every model. Report distance, obstacles cleared, coins, collisions,
 and missed decision deadlines. An unlicensed [Subway Surfers clone](https://github.com/eeshadutta/Subway-Surfers)
