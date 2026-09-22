@@ -16,7 +16,7 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(16)
         .alert(
-            "laya",
+            "Tetris model",
             isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })
         ) {
             Button("OK") { model.errorMessage = nil }
@@ -35,14 +35,14 @@ struct ContentView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("laya plays Tetris").font(.title2.bold())
+            Text("on-device models play Tetris").font(.title2.bold())
             Text(
-                "Each offered landing is described in one sentence; laya answers “Is this a clean placement?” and the highest P(true) is played."
+                "GLiClass compares the two strongest legal landings in one encoder pass; laya can score every landing for comparison."
             )
             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
                 Text(model.loadStatus).font(.caption.monospaced()).foregroundStyle(
-                    model.manager == nil ? Color.secondary : Color.green)
+                    model.hasLoadedModel ? Color.green : Color.secondary)
                 if model.marathon, model.gamesPlayed > 0 {
                     Text("· game \(model.gamesPlayed + 1)").font(.caption.monospaced())
                         .foregroundStyle(.orange)
@@ -86,11 +86,11 @@ struct ContentView: View {
     private var controls: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Button(model.manager == nil ? "Load model" : "Loaded") { model.loadModel() }
-                    .disabled(model.isLoading || model.manager != nil)
+                Button(model.hasLoadedModel ? "Loaded" : "Load model") { model.loadModel() }
+                    .disabled(model.isLoading || model.hasLoadedModel || [.heuristic, .random].contains(model.policy))
                 Button(model.isRunning ? "Pause" : (model.isOver ? "Restart" : "Play")) { model.toggle() }
                     .keyboardShortcut(.space, modifiers: [])
-                    .disabled(model.policy == .laya && model.manager == nil)
+                    .disabled(!model.hasLoadedModel)
                 Button("Reset") { model.reset() }.disabled(model.isRunning)
             }
             Toggle("Harness: withhold burying moves, graded wording", isOn: $model.harness)

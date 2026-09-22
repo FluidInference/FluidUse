@@ -13,7 +13,7 @@ default:
     print(
         """
         usage: swift run -c release FluidUseLaya answer --state TEXT --type noul|choice|score --instructions TEXT [--options a|b]
-               swift run -c release FluidUseLaya tetris [--policy laya|heuristic|random] [--pieces N] [--seed N]
+               swift run -c release FluidUseLaya tetris [--policy laya|gliclass|heuristic|random] [--pieces N] [--seed N]
                swift run -c release FluidUseLaya benchmark --suites suites.jsonl [--reference reference-rows.jsonl]
         Add --help to any subcommand for its options.
         """)

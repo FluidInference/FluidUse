@@ -204,6 +204,32 @@ The Tetris figures above are the PR author's historical measurements, not a new 
 Per-seed Tetris reports are not checked into this repository. Release verification covers logic,
 controls and build correctness; the historical lookahead results predate the terminal-board fix.
 
+#### GLiClass Edge Apps v2
+
+The GLiClass demo uses the 32.7M-parameter application-tuned checkpoint and a 66 MB FP16 L128
+Core ML package. It first applies the same no-new-hole harness, keeps the heuristic's two strongest
+surviving landings, then asks GLiClass to choose between their natural-language descriptions in one
+encoder pass. This is a different policy from laya's independent score for every surviving landing.
+
+Seeds 1–10, with a 5,000-piece cap:
+
+| Policy | Mean pieces | Mean lines | Seeds reaching cap | Model calls / non-forced piece |
+| --- | ---: | ---: | ---: | ---: |
+| Corrected Dellacherie heuristic | 2,874.4 | 1,140.2 | 3/10 | 0 |
+| **GLiClass, heuristic top-two** | **3,482.3** | **1,385.4** | **4/10** | **1** |
+
+GLiClass's per-seed piece counts were 5,000, 1,840, 5,000, 4,103, 1,863, 2,377, 860,
+5,000, 3,780, and 5,000. The capped mean is therefore a lower bound. It chose the heuristic's first
+candidate 98.2% of the time; the remaining choices improved mean survival by 21.1% over the corrected
+heuristic control. End-to-end model-call latency averaged 4.86 ms median across the ten runs. That is
+slower per call than laya's historical 3.8 ms, but GLiClass makes about one call per piece instead of
+laya's 5.6 calls, so the complete decision loop is substantially faster.
+
+The historical laya mean above is 568.3 pieces, but its per-seed artifacts are unavailable. Treat the
+GLiClass comparison to that number as directional; the GLiClass and corrected heuristic rows were run
+together with the current terminal-board fix and are the controlled comparison. The complete run data,
+model size, command, and machine are in [`Benchmarks/gliclass-tetris.json`](Benchmarks/gliclass-tetris.json).
+
 ## Reproduce
 
 The benchmark command writes completion counts and returns a failure exit status when any

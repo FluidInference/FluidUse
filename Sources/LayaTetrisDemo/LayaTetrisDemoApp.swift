@@ -14,7 +14,7 @@ struct LayaTetrisDemoApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("laya plays Tetris") {
+        WindowGroup("on-device models play Tetris") {
             ContentView()
                 .environmentObject(model)
                 // Tall enough for header + 520 pt board + controls; still fits a

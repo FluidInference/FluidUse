@@ -33,7 +33,10 @@ let package = Package(
             dependencies: ["FluidUse", "LayaTetris"],
             exclude: ["README.md"]
         ),
-        .testTarget(name: "FluidUseTests", dependencies: ["FluidUse", "LayaTetris"]),
+        .testTarget(
+            name: "FluidUseTests", dependencies: ["FluidUse", "LayaTetris"],
+            resources: [.copy("Fixtures")]
+        ),
         .testTarget(name: "LayaTetrisTests", dependencies: ["LayaTetris"]),
         .testTarget(name: "LayaTetrisDemoTests", dependencies: ["LayaTetrisDemo", "LayaTetris"]),
     ]

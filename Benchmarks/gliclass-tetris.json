@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-22",
+  "machine": "Apple M5 Pro",
+  "source_commit": "24615f41a7a848936f13280439b50d571854b7ab",
+  "model": {
+    "name": "GLiClass Edge Apps v2",
+    "base_model": "knowledgator/gliclass-edge-v3.0",
+    "parameters": 32705154,
+    "coreml_package": "gliclass_edge_apps_fp16_L128_options25.mlpackage",
+    "coreml_package_bytes": 65675264,
+    "precision": "fp16",
+    "compute_units": "cpuAndNeuralEngine"
+  },
+  "command": "FluidUseLaya tetris --policy gliclass --gliclass-choice --gliclass-candidates 2 --lengths 128 --pieces 5000 --shortlist --describe graded --agreement --json",
+  "piece_cap": 5000,
+  "gliclass": {
+    "summary": {
+      "mean_pieces": 3482.3,
+      "median_pieces": 3941.5,
+      "mean_lines": 1385.4,
+      "seeds_reaching_cap": 4,
+      "mean_of_run_median_ms": 4.8640541,
+      "mean_heuristic_top_agreement": 0.9819464559
+    },
+    "runs": [
+      { "seed": 1, "pieces": 5000, "lines": 1998, "game_over": false, "median_ms": 4.94975, "heuristic_top_agreement": 0.9792790848 },
+      { "seed": 2, "pieces": 1840, "lines": 726, "game_over": true, "median_ms": 4.747416, "heuristic_top_agreement": 0.9821958457 },
+      { "seed": 3, "pieces": 5000, "lines": 1997, "game_over": false, "median_ms": 4.74375, "heuristic_top_agreement": 0.9831497084 },
+      { "seed": 4, "pieces": 4103, "lines": 1628, "game_over": true, "median_ms": 4.838417, "heuristic_top_agreement": 0.9824973877 },
+      { "seed": 5, "pieces": 1863, "lines": 734, "game_over": true, "median_ms": 4.962542, "heuristic_top_agreement": 0.9819557625 },
+      { "seed": 6, "pieces": 2377, "lines": 939, "game_over": true, "median_ms": 4.935708, "heuristic_top_agreement": 0.9821755027 },
+      { "seed": 7, "pieces": 860, "lines": 333, "game_over": true, "median_ms": 4.877875, "heuristic_top_agreement": 0.9821882952 },
+      { "seed": 8, "pieces": 5000, "lines": 1998, "game_over": false, "median_ms": 4.833083, "heuristic_top_agreement": 0.9815924658 },
+      { "seed": 9, "pieces": 3780, "lines": 1502, "game_over": true, "median_ms": 4.927875, "heuristic_top_agreement": 0.9834616481 },
+      { "seed": 10, "pieces": 5000, "lines": 1999, "game_over": false, "median_ms": 4.824125, "heuristic_top_agreement": 0.9809688581 }
+    ]
+  },
+  "heuristic_control": {
+    "summary": {
+      "mean_pieces": 2874.4,
+      "mean_lines": 1140.2,
+      "seeds_reaching_cap": 3
+    },
+    "runs": [
+      { "seed": 1, "pieces": 1969, "lines": 775 },
+      { "seed": 2, "pieces": 5000, "lines": 1997 },
+      { "seed": 3, "pieces": 2540, "lines": 1004 },
+      { "seed": 4, "pieces": 3275, "lines": 1296 },
+      { "seed": 5, "pieces": 5000, "lines": 1998 },
+      { "seed": 6, "pieces": 959, "lines": 371 },
+      { "seed": 7, "pieces": 460, "lines": 173 },
+      { "seed": 8, "pieces": 5000, "lines": 1998 },
+      { "seed": 9, "pieces": 1014, "lines": 392 },
+      { "seed": 10, "pieces": 3527, "lines": 1398 }
+    ]
+  }
+}

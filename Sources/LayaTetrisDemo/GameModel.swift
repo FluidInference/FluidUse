@@ -12,16 +12,17 @@ struct ScoredCandidate: Identifiable {
     let milliseconds: Double
 }
 
-/// Drives the game loop: laya scores every legal landing of the current piece, the best wins.
+/// Drives the game loop for laya, GLiClass, and the non-model controls.
 @MainActor
 final class GameModel: ObservableObject {
     enum Policy: String, CaseIterable, Identifiable {
-        case laya, heuristic, random
+        case gliclass, laya, heuristic, random
         var id: String { rawValue }
     }
 
     // Model
     @Published private(set) var manager: LayaManager?
+    @Published private(set) var gliClassManager: GLiClassManager?
     @Published private(set) var loadStatus = "Not loaded"
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
@@ -53,7 +54,7 @@ final class GameModel: ObservableObject {
     @Published private(set) var totalLines = 0
 
     // Controls
-    @Published var policy: Policy = .laya
+    @Published var policy: Policy = .gliclass
     /// Harness on: landings that bury a cell are withheld when a clean one exists, and the
     /// landing description stays discriminative on a tall board. 7.5x the pieces, measured.
     @Published var harness = true
@@ -88,6 +89,14 @@ final class GameModel: ObservableObject {
 
     static let question = LayaTetris.question
 
+    var hasLoadedModel: Bool {
+        switch policy {
+        case .gliclass: return gliClassManager != nil
+        case .laya: return manager != nil
+        case .heuristic, .random: return true
+        }
+    }
+
     /// `m:ss.t` so a demo clip reads a running clock rather than a raw double.
     var elapsedText: String {
         let minutes = Int(elapsedSeconds) / 60
@@ -99,14 +108,15 @@ final class GameModel: ObservableObject {
     /// prints the stats and exits, which is how the demo is smoke-tested headlessly.
     func applyEnvironment() {
         let environment = ProcessInfo.processInfo.environment
+        if environment["TETRIS_POLICY"] == "laya" { policy = .laya }
         if let seedText = environment["LAYA_DEMO_SEED"], let value = UInt64(seedText) { seed = value }
         if let text = environment["LAYA_DEMO_LOOKAHEAD"], let value = Int(text) { lookahead = value }
         if environment["LAYA_DEMO_AUTOLOAD"] == "1" { loadModel() }
         guard environment["LAYA_DEMO_AUTORUN"] == "1" else { return }
         loadModel()
         Task {
-            while manager == nil && isLoading { try? await Task.sleep(nanoseconds: 100_000_000) }
-            guard manager != nil else {
+            while !hasLoadedModel && isLoading { try? await Task.sleep(nanoseconds: 100_000_000) }
+            guard hasLoadedModel else {
                 if environment["LAYA_DEMO_QUIT_AFTER"] != nil {
                     print("autorun: model load failed: \(errorMessage ?? "unknown error")")
                     exit(1)
@@ -139,26 +149,44 @@ final class GameModel: ObservableObject {
     }
 
     func loadModel() {
-        guard !isLoading, manager == nil else { return }
+        guard !isLoading, !hasLoadedModel else { return }
         isLoading = true
-        loadStatus = "Loading laya (128-token bucket, CPU + Neural Engine)…"
+        loadStatus = "Loading \(policy.rawValue) (128-token bucket, CPU + Neural Engine)…"
         Task {
             do {
                 let started = Date()
-                let configuration = LayaManager.Configuration(lengths: [128])
-                let loaded: LayaManager
-                if let directory = ProcessInfo.processInfo.environment["LAYA_MODEL_DIR"], !directory.isEmpty {
-                    loaded = try await LayaManager.load(
-                        from: URL(fileURLWithPath: directory), configuration: configuration)
-                } else {
-                    loaded = try await LayaManager.load(configuration: configuration)
+                switch policy {
+                case .gliclass:
+                    guard let directory = ProcessInfo.processInfo.environment["GLICLASS_MODEL_DIR"],
+                        !directory.isEmpty
+                    else { throw GLiClassError.invalidAsset("Set GLICLASS_MODEL_DIR for the GLiClass demo") }
+                    let loaded = try await GLiClassManager.load(
+                        from: URL(fileURLWithPath: directory), configuration: .init(lengths: [128]))
+                    _ = try await loaded.classify(
+                        text: "The piece buries nothing and keeps the stack low.",
+                        labels: ["a poor Tetris placement", "a clean Tetris placement"],
+                        prompt: "Choose the better placement.")
+                    gliClassManager = loaded
+                    loadStatus = String(
+                        format: "GLiClass Edge Apps v2 · L128 · CPU + ANE · loaded in %.1f s",
+                        Date().timeIntervalSince(started))
+                case .laya:
+                    let configuration = LayaManager.Configuration(lengths: [128])
+                    let loaded: LayaManager
+                    if let directory = ProcessInfo.processInfo.environment["LAYA_MODEL_DIR"], !directory.isEmpty {
+                        loaded = try await LayaManager.load(
+                            from: URL(fileURLWithPath: directory), configuration: configuration)
+                    } else {
+                        loaded = try await LayaManager.load(configuration: configuration)
+                    }
+                    _ = try await loaded.answer(state: "The piece leaves no holes.", question: Self.question)
+                    manager = loaded
+                    loadStatus = String(
+                        format: "laya-multilingual · L128 · CPU + ANE · loaded in %.1f s",
+                        Date().timeIntervalSince(started))
+                case .heuristic, .random:
+                    break
                 }
-                // First call pays the Core ML warm-up; keep it out of the game stats.
-                _ = try await loaded.answer(state: "The piece leaves no holes.", question: Self.question)
-                manager = loaded
-                loadStatus = String(
-                    format: "laya-multilingual · L128 · CPU + ANE · loaded in %.1f s", Date().timeIntervalSince(started)
-                )
             } catch {
                 errorMessage = error.localizedDescription
                 loadStatus = "Load failed"
@@ -211,7 +239,7 @@ final class GameModel: ObservableObject {
             finishRun()
             return
         }
-        guard policy != .laya || manager != nil else {
+        guard hasLoadedModel else {
             errorMessage = "Load the model first, or pick the heuristic policy."
             return
         }
@@ -264,6 +292,37 @@ final class GameModel: ObservableObject {
             var best: (Float, TetrisGame.Candidate)?
             var scoredPairs: [(TetrisGame.Candidate, Float)] = []
             switch policy {
+            case .gliclass:
+                guard let gliClassManager else { break }
+                let scored = Array(all.sorted { $0.features.heuristic > $1.features.heuristic }.prefix(2))
+                if scored.count == 1 {
+                    best = (Float(scored[0].features.heuristic), scored[0])
+                    break
+                }
+                let sentences = scored.map { game.describe($0, piece: piece, style: harness ? .graded : .plain) }
+                evaluating = scored[0]
+                let t0 = DispatchTime.now().uptimeNanoseconds
+                do {
+                    let answer = try await gliClassManager.classify(
+                        text: "Avoid holes, keep the stack low and smooth, and clear lines.", labels: sentences,
+                        prompt: "Choose the best Tetris placement.")
+                    guard run == generation, !Task.isCancelled else { return }
+                    let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
+                    record(ms: ms, tokens: answer.tokenCount, bucket: answer.bucketLength)
+                    for (index, candidate) in scored.enumerated() {
+                        candidates.append(
+                            ScoredCandidate(
+                                id: candidate.id, candidate: candidate, sentence: sentences[index],
+                                probability: answer.probabilities[index], milliseconds: ms))
+                    }
+                    best = (answer.probabilities[answer.selectedIndex], scored[answer.selectedIndex])
+                } catch is CancellationError {
+                    return
+                } catch {
+                    guard run == generation, !Task.isCancelled else { return }
+                    errorMessage = error.localizedDescription
+                    return
+                }
             case .laya:
                 guard let manager else { break }
                 for candidate in all {
@@ -360,7 +419,7 @@ final class GameModel: ObservableObject {
             let placed = String(
                 format: "%@ → column %d rot %d · %@ %.3f · %d lines", piece.name as NSString, pick.column,
                 pick.rotation,
-                (policy == .laya ? "P(clean)" : "score") as NSString, score, lines)
+                ([.laya, .gliclass].contains(policy) ? "model" : "score") as NSString, score, lines)
             log.insert(placed, at: 0)
             if log.count > 12 { log.removeLast() }
             printConsole(piece: piece, chosen: pick, score: score)
@@ -404,8 +463,9 @@ final class GameModel: ObservableObject {
         let yellow = "\u{1B}[33m"
         let dim = "\u{1B}[2m"
         let reset = "\u{1B}[0m"
-        print("\(cyan)▶ laya-multilingual\(reset) · \(piece.name) piece · \(candidates.count) landings scored")
-        if policy == .laya {
+        let modelName = policy == .gliclass ? "GLiClass Edge Apps v2" : "laya-multilingual"
+        print("\(cyan)▶ \(modelName)\(reset) · \(piece.name) piece · \(candidates.count) landings scored")
+        if policy == .laya || policy == .gliclass {
             let sorted = candidates.sorted { $0.probability > $1.probability }
             for scored in sorted.prefix(3) {
                 let marker = scored.candidate.id == chosen.id ? "→" : " "

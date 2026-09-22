@@ -35,6 +35,9 @@ struct LayaTetrisCommand {
         var seed: UInt64 = 7
         var policy = "laya"
         var question: String?
+        var gliClassChoice = false
+        var gliClassCandidates = GLiClassManager.maximumOptions
+        var gliClassMargin: Float = 0
         var shortlist = false
         var agreement = false
         var lookahead = 0
@@ -62,6 +65,17 @@ struct LayaTetrisCommand {
             case "--seed": options.seed = UInt64(try value("--seed")) ?? options.seed
             case "--policy": options.policy = try value("--policy")
             case "--question": options.question = try value("--question")
+            case "--gliclass-choice": options.gliClassChoice = true
+            case "--gliclass-candidates":
+                guard let count = Int(try value("--gliclass-candidates")),
+                    (2...GLiClassManager.maximumOptions).contains(count)
+                else { throw GLiClassError.invalidAsset("--gliclass-candidates must be between 2 and 25") }
+                options.gliClassCandidates = count
+            case "--gliclass-margin":
+                guard let margin = Float(try value("--gliclass-margin")), (0...1).contains(margin) else {
+                    throw GLiClassError.invalidAsset("--gliclass-margin must be between 0 and 1")
+                }
+                options.gliClassMargin = margin
             case "--shortlist": options.shortlist = true
             case "--agreement": options.agreement = true
             case "--lookahead":
@@ -82,8 +96,8 @@ struct LayaTetrisCommand {
             }
             index += 1
         }
-        guard ["laya", "heuristic", "random"].contains(options.policy) else {
-            throw LayaError.invalidAsset("--policy must be laya, heuristic, or random")
+        guard ["laya", "gliclass", "heuristic", "random"].contains(options.policy) else {
+            throw LayaError.invalidAsset("--policy must be laya, gliclass, heuristic, or random")
         }
         guard ["product", "min", "next"].contains(options.combine) else {
             throw LayaError.invalidAsset("--combine must be product, min, or next")
@@ -98,21 +112,45 @@ struct LayaTetrisCommand {
     private static func play(arguments: [String]) async throws {
         let options = try parse(arguments)
         let layaQuestion = options.question.map { LayaQuestion.noul($0) } ?? question
-        var manager: LayaManager?
+        var layaManager: LayaManager?
+        var gliClassManager: GLiClassManager?
         if options.policy == "laya" {
             let configuration = LayaManager.Configuration(lengths: options.lengths, precision: options.precision)
             if let directory = options.modelDirectory {
-                manager = try await LayaManager.load(
+                layaManager = try await LayaManager.load(
                     from: URL(fileURLWithPath: directory), configuration: configuration)
             } else {
-                manager = try await LayaManager.load(configuration: configuration)
+                layaManager = try await LayaManager.load(configuration: configuration)
             }
+        } else if options.policy == "gliclass" {
+            guard let directory = options.modelDirectory else {
+                throw GLiClassError.invalidAsset("--policy gliclass currently requires --model-dir")
+            }
+            gliClassManager = try await GLiClassManager.load(
+                from: URL(fileURLWithPath: directory), configuration: .init(lengths: options.lengths))
+        }
+        let gliClassLabels = [
+            "a poor Tetris placement that creates holes or a dangerous tall stack",
+            "a clean Tetris placement that avoids holes and keeps the stack low",
+        ]
+        let gliClassPrompt = options.question ?? "Which label best describes this Tetris placement?"
+
+        func score(_ state: String) async throws -> (value: Float, tokens: Int) {
+            if let layaManager {
+                let answer = try await layaManager.answer(state: state, question: layaQuestion)
+                return (answer.noul ?? 0, answer.tokenCount)
+            }
+            guard let gliClassManager else { throw GLiClassError.invalidModel("No decision model is loaded") }
+            let answer = try await gliClassManager.classify(
+                text: state, labels: gliClassLabels, prompt: gliClassPrompt)
+            return (answer.probabilities[1], answer.tokenCount)
         }
         var game = TetrisGame(seed: options.seed)
         var rng = SplitMix64(seed: options.seed &+ 1)
         var decisionTimes: [Double] = []
         var percentiles: [Double] = []
         var offered: [Int] = []
+        var modelOffered: [Int] = []
         var forced = 0
         var beforeFilter: [Int] = []
         var agreements = 0
@@ -129,8 +167,58 @@ struct LayaTetrisCommand {
             if candidates.count == 1 { forced += 1 }
             var chosen: TetrisGame.Candidate
             switch options.policy {
-            case "laya":
-                guard let manager else { throw LayaError.invalidModel("The laya policy needs a loaded model") }
+            case "gliclass" where options.gliClassChoice:
+                guard let gliClassManager else { throw GLiClassError.invalidModel("No decision model is loaded") }
+                // GLiClass is a dynamic-label classifier, so it can compare the surviving moves in one
+                // encoder pass. The converted checkpoint has 25 option rows; only unusually wide early-game
+                // sets exceed that, and the heuristic supplies a deterministic safety prefilter there.
+                let scored = Array(
+                    candidates.sorted { $0.features.heuristic > $1.features.heuristic }
+                        .prefix(options.gliClassCandidates))
+                modelOffered.append(scored.count)
+                if scored.count == 1 {
+                    chosen = scored[0]
+                } else {
+                    let labels = scored.map { candidate in
+                        guard scored.count > 2 else {
+                            return game.describe(candidate, piece: piece, style: options.describeStyle)
+                        }
+                        let feature = candidate.features
+                        return "column \(candidate.column), rotation \(candidate.rotation): \(feature.newHoles) holes; "
+                            + "\(feature.linesCleared) lines; height \(feature.maxHeight); roughness \(feature.bumpiness); "
+                            + "well \(feature.wellDepth)"
+                    }
+                    let t0 = DispatchTime.now().uptimeNanoseconds
+                    let answer = try await gliClassManager.classify(
+                        text: "Avoid holes, keep the stack low and smooth, and clear lines.", labels: labels,
+                        prompt: options.question ?? "Choose the best Tetris placement.")
+                    decisionTimes.append(Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6)
+                    tokenCounts.append(answer.tokenCount)
+                    let leader = answer.selectedIndex
+                    let runnerUp =
+                        answer.probabilities.indices.filter { $0 != leader }
+                        .map { answer.probabilities[$0] }.max() ?? 0
+                    let margin = answer.probabilities[leader] - runnerUp
+                    chosen = margin >= options.gliClassMargin ? scored[leader] : scored[0]
+                    if pieces < options.trace {
+                        for (index, label) in labels.enumerated() {
+                            print(String(format: "  %.3f  %@", answer.probabilities[index], label))
+                        }
+                    }
+                }
+                if options.agreement, scored.count > 1 {
+                    let ranked = scored.sorted { $0.features.heuristic > $1.features.heuristic }
+                    if let position = ranked.firstIndex(where: { $0.id == chosen.id }) {
+                        percentiles.append(1.0 - Double(position) / Double(ranked.count - 1))
+                    }
+                    if ranked[0].id == chosen.id { agreements += 1 }
+                    agreementPieces += 1
+                }
+                if pieces < options.trace {
+                    print("  -> column \(chosen.column) rotation \(chosen.rotation)\n\(game.render(after: chosen))")
+                }
+            case "laya", "gliclass":
+                modelOffered.append(candidates.count)
                 var best: (score: Float, candidate: TetrisGame.Candidate)?
                 var candidatesScored: [(TetrisGame.Candidate, Float)] = []
                 // --shortlist: the harness enforces the hard constraint (never bury a cell when a
@@ -140,10 +228,10 @@ struct LayaTetrisCommand {
                 for candidate in scored {
                     let state = game.describe(candidate, piece: piece, style: options.describeStyle)
                     let t0 = DispatchTime.now().uptimeNanoseconds
-                    let answer = try await manager.answer(state: state, question: layaQuestion)
+                    let answer = try await score(state)
                     decisionTimes.append(Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6)
-                    tokenCounts.append(answer.tokenCount)
-                    let score = answer.noul ?? 0
+                    tokenCounts.append(answer.tokens)
+                    let score = answer.value
                     if pieces < options.trace {
                         print(String(format: "  %.3f  %@", score, state))
                     }
@@ -165,10 +253,10 @@ struct LayaTetrisCommand {
                         for option in follow.prefix(12) {
                             let sentence = game.describe(option, piece: next, style: options.describeStyle)
                             let t = DispatchTime.now().uptimeNanoseconds
-                            let reply = try await manager.answer(state: sentence, question: layaQuestion)
+                            let reply = try await score(sentence)
                             decisionTimes.append(Double(DispatchTime.now().uptimeNanoseconds - t) / 1e6)
-                            tokenCounts.append(reply.tokenCount)
-                            bestNext = max(bestNext, reply.noul ?? 0)
+                            tokenCounts.append(reply.tokens)
+                            bestNext = max(bestNext, reply.value)
                         }
                         let combined: Float
                         switch options.combine {
@@ -222,8 +310,8 @@ struct LayaTetrisCommand {
                     ? 0 : Double(beforeFilter.reduce(0, +)) / Double(beforeFilter.count),
                 "landings_after_filter_mean": offered.isEmpty
                     ? 0 : Double(offered.reduce(0, +)) / Double(offered.count),
-                "landings_offered_to_model_mean": options.policy != "laya" || offered.isEmpty
-                    ? 0 : Double(offered.reduce(0, +)) / Double(offered.count),
+                "landings_offered_to_model_mean": modelOffered.isEmpty
+                    ? 0 : Double(modelOffered.reduce(0, +)) / Double(modelOffered.count),
                 "forced_single_option_fraction": offered.isEmpty
                     ? 0 : Double(forced) / Double(offered.count),
                 "heuristic_percentile_mean": percentiles.isEmpty
@@ -239,7 +327,7 @@ struct LayaTetrisCommand {
         print(
             "policy \(options.policy) · pieces \(pieces) · lines cleared \(game.linesCleared) · \(game.isOver ? "topped out" : "stopped at piece cap")"
         )
-        if options.agreement, options.policy == "laya" {
+        if options.agreement, ["laya", "gliclass"].contains(options.policy) {
             let top = agreementPieces == 0 ? 0 : Double(agreements) / Double(agreementPieces)
             let percentile = percentiles.isEmpty ? 0 : percentiles.reduce(0, +) / Double(percentiles.count)
             print(
@@ -251,8 +339,9 @@ struct LayaTetrisCommand {
             print(
                 String(
                     format:
-                        "%d laya decisions · median %.2f ms · p95 %.2f ms · %.0f decisions/min · prompts ≤ %d tokens · %.1f s total",
-                    decisionTimes.count, median, p95, perMinute, tokenCounts.max() ?? 0, elapsed))
+                        "%d %@ decisions · median %.2f ms · p95 %.2f ms · %.0f decisions/min · prompts ≤ %d tokens · %.1f s total",
+                    decisionTimes.count, options.policy as NSString, median, p95, perMinute, tokenCounts.max() ?? 0,
+                    elapsed))
         } else {
             print(String(format: "%.2f s total", elapsed))
         }
@@ -262,13 +351,20 @@ struct LayaTetrisCommand {
         print(
             """
             Usage: swift run FluidUseLaya tetris [--model-dir DIR] [--precision fp16|e8] [--lengths 128]
-                                             [--pieces 200] [--seed 7] [--policy laya|heuristic|random]
+                                             [--pieces 200] [--seed 7] [--policy laya|gliclass|heuristic|random]
                                              [--shortlist] [--describe plain|graded] [--lookahead N]
                                              [--combine product|min|next] [--agreement] [--question TEXT]
+                                             [--gliclass-choice] [--gliclass-candidates N] [--gliclass-margin P]
                                              [--show-every N] [--trace N] [--json]
 
             Plays headless 10x20 Tetris. With --policy laya (default) every legal landing is described in
             one sentence and scored by laya's P(clean); the best-scoring landing is played.
+
+            With --policy gliclass, --model-dir must hold tokenizer.json and the GLiClass Edge Apps v2
+            Core ML bucket. The same candidates and descriptions are scored for an apples-to-apples game.
+              --gliclass-choice  compare up to 25 candidate descriptions in one encoder pass; use L512
+              --gliclass-candidates N  heuristic prefilter width for choice mode (default 25)
+              --gliclass-margin P  minimum probability margin before GLiClass overrides the heuristic leader
 
             The two flags that matter, and only together (76 -> 568 pieces over ten seeds):
               --shortlist        withhold landings that bury a cell when a clean landing exists
