@@ -6,10 +6,11 @@ expectimax shortlist to each model. GLiClass compares the candidates in one clas
 its established `noul` question to each candidate, requiring two passes per move.
 
 ```bash
-GLICLASS_MODEL_DIR=/path/to/gliclass-assets \
-LAYA_MODEL_DIR="$HOME/Library/Application Support/FluidUse/Models/laya-coreml" \
 swift run -c release Decision2048BenchDemo
 ```
+
+Both models download their published Core ML assets on first use. To use existing assets, set
+`GLICLASS_MODEL_DIR` and/or `LAYA_MODEL_DIR` to their respective model directories.
 
 Set `GAME2048_AUTOLOAD=1 GAME2048_AUTORUN=1` to launch immediately, `GAME2048_SEED=<n>` to select the
 deterministic starting seed, and `GAME2048_DELAY_MS=<n>` to control visual pacing. Model inference runs

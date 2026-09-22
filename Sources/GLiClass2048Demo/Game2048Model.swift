@@ -92,13 +92,17 @@ final class Game2048Model: ObservableObject {
         loadStatus = "Loading GLiClass Edge Apps v2…"
         Task {
             do {
-                guard let directory = ProcessInfo.processInfo.environment["GLICLASS_MODEL_DIR"], !directory.isEmpty
-                else { throw GLiClassError.invalidAsset("Set GLICLASS_MODEL_DIR for the 2048 demo") }
-                let precision = ProcessInfo.processInfo.environment["GLICLASS_PRECISION"] ?? "lut8"
+                let environment = ProcessInfo.processInfo.environment
+                let precision = environment["GLICLASS_PRECISION"] ?? "lut8"
                 let started = Date()
-                let loaded = try await GLiClassManager.load(
-                    from: URL(fileURLWithPath: directory),
-                    configuration: .init(lengths: [128], precision: precision))
+                let configuration = GLiClassManager.Configuration(lengths: [128], precision: precision)
+                let loaded: GLiClassManager
+                if let directory = environment["GLICLASS_MODEL_DIR"], !directory.isEmpty {
+                    loaded = try await GLiClassManager.load(
+                        from: URL(fileURLWithPath: directory), configuration: configuration)
+                } else {
+                    loaded = try await GLiClassManager.load(configuration: configuration)
+                }
                 _ = try await loaded.classify(
                     text: "Build the largest tile without filling the board.",
                     labels: ["swipe left: 8 empty cells", "swipe right: 5 empty cells"],

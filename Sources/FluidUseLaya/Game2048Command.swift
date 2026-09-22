@@ -76,12 +76,13 @@ struct Game2048Command {
         let options = try parse(arguments)
         let manager: GLiClassManager?
         if options.policy == "gliclass" {
-            guard let modelDirectory = options.modelDirectory else {
-                throw GLiClassError.invalidAsset("--policy gliclass requires --model-dir")
+            let configuration = GLiClassManager.Configuration(lengths: [128], precision: options.precision)
+            if let modelDirectory = options.modelDirectory {
+                manager = try await GLiClassManager.load(
+                    from: URL(fileURLWithPath: modelDirectory), configuration: configuration)
+            } else {
+                manager = try await GLiClassManager.load(configuration: configuration)
             }
-            manager = try await GLiClassManager.load(
-                from: URL(fileURLWithPath: modelDirectory),
-                configuration: .init(lengths: [128], precision: options.precision))
         } else {
             manager = nil
         }
