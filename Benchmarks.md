@@ -258,6 +258,29 @@ GLiClass comparison to that number as directional; the GLiClass and corrected he
 together with the current terminal-board fix and are the controlled comparison. The complete run data,
 model size, command, and machine are in [`Benchmarks/gliclass-tetris.json`](Benchmarks/gliclass-tetris.json).
 
+#### GLiClass 2048
+
+`FluidUseLaya 2048` and `GLiClass2048Demo` share a deterministic 4×4 engine. A conventional safety
+heuristic ranks legal swipes from empty cells, merge score, corner placement, monotonicity, and
+roughness. GLiClass compares the top two descriptions in one LUT8 L128 pass. A 0.40 probability-margin
+gate keeps the heuristic leader unless the model strongly prefers the alternative.
+
+Seeds 1–10, played to game over:
+
+| Policy | Mean score | Mean moves | Games reaching 2048 | Mean run-median latency |
+| --- | ---: | ---: | ---: | ---: |
+| Random | 1,187 | 125.8 | 0/10 | — |
+| Heuristic | **14,104** | **818.2** | **2/10** | — |
+| GLiClass LUT8, no margin | 7,688 | 499.8 | 0/10 | 1.76 ms |
+| GLiClass LUT8, margin 0.40 | 13,419 | 786.2 | **2/10** | 1.80 ms |
+
+The confidence gate recovers most of the heuristic's average performance while allowing selective
+model intervention; it does not beat the heuristic on average. Seed 9 is the measured visual-demo
+case: GLiClass scored 33,812 over 1,702 moves and reached tile 2048, while the heuristic on the same
+seed scored 7,268 and stopped at tile 512. The default is intentionally disclosed as a selected demo
+seed rather than a representative mean. Full per-seed results are in
+[`Benchmarks/gliclass-2048.json`](Benchmarks/gliclass-2048.json).
+
 ## Reproduce
 
 The benchmark command writes completion counts and returns a failure exit status when any

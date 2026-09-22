@@ -82,8 +82,10 @@ questions, reference answers, reports and conversion live in
 swift run -c release FluidUseLaya answer --state "…" --type choice \
     --instructions "What does the customer want?" --options "refund|order status|technical help"
 swift run -c release FluidUseLaya tetris --shortlist --describe graded --pieces 200  # headless Tetris, P(clean) per landing
+swift run -c release FluidUseLaya 2048 --model-dir /path/to/gliclass --precision lut8 --games 10
 swift run -c release FluidUseLaya benchmark --suites <mobius>/benchmark/suites.jsonl --reference <mobius>/benchmark/reference-rows.jsonl
 swift run -c release LayaTetrisDemo                              # SwiftUI: laya plays Tetris, live decisions
+swift run -c release GLiClass2048Demo                            # SwiftUI: GLiClass plays 2048
 ```
 
 `LayaTetrisDemo` ([Sources/LayaTetrisDemo](Sources/LayaTetrisDemo), [25 s clip](Media/laya-tetris.mp4))
