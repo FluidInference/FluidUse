@@ -75,6 +75,19 @@ public actor GLiClassManager {
         self.tokenizer = tokenizer
     }
 
+    /// Download requested buckets from the Hub into the FluidUse model cache and load them.
+    /// - Parameter cacheDirectory: The parent Models directory, not the repository subdirectory.
+    public static func load(
+        cacheDirectory: URL? = nil,
+        configuration: Configuration = Configuration(),
+        progress: GLiClassModelStore.Progress? = nil
+    ) async throws -> GLiClassManager {
+        let directory = try await GLiClassModelStore.ensure(
+            lengths: configuration.lengths, precision: configuration.precision,
+            cacheDirectory: cacheDirectory, progress: progress)
+        return try await load(from: directory, configuration: configuration)
+    }
+
     /// Load `.mlmodelc`/`.mlpackage` buckets and `tokenizer.json` from a local directory.
     public static func load(
         from directory: URL, configuration: Configuration = Configuration()

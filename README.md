@@ -82,7 +82,7 @@ questions, reference answers, reports and conversion live in
 swift run -c release FluidUseLaya answer --state "…" --type choice \
     --instructions "What does the customer want?" --options "refund|order status|technical help"
 swift run -c release FluidUseLaya tetris --shortlist --describe graded --pieces 200  # headless Tetris, P(clean) per landing
-swift run -c release FluidUseLaya 2048 --model-dir /path/to/gliclass --precision lut8 --games 10
+swift run -c release FluidUseLaya 2048 --precision lut8 --games 10
 swift run -c release FluidUseLaya benchmark --suites <mobius>/benchmark/suites.jsonl --reference <mobius>/benchmark/reference-rows.jsonl
 swift run -c release LayaTetrisDemo                              # SwiftUI: GLiClass/laya play Tetris
 swift run -c release GLiClass2048Demo                            # SwiftUI: GLiClass plays 2048
@@ -121,8 +121,15 @@ The on-device models, measured on the same Mac with checked-in reports: [Benchma
 CUA-S1-FORMS: 0.9 ms per decision on the Neural Engine, accuracy identical to PyTorch on the
 24,370-row synthetic test. laya: 3.6 ms per short question, identical to PyTorch on laya's ten
 published suites, e8 buckets 30% smaller at the same accuracy. GLiClass Edge Apps v2: 1.61 ms FP16
-or 1.81 ms LUT8 for a two-option L128 decision, with its conversion pipeline in
+or 1.81 ms LUT8 for a two-option L128 decision. Its
+[Core ML packages and config](https://huggingface.co/FluidInference/gliclass-edge-apps-coreml)
+are on Hugging Face, with the conversion pipeline in
 [mobius PR #101](https://github.com/FluidInference/mobius/pull/101).
+GLiClass demos download the selected Core ML bucket and tokenizer on first use. The loader reads the
+published `config.json`, checks each file against `checksums.json`, and caches the assets under
+`~/Library/Application Support/FluidUse/Models/gliclass-edge-apps-coreml`. `GLICLASS_MODEL_DIR`
+or CLI `--model-dir` still selects a local directory. The Hub publishes FP16 at L128/L256/L512 and
+LUT8 at L128; other local precision variants require an explicit local directory.
 
 ## Scope
 
