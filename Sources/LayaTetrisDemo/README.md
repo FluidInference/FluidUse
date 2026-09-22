@@ -2,7 +2,8 @@
 
 SwiftUI app for `GLiClassManager` and `LayaManager`. GLiClass compares the two strongest legal
 landings as natural-language labels in one encoder pass; laya scores every offered landing with
-*"Is this a clean placement?"*. The scoreboard shows elapsed time, pieces, lines, latency, and calls.
+*"Is this a clean placement?"*. The scoreboard shows elapsed time, pieces, lines, cumulative model
+milliseconds per move, and calls.
 
 ```bash
 swift run -c release LayaTetrisDemo
@@ -10,10 +11,12 @@ swift run -c release LayaTetrisDemo
 
 No Xcode project is needed. Set `GLICLASS_MODEL_DIR` to a directory holding `tokenizer.json` and
 `gliclass_edge_apps_fp16_L128_options25.mlpackage`, or select laya and let it download from
-`FluidInference/laya-coreml` (`LAYA_MODEL_DIR` skips that download). **Play** scores on the Neural Engine
-with no artificial delay by default. The *delay per scored landing* slider slows the scoring down
-so each candidate can be watched being evaluated on the board (orange outline),
-and the chosen landing is drawn in green.
+`FluidInference/laya-coreml` (`LAYA_MODEL_DIR` skips that download). **Play** scores flat out on the
+Neural Engine and continues on the next seed after a top-out. SwiftUI presents the evolving board at
+the display refresh rate while the model stays hot. The *pause per piece* slider can expose individual
+moves, but long pauses let the Neural Engine idle and raise measured latency. The *delay per scored
+landing* slider slows laya's candidate-by-candidate scoring so it can be watched on the board (orange
+outline); the chosen landing is drawn in green.
 
 **Policy** switches among GLiClass, laya, a feature-weighted heuristic, and random play. The harness
 toggle applies to every policy. See [Benchmarks.md](../../Benchmarks.md) for the reported runs.
@@ -30,9 +33,10 @@ piece sequence.
 
 Set `GLICLASS_PRECISION=lut8` or `lut6` to load the matching palettized package from the same model
 directory. FP16 remains the default. LUT8 is the recommended compact package: 33.0 MB, 97.1% FP16
-choice agreement on the L128 application-suite rows, and 4.92 ms average median Tetris-call latency.
-LUT6 is an aggressive 24.8 MB option; LUT4 is intentionally not documented as deployable because it
-lost 15.75 accuracy points.
+choice agreement on the L128 application-suite rows, and 1.81 ms median complete-call latency in the
+optimized 1,000-piece seed-24 run. FP16 measured 1.61 ms in the same run. LUT6 is an aggressive
+24.8 MB option; LUT4 is intentionally not documented as deployable because it lost 15.75 accuracy
+points.
 
 `GLICLASS_PRECISION=fp16-mask` selects the experimental float-mask FP16 package. It moves one more
 operation from CPU to ANE with exact application-suite parity, but improved a paired three-seed
@@ -45,7 +49,7 @@ The simulation (`Sources/LayaTetris`) is shared with `swift run FluidUseLaya tet
 - **Harness** (on): withholds landings that bury a cell when a clean one exists, and uses wording
   that stays discriminative on a tall board. Together they raise the reported mean from 76 to 568
   pieces. Wording alone regresses to 48; filtering alone improves modestly to 87.
-- **Marathon** (off): starts a new board after each top-out. The scoreboard carries pieces, lines,
+- **Marathon** (on): starts a new board after each top-out. The scoreboard carries pieces, lines,
   calls and elapsed time across games; the header shows the game number. Useful
   for a long recording; it does not make the model survive longer.
 - **Lookahead** (off): also scores the board each of the top N landings leaves for the next piece.

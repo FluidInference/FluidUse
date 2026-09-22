@@ -61,7 +61,9 @@ struct ContentView: View {
             Divider().frame(height: 26)
             readout("\(model.totalLines)", "lines", .green)
             Divider().frame(height: 26)
-            readout(model.lastMs > 0 ? String(format: "%.1f", model.lastMs) : "–", "ms", .orange)
+            readout(
+                model.modelMillisecondsPerPiece > 0 ? String(format: "%.1f", model.modelMillisecondsPerPiece) : "–",
+                "model ms/move", .orange)
             Divider().frame(height: 26)
             readout("\(model.decisions)", "calls", .blue)
         }
@@ -122,7 +124,8 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(format: "Delay per scored landing: %.0f ms", model.stepDelayMs)).font(.caption)
                 Slider(value: $model.stepDelayMs, in: 0...300, step: 10)
-                Text(String(format: "Pause per piece: %.0f ms", model.pieceDelayMs)).font(.caption)
+                Text(String(format: "Pause per piece: %.0f ms (may raise model latency)", model.pieceDelayMs))
+                    .font(.caption)
                 Slider(value: $model.pieceDelayMs, in: 0...1000, step: 20)
             }
         }

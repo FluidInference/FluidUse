@@ -24,14 +24,42 @@ public actor GLiClassManager {
         }
     }
 
-    private struct Bucket: Sendable {
+    /// Reusable input storage for one fixed-shape model. `classify` is actor-isolated, so a
+    /// prediction always finishes before the next call mutates these buffers.
+    private final class Bucket {
         let length: Int
         let model: MLModel
         let usesAttentionBias: Bool
+        let inputIds: MLMultiArray
+        let classMarkerMap: MLMultiArray
+        let attention: MLMultiArray
+        let features: MLDictionaryFeatureProvider
+
+        init(length: Int, model: MLModel, usesAttentionBias: Bool) throws {
+            self.length = length
+            self.model = model
+            self.usesAttentionBias = usesAttentionBias
+            inputIds = try MLMultiArray(shape: [1, NSNumber(value: length)], dataType: .int32)
+            classMarkerMap = try MLMultiArray(
+                shape: [1, NSNumber(value: GLiClassManager.maximumOptions), NSNumber(value: length)],
+                dataType: .float32)
+            if usesAttentionBias {
+                attention = try MLMultiArray(
+                    shape: [1, 1, 1, NSNumber(value: length)], dataType: .float32)
+            } else {
+                attention = try MLMultiArray(shape: [1, NSNumber(value: length)], dataType: .int32)
+            }
+            features = try MLDictionaryFeatureProvider(dictionary: [
+                "input_ids": MLFeatureValue(multiArray: inputIds),
+                "class_marker_map": MLFeatureValue(multiArray: classMarkerMap),
+                usesAttentionBias ? "attention_bias" : "attention_mask": MLFeatureValue(multiArray: attention),
+            ])
+        }
     }
 
     private let buckets: [Bucket]
     private let tokenizer: GLiClassTokenizer
+    private var sequenceCache: [String: [Int]] = [:]
     public nonisolated let lengths: [Int]
 
     public init(models: [MLModel], tokenizer: GLiClassTokenizer) throws {
@@ -40,7 +68,7 @@ public actor GLiClassManager {
         for model in models {
             let length = try Self.modelLength(model.modelDescription)
             let usesAttentionBias = try Self.validate(model.modelDescription, length: length)
-            buckets.append(Bucket(length: length, model: model, usesAttentionBias: usesAttentionBias))
+            buckets.append(try Bucket(length: length, model: model, usesAttentionBias: usesAttentionBias))
         }
         self.buckets = buckets.sorted { $0.length < $1.length }
         self.lengths = self.buckets.map(\.length)
@@ -100,7 +128,14 @@ public actor GLiClassManager {
             throw GLiClassError.emptyOption(index)
         }
         let rendered = labels.map { "<<LABEL>>\($0)" }.joined() + "<<SEP>>" + (prompt ?? "") + text
-        let untruncated = tokenizer.encode(rendered)
+        let untruncated: [Int]
+        if let cached = sequenceCache[rendered] {
+            untruncated = cached
+        } else {
+            untruncated = tokenizer.encodeClassification(text: text, labels: labels, prompt: prompt)
+            if sequenceCache.count >= 4096 { sequenceCache.removeAll(keepingCapacity: true) }
+            sequenceCache[rendered] = untruncated
+        }
         guard let bucket = buckets.first(where: { untruncated.count <= $0.length }) ?? buckets.last else {
             throw GLiClassError.invalidModel("No bucket loaded")
         }
@@ -119,42 +154,28 @@ public actor GLiClassManager {
     public nonisolated func tokenSequence(
         text: String, labels: [String], prompt: String? = nil
     ) -> (ids: [Int], markers: [Int]) {
-        let rendered = labels.map { "<<LABEL>>\($0)" }.joined() + "<<SEP>>" + (prompt ?? "") + text
-        let ids = tokenizer.encode(rendered)
+        let ids = tokenizer.encodeClassification(text: text, labels: labels, prompt: prompt)
         return (ids, ids.indices.filter { ids[$0] == tokenizer.classTokenId })
     }
 
     private func predict(ids: [Int], markers: [Int], bucket: Bucket) throws -> (logits: [Float], probabilities: [Float])
     {
         let length = bucket.length
-        let inputIds = try MLMultiArray(shape: [1, NSNumber(value: length)], dataType: .int32)
-        let markerMap = try MLMultiArray(
-            shape: [1, NSNumber(value: Self.maximumOptions), NSNumber(value: length)], dataType: .float32)
-        let idPointer = inputIds.dataPointer.assumingMemoryBound(to: Int32.self)
+        let idPointer = bucket.inputIds.dataPointer.assumingMemoryBound(to: Int32.self)
         for index in 0..<length {
             idPointer[index] = Int32(index < ids.count ? ids[index] : tokenizer.padTokenId)
         }
-        let markerPointer = markerMap.dataPointer.assumingMemoryBound(to: Float.self)
-        markerPointer.initialize(repeating: 0, count: Self.maximumOptions * length)
+        let markerPointer = bucket.classMarkerMap.dataPointer.assumingMemoryBound(to: Float.self)
+        for index in 0..<(Self.maximumOptions * length) { markerPointer[index] = 0 }
         for (row, position) in markers.enumerated() { markerPointer[row * length + position] = 1 }
-        var inputs: [String: MLFeatureValue] = [
-            "input_ids": MLFeatureValue(multiArray: inputIds),
-            "class_marker_map": MLFeatureValue(multiArray: markerMap),
-        ]
         if bucket.usesAttentionBias {
-            let bias = try MLMultiArray(
-                shape: [1, 1, 1, NSNumber(value: length)], dataType: .float32)
-            let pointer = bias.dataPointer.assumingMemoryBound(to: Float.self)
+            let pointer = bucket.attention.dataPointer.assumingMemoryBound(to: Float.self)
             for index in 0..<length { pointer[index] = index < ids.count ? 0 : -10_000 }
-            inputs["attention_bias"] = MLFeatureValue(multiArray: bias)
         } else {
-            let attention = try MLMultiArray(shape: [1, NSNumber(value: length)], dataType: .int32)
-            let pointer = attention.dataPointer.assumingMemoryBound(to: Int32.self)
+            let pointer = bucket.attention.dataPointer.assumingMemoryBound(to: Int32.self)
             for index in 0..<length { pointer[index] = index < ids.count ? 1 : 0 }
-            inputs["attention_mask"] = MLFeatureValue(multiArray: attention)
         }
-        let features = try MLDictionaryFeatureProvider(dictionary: inputs)
-        let prediction = try bucket.model.prediction(from: features)
+        let prediction = try bucket.model.prediction(from: bucket.features)
         let logits = try read("logits", output: prediction)
         let probabilities = try read("probabilities", output: prediction)
         guard logits.allSatisfy(\.isFinite), probabilities.allSatisfy(\.isFinite) else {

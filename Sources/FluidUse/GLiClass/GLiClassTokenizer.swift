@@ -7,6 +7,7 @@ public final class GLiClassTokenizer: Sendable {
     public let clsTokenId: Int
     public let sepTokenId: Int
     public let padTokenId: Int
+    private let labelSeparatorTokenId: Int
 
     private struct AddedToken: Sendable {
         let content: String
@@ -26,6 +27,7 @@ public final class GLiClassTokenizer: Sendable {
     private let splitRegex: NSRegularExpression
     private let byteCharacters: [String]
     private let cache = TokenCache()
+    private let plainTextCache = EncodingCache()
 
     private static let splitPattern =
         "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)|\\s+"
@@ -77,6 +79,7 @@ public final class GLiClassTokenizer: Sendable {
             return id
         }
         self.classTokenId = try required("<<LABEL>>")
+        self.labelSeparatorTokenId = try required("<<SEP>>")
         self.clsTokenId = try required("[CLS]")
         self.sepTokenId = try required("[SEP]")
         self.padTokenId = try required("[PAD]")
@@ -93,6 +96,40 @@ public final class GLiClassTokenizer: Sendable {
             }
         }
         return addSpecialTokens ? [clsTokenId] + ids + [sepTokenId] : ids
+    }
+
+    /// Encode GLiClass's dynamic-label template without repeatedly scanning ordinary text for
+    /// every tokenizer special token. Inputs containing an added token use the general encoder.
+    func encodeClassification(text: String, labels: [String], prompt: String?) -> [Int] {
+        let tail = (prompt ?? "") + text
+        let segments = labels + [tail]
+        guard !segments.contains(where: containsAddedToken) else {
+            let rendered = labels.map { "<<LABEL>>\($0)" }.joined() + "<<SEP>>" + tail
+            return encode(rendered)
+        }
+
+        var ids = [clsTokenId]
+        for label in labels {
+            ids.append(classTokenId)
+            ids.append(contentsOf: encodePlainText(label))
+        }
+        ids.append(labelSeparatorTokenId)
+        ids.append(contentsOf: encodePlainText(tail))
+        ids.append(sepTokenId)
+        return ids
+    }
+
+    private func containsAddedToken(_ text: String) -> Bool {
+        addedTokens.contains { text.contains($0.content) }
+    }
+
+    private func encodePlainText(_ text: String) -> [Int] {
+        let normalized = text.precomposedStringWithCanonicalMapping
+        if let value = plainTextCache.lookup(normalized) { return value }
+        var ids: [Int] = []
+        encodeText(normalized, into: &ids)
+        plainTextCache.store(normalized, ids)
+        return ids
     }
 
     private func encodeText(_ text: String, into ids: inout [Int]) {
@@ -165,6 +202,18 @@ public final class GLiClassTokenizer: Sendable {
 
         func lookup(_ key: String) -> [String]? { values.withLock { $0[key] } }
         func store(_ key: String, _ value: [String]) {
+            values.withLock {
+                if $0.count >= 8192 { $0.removeAll(keepingCapacity: true) }
+                $0[key] = value
+            }
+        }
+    }
+
+    private struct EncodingCache: Sendable {
+        private let values = OSAllocatedUnfairLock<[String: [Int]]>(initialState: [:])
+
+        func lookup(_ key: String) -> [Int]? { values.withLock { $0[key] } }
+        func store(_ key: String, _ value: [Int]) {
             values.withLock {
                 if $0.count >= 8192 { $0.removeAll(keepingCapacity: true) }
                 $0[key] = value

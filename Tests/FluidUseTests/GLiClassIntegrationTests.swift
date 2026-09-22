@@ -39,7 +39,8 @@ final class GLiClassIntegrationTests: XCTestCase {
     }
 
     func testRenderedSequenceMatchesReferencePipeline() async throws {
-        let manager = try await GLiClassManager.load(from: try modelDirectory())
+        let directory = try modelDirectory()
+        let manager = try await GLiClassManager.load(from: directory)
         let item = try JSONDecoder().decode(
             SequenceCase.self,
             from: Data(contentsOf: fixtureDirectory.appendingPathComponent("gliclass-sequence-case.json")))
@@ -53,6 +54,25 @@ final class GLiClassIntegrationTests: XCTestCase {
             labels: labels, prompt: "Which label best describes this placement?")
         XCTAssertEqual(sequence.ids, item.ids)
         XCTAssertEqual(sequence.markers, item.markers)
+
+        let tokenizer = try GLiClassTokenizer(tokenizerJsonURL: directory.appendingPathComponent("tokenizer.json"))
+        let cases: [(text: String, labels: [String], prompt: String?)] = [
+            (
+                "Avoid holes, keep the stack low and smooth, and clear lines.",
+                [
+                    "The I piece clears two lines and buries nothing.",
+                    "The T piece buries one cell and leaves two rows of space.",
+                ],
+                "Choose the best Tetris placement."
+            ),
+            ("café 中文 🧱", ["first option", "second option", "third option"], nil),
+            ("contains [MASK] token", ["label  one", "|||IP_ADDRESS|||"], "specials: "),
+        ]
+        for item in cases {
+            let optimized = manager.tokenSequence(text: item.text, labels: item.labels, prompt: item.prompt).ids
+            let rendered = item.labels.map { "<<LABEL>>\($0)" }.joined() + "<<SEP>>" + (item.prompt ?? "") + item.text
+            XCTAssertEqual(optimized, tokenizer.encode(rendered))
+        }
     }
 
     func testRealModelPrefersCleanPlacement() async throws {
@@ -71,6 +91,25 @@ final class GLiClassIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(good.probabilities[1], bad.probabilities[1])
         XCTAssertEqual(good.probabilities.reduce(0, +), 1, accuracy: 1e-5)
         XCTAssertEqual(good.bucketLength, 128)
+    }
+
+    func testRepeatedPredictionsDoNotRetainPreviousInputState() async throws {
+        let manager = try await GLiClassManager.load(from: try modelDirectory())
+        let labels = ["a poor placement", "a clean placement"]
+        let prompt = "Choose the better Tetris placement."
+        let first = try await manager.classify(
+            text: "The I piece clears two lines, buries nothing, and keeps the stack low.",
+            labels: labels, prompt: prompt)
+        _ = try await manager.classify(
+            text: "The T piece buries three cells and leaves only one row of space above a very uneven surface.",
+            labels: labels, prompt: prompt)
+        let repeated = try await manager.classify(
+            text: "The I piece clears two lines, buries nothing, and keeps the stack low.",
+            labels: labels, prompt: prompt)
+
+        XCTAssertEqual(repeated.logits, first.logits)
+        XCTAssertEqual(repeated.probabilities, first.probabilities)
+        XCTAssertEqual(repeated.selectedIndex, first.selectedIndex)
     }
 
     func testModelNamesCoverPublishedPrecisions() throws {

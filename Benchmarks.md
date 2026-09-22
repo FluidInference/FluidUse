@@ -239,6 +239,13 @@ or 20.96 ms per piece. GLiClass therefore ran the complete simulation **4.33× f
 47.7 pieces/second). Its individual Swift model call was slower—4.87 ms versus laya's 3.76 ms—but it
 made 0.92 calls per piece instead of 5.44 because it ranks the top two landings jointly.
 
+The Swift runtime now reuses fixed-shape Core ML input buffers and encodes the GLiClass label
+template by segment, avoiding a full scan against every tokenizer added token. Repeating seed 24 to
+the 1,000-piece cap preserved the original 399 lines and 937 model calls. Median complete-call latency
+for `fp16-mask` fell from 5.10 ms to **1.62 ms**. Plain FP16 measured **1.61 ms** (1.51 seconds for
+the full simulation), and LUT8 measured **1.81 ms**. This makes GLiClass faster than the 3.76 ms laya
+comparison per call as well as per placed piece.
+
 An ANE placement experiment replaces the integer attention mask with a ready-to-add floating-point
 bias. It removes one CPU cast, raises operation placement from 98.9% to 99.1% ANE and exactly preserves
 all 3,899 application-suite choices. Alternating FP16 and `fp16-mask` on seeds 1–3 reduced aggregate

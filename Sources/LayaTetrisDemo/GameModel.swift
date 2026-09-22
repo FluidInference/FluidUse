@@ -67,9 +67,9 @@ final class GameModel: ObservableObject {
     /// Off by default: greedy is the better player, and 1,199 pieces in 31 s is the honest demo.
     @Published var lookahead = 0
     /// Keep playing after a top-out: a new board on the next seed, totals carried forward.
-    /// A single game averages 568 pieces, so this is what makes a multi-minute clip possible.
-    @Published var marathon = false
-    @Published var seed: UInt64 = 24
+    /// Enabled for the visual demo so a run continues even when one seed tops out early.
+    @Published var marathon = true
+    @Published var seed: UInt64 = 1
     /// Extra delay per scored candidate so the scoring can be watched; 0 runs flat out.
     @Published var stepDelayMs = 0.0
     /// Pause after each placed piece.
@@ -88,6 +88,12 @@ final class GameModel: ObservableObject {
     private var runDecisionSeconds = 0.0
 
     static let question = LayaTetris.question
+
+    /// End-to-end model time per placed piece. This is the comparable speed number: GLiClass
+    /// usually needs one encoder call while laya scores several surviving landings separately.
+    var modelMillisecondsPerPiece: Double {
+        totalPieces > 0 ? runDecisionSeconds * 1000 / Double(totalPieces) : 0
+    }
 
     var hasLoadedModel: Bool {
         switch policy {
@@ -303,13 +309,12 @@ final class GameModel: ObservableObject {
                 }
                 let sentences = scored.map { game.describe($0, piece: piece, style: harness ? .graded : .plain) }
                 evaluating = scored[0]
-                let t0 = DispatchTime.now().uptimeNanoseconds
                 do {
-                    let answer = try await gliClassManager.classify(
+                    let (answer, ms) = try await timedClassification(
+                        manager: gliClassManager,
                         text: "Avoid holes, keep the stack low and smooth, and clear lines.", labels: sentences,
                         prompt: "Choose the best Tetris placement.")
                     guard run == generation, !Task.isCancelled else { return }
-                    let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
                     record(ms: ms, tokens: answer.tokenCount, bucket: answer.bucketLength)
                     for (index, candidate) in scored.enumerated() {
                         candidates.append(
@@ -331,12 +336,11 @@ final class GameModel: ObservableObject {
                     guard !Task.isCancelled, run == generation else { return }
                     evaluating = candidate
                     let sentence = game.describe(candidate, piece: piece, style: harness ? .graded : .plain)
-                    let t0 = DispatchTime.now().uptimeNanoseconds
                     do {
-                        let answer = try await manager.answer(state: sentence, question: Self.question)
+                        let (answer, ms) = try await timedAnswer(
+                            manager: manager, state: sentence, question: Self.question)
                         // Paused or reset while the model was busy: drop the result quietly.
                         guard run == generation, !Task.isCancelled else { return }
-                        let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
                         record(ms: ms, tokens: answer.tokenCount, bucket: answer.bucketLength)
                         let p = answer.noul ?? 0
                         candidates.append(
@@ -385,13 +389,11 @@ final class GameModel: ObservableObject {
                     for option in follow.prefix(12) {
                         if Task.isCancelled || run != generation { return }
                         let sentence = game.describe(option, piece: next, style: harness ? .graded : .plain)
-                        let t0 = DispatchTime.now().uptimeNanoseconds
                         do {
-                            let reply = try await manager.answer(state: sentence, question: Self.question)
+                            let (reply, ms) = try await timedAnswer(
+                                manager: manager, state: sentence, question: Self.question)
                             guard run == generation, !Task.isCancelled else { return }
-                            record(
-                                ms: Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6,
-                                tokens: reply.tokenCount, bucket: reply.bucketLength)
+                            record(ms: ms, tokens: reply.tokenCount, bucket: reply.bucketLength)
                             bestNext = max(bestNext, reply.noul ?? 0)
                         } catch is CancellationError {
                             return
@@ -451,6 +453,37 @@ final class GameModel: ObservableObject {
         }
         guard run == generation, !Task.isCancelled else { return }
         if isOver { log.insert("Topped out after \(pieces) pieces, \(lines) lines.", at: 0) }
+    }
+
+    /// Measure away from MainActor so SwiftUI rendering time is not reported as model latency.
+    private func timedClassification(
+        manager: GLiClassManager, text: String, labels: [String], prompt: String
+    ) async throws -> (GLiClassAnswer, Double) {
+        let inference = Task.detached(priority: .userInitiated) {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let answer = try await manager.classify(text: text, labels: labels, prompt: prompt)
+            return (answer, Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6)
+        }
+        return try await withTaskCancellationHandler {
+            try await inference.value
+        } onCancel: {
+            inference.cancel()
+        }
+    }
+
+    private func timedAnswer(
+        manager: LayaManager, state: String, question: LayaQuestion
+    ) async throws -> (LayaAnswer, Double) {
+        let inference = Task.detached(priority: .userInitiated) {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let answer = try await manager.answer(state: state, question: question)
+            return (answer, Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6)
+        }
+        return try await withTaskCancellationHandler {
+            try await inference.value
+        } onCancel: {
+            inference.cancel()
+        }
     }
 
     /// Terminal console for presentations (tmux next to asitop): one block per placed piece,
