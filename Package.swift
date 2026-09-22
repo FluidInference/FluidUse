@@ -39,6 +39,11 @@ let package = Package(
             dependencies: ["FluidUse", "Game2048"],
             exclude: ["README.md"]
         ),
+        .executableTarget(
+            name: "Decision2048BenchDemo",
+            dependencies: ["FluidUse", "Game2048"],
+            exclude: ["README.md"]
+        ),
         .testTarget(
             name: "FluidUseTests", dependencies: ["FluidUse", "LayaTetris"],
             resources: [.copy("Fixtures")]
@@ -47,5 +52,6 @@ let package = Package(
         .testTarget(name: "LayaTetrisDemoTests", dependencies: ["LayaTetrisDemo", "LayaTetris"]),
         .testTarget(name: "Game2048Tests", dependencies: ["Game2048"]),
         .testTarget(name: "GLiClass2048DemoTests", dependencies: ["GLiClass2048Demo", "Game2048"]),
+        .testTarget(name: "Decision2048BenchDemoTests", dependencies: ["Decision2048BenchDemo", "Game2048"]),
     ]
 )

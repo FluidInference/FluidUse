@@ -86,6 +86,7 @@ swift run -c release FluidUseLaya 2048 --model-dir /path/to/gliclass --precision
 swift run -c release FluidUseLaya benchmark --suites <mobius>/benchmark/suites.jsonl --reference <mobius>/benchmark/reference-rows.jsonl
 swift run -c release LayaTetrisDemo                              # SwiftUI: laya plays Tetris, live decisions
 swift run -c release GLiClass2048Demo                            # SwiftUI: GLiClass plays 2048
+swift run -c release Decision2048BenchDemo                       # SwiftUI: GLiClass vs laya at 2048
 ```
 
 `LayaTetrisDemo` ([Sources/LayaTetrisDemo](Sources/LayaTetrisDemo), [25 s clip](Media/laya-tetris.mp4))

@@ -290,6 +290,52 @@ agreed with the expectimax leader on 97.7% of comparisons. This is 90% more move
 1,702-move seed-9 demo. The real SwiftUI run lasts **33.6 seconds** instead of 16.5 seconds, with no
 artificial delay and 2.10 ms of model work per move.
 
+#### 2048 Bench: GLiClass vs laya
+
+`Decision2048BenchDemo` runs GLiClass Edge Apps v2 LUT8 and laya Multilingual E8 side by side. Both
+boards start from the same seed and use the same top-two one-move expectimax shortlist. The comparison
+uses each model's raw final decision without a confidence fallback: GLiClass compares both descriptions
+in one call, while laya applies its established `noul` question to each description in two calls.
+
+Isolated Core ML runs over seeds 1–10 avoid accelerator contention:
+
+| Model | Mean score | Mean moves | Best tile | Model ms/move | Expectimax agreement |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **GLiClass LUT8** | **10,740** | **651.5** | **2048** | **1.77** | **79.2%** |
+| laya E8 | 2,834 | 232.5 | 512 | 7.63 | 46.9% |
+
+GLiClass scores **3.79×** as many points, survives **2.80×** as many moves, and uses **4.31×** less
+model time per move. The speed difference combines a smaller model with fewer calls: GLiClass is 32.7M
+parameters and compares the candidates jointly, while laya is about 322M parameters and scores each
+candidate independently. A calibration run of laya's one-pass `choice` head performed worse on seed 1
+(1,416 points and 144 moves versus 3,032 points and 244 moves for `noul`), so the demo retains laya's
+existing candidate-scoring contract. The shortlist remains a strong conventional policy and is a
+material part of both results; this measures fit for the same constrained decision, not general model
+quality. Full results and protocol are in
+[`Benchmarks/decision-models-2048.json`](Benchmarks/decision-models-2048.json).
+
+A separate conversion gate screened every locally runnable sub-1B candidate on seeds 1–3 with the
+same raw top-two choice. It uses Core ML where a verified package already exists and PyTorch MPS only
+to reject candidates before investing in a new exporter. PyTorch latency is therefore not a Core ML
+projection.
+
+| Candidate | Runtime | Mean score | Mean moves | Best tile | Median call | Expectimax agreement |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Expectimax control | no model | **21,339** | **1,170.7** | **2048** | — | 100% |
+| **GLiClass Edge Apps v2 LUT8** | **Core ML** | **14,701** | **841.7** | **2048** | **1.78 ms** | 77.1% |
+| Kev 0.8B | PyTorch MPS | 7,487 | 494.7 | 1024 | 144.79 ms | 79.3% |
+| laya E8 | Core ML | 3,239 | 253.3 | 512 | 3.84 ms × 2 | 44.1% |
+| GLiNER 2.5 small | PyTorch MPS | 1,952 | 175.0 | 256 | 20.13 ms | 4.3% |
+| GLiClass Base v3 | PyTorch MPS | 1,695 | 163.3 | 256 | 41.23 ms | 24.5% |
+| Kev 0.5B FP16 | Core ML | 1,333 | 139.0 | 128 | 7.49 ms | 6.3% |
+
+GLiClass Edge is the conversion winner: it scores almost twice as high as the second-place model and
+is roughly 81× faster than Kev 0.8B's current Apple path. GLiClass Base and GLiNER small failed the
+quality gate, so their incompatible DeBERTa exporters were not pursued. Kev 0.8B is the only useful
+future challenger, but it needs a new Qwen3.5 hybrid exporter and still loses decisively on this game.
+The higher expectimax-only result shows that 2048-specific training of the existing Edge model is a
+better next quality experiment than converting another untuned general model.
+
 ## Reproduce
 
 The benchmark command writes completion counts and returns a failure exit status when any

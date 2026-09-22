@@ -1,0 +1,630 @@
+{
+  "title": "2048 Bench for Decision Models",
+  "date": "2026-09-22",
+  "hardware": "local Apple Silicon Mac; Core ML CPU + Neural Engine",
+  "protocol": {
+    "seeds": "1...10",
+    "board": "standard deterministic 4x4 2048 with identical initial seeds",
+    "shortlist": "top two legal moves ranked by the same one-move expectimax heuristic",
+    "decision": "raw model choice; no confidence fallback",
+    "scheduling": "models benchmarked in separate processes to avoid accelerator contention",
+    "gliclass": "GLiClass Edge Apps v2, LUT8, L128, one comparison call per move",
+    "laya": "Laya Multilingual, E8, L128, one noul call per candidate (normally two calls per move)"
+  },
+  "summary": {
+    "gliclass": {
+      "mean_score": 10740,
+      "mean_moves": 651.5,
+      "best_tile": 2048,
+      "mean_model_ms_per_move": 1.7712037598494939,
+      "mean_heuristic_agreement": 0.792319591521145,
+      "games_reaching_2048": 1,
+      "games": [
+        {
+          "elapsed_s": 0.9885519742965698,
+          "game_over": true,
+          "heuristic_agreement": 0.755,
+          "maximum_tile": 256,
+          "median_ms": 1.781208,
+          "model_calls": 400,
+          "moves": 400,
+          "score": 5160,
+          "seed": 1
+        },
+        {
+          "elapsed_s": 1.273598074913025,
+          "game_over": true,
+          "heuristic_agreement": 0.7957198443579766,
+          "maximum_tile": 512,
+          "median_ms": 1.773541,
+          "model_calls": 514,
+          "moves": 514,
+          "score": 7280,
+          "seed": 2
+        },
+        {
+          "elapsed_s": 4.1987210512161255,
+          "game_over": true,
+          "heuristic_agreement": 0.7616387337057728,
+          "maximum_tile": 2048,
+          "median_ms": 1.793709,
+          "model_calls": 1611,
+          "moves": 1611,
+          "score": 31664,
+          "seed": 3
+        },
+        {
+          "elapsed_s": 1.8607980012893677,
+          "game_over": true,
+          "heuristic_agreement": 0.7816411682892906,
+          "maximum_tile": 1024,
+          "median_ms": 1.816666,
+          "model_calls": 719,
+          "moves": 721,
+          "score": 12132,
+          "seed": 4
+        },
+        {
+          "elapsed_s": 1.6692719459533691,
+          "game_over": true,
+          "heuristic_agreement": 0.7762039660056658,
+          "maximum_tile": 1024,
+          "median_ms": 1.741416,
+          "model_calls": 706,
+          "moves": 707,
+          "score": 11996,
+          "seed": 5
+        },
+        {
+          "elapsed_s": 2.0430920124053955,
+          "game_over": true,
+          "heuristic_agreement": 0.815028901734104,
+          "maximum_tile": 1024,
+          "median_ms": 1.736417,
+          "model_calls": 865,
+          "moves": 865,
+          "score": 14748,
+          "seed": 6
+        },
+        {
+          "elapsed_s": 1.1841861009597778,
+          "game_over": true,
+          "heuristic_agreement": 0.8329809725158562,
+          "maximum_tile": 512,
+          "median_ms": 1.785416,
+          "model_calls": 473,
+          "moves": 473,
+          "score": 7024,
+          "seed": 7
+        },
+        {
+          "elapsed_s": 1.1801189184188843,
+          "game_over": true,
+          "heuristic_agreement": 0.7854166666666667,
+          "maximum_tile": 512,
+          "median_ms": 1.772458,
+          "model_calls": 480,
+          "moves": 480,
+          "score": 7032,
+          "seed": 8
+        },
+        {
+          "elapsed_s": 1.2992440462112427,
+          "game_over": true,
+          "heuristic_agreement": 0.8236472945891784,
+          "maximum_tile": 512,
+          "median_ms": 1.778459,
+          "model_calls": 499,
+          "moves": 499,
+          "score": 7344,
+          "seed": 9
+        },
+        {
+          "elapsed_s": 0.5899989604949951,
+          "game_over": true,
+          "heuristic_agreement": 0.7959183673469388,
+          "maximum_tile": 256,
+          "median_ms": 1.74025,
+          "model_calls": 245,
+          "moves": 245,
+          "score": 3020,
+          "seed": 10
+        }
+      ]
+    },
+    "laya": {
+      "mean_score": 2834,
+      "mean_moves": 232.5,
+      "best_tile": 512,
+      "mean_model_ms_per_move": 7.6284832,
+      "mean_heuristic_agreement": 0.4694772693383582,
+      "games_reaching_2048": 0,
+      "games": [
+        {
+          "elapsed_s": 2.1290489435195923,
+          "game_over": true,
+          "heuristic_agreement": 0.45081967213114754,
+          "maximum_tile": 256,
+          "median_ms": 3.88675,
+          "model_calls": 488,
+          "moves": 244,
+          "score": 3032,
+          "seed": 1
+        },
+        {
+          "elapsed_s": 3.055999994277954,
+          "game_over": true,
+          "heuristic_agreement": 0.41823056300268097,
+          "maximum_tile": 512,
+          "median_ms": 3.834625,
+          "model_calls": 746,
+          "moves": 373,
+          "score": 5324,
+          "seed": 2
+        },
+        {
+          "elapsed_s": 1.197208046913147,
+          "game_over": true,
+          "heuristic_agreement": 0.45454545454545453,
+          "maximum_tile": 128,
+          "median_ms": 3.809667,
+          "model_calls": 286,
+          "moves": 143,
+          "score": 1360,
+          "seed": 3
+        },
+        {
+          "elapsed_s": 1.6813820600509644,
+          "game_over": true,
+          "heuristic_agreement": 0.5495049504950495,
+          "maximum_tile": 128,
+          "median_ms": 3.785125,
+          "model_calls": 404,
+          "moves": 202,
+          "score": 2120,
+          "seed": 4
+        },
+        {
+          "elapsed_s": 1.322732925415039,
+          "game_over": true,
+          "heuristic_agreement": 0.5067567567567568,
+          "maximum_tile": 128,
+          "median_ms": 3.898833,
+          "model_calls": 296,
+          "moves": 148,
+          "score": 1404,
+          "seed": 5
+        },
+        {
+          "elapsed_s": 2.2018280029296875,
+          "game_over": true,
+          "heuristic_agreement": 0.42578125,
+          "maximum_tile": 256,
+          "median_ms": 3.841667,
+          "model_calls": 512,
+          "moves": 256,
+          "score": 3100,
+          "seed": 6
+        },
+        {
+          "elapsed_s": 2.8397940397262573,
+          "game_over": true,
+          "heuristic_agreement": 0.43142857142857144,
+          "maximum_tile": 512,
+          "median_ms": 3.773333,
+          "model_calls": 700,
+          "moves": 350,
+          "score": 5020,
+          "seed": 7
+        },
+        {
+          "elapsed_s": 1.9579269886016846,
+          "game_over": true,
+          "heuristic_agreement": 0.4918032786885246,
+          "maximum_tile": 256,
+          "median_ms": 3.75675,
+          "model_calls": 488,
+          "moves": 244,
+          "score": 3048,
+          "seed": 8
+        },
+        {
+          "elapsed_s": 1.3535670042037964,
+          "game_over": true,
+          "heuristic_agreement": 0.4634146341463415,
+          "maximum_tile": 128,
+          "median_ms": 3.744125,
+          "model_calls": 328,
+          "moves": 164,
+          "score": 1536,
+          "seed": 9
+        },
+        {
+          "elapsed_s": 1.7707109451293945,
+          "game_over": true,
+          "heuristic_agreement": 0.5024875621890548,
+          "maximum_tile": 256,
+          "median_ms": 3.811541,
+          "model_calls": 402,
+          "moves": 201,
+          "score": 2396,
+          "seed": 10
+        }
+      ]
+    },
+    "gliclass_score_ratio": 3.78969654199012,
+    "gliclass_move_ratio": 2.8021505376344087,
+    "gliclass_model_time_speedup": 4.3069484002496825
+  },
+  "calibration_check": {
+    "laya_choice_seed_1": {
+      "elapsed_s": 0.6204420328140259,
+      "game_over": true,
+      "heuristic_agreement": 0.034722222222222224,
+      "maximum_tile": 128,
+      "median_ms": 3.679375,
+      "model_calls": 144,
+      "moves": 144,
+      "score": 1416,
+      "seed": 1
+    },
+    "laya_noul_seed_1": {
+      "elapsed_s": 2.172453999519348,
+      "game_over": true,
+      "heuristic_agreement": 0.45081967213114754,
+      "maximum_tile": 256,
+      "median_ms": 3.882584,
+      "model_calls": 488,
+      "moves": 244,
+      "score": 3032,
+      "seed": 1
+    },
+    "selection": "noul was retained because it outperformed Laya choice on the calibration seed and matches the existing Laya candidate-scoring contract."
+  },
+  "candidate_screen": {
+    "purpose": "2048-specific conversion gate. Models that lose badly on quality are not converted solely for this benchmark.",
+    "protocol": "Seeds 1-3, same deterministic engine, raw final model decision over the same top-two one-move expectimax shortlist, no confidence fallback.",
+    "latency_note": "Runtime columns differ. Only rows with the same runtime are directly comparable for latency; PyTorch MPS numbers are quality-screen measurements, not projected Core ML latency.",
+    "ranking": [
+      {
+        "model": "Expectimax control",
+        "runtime": "none",
+        "note": "No model; top-ranked shortlist move",
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "mean_score": 21338.666666666668,
+        "mean_moves": 1170.6666666666667,
+        "best_tile": 2048,
+        "mean_run_median_call_ms": 0,
+        "mean_expectimax_agreement": 1,
+        "games": [
+          {
+            "elapsed_s": 0.6867939233779907,
+            "game_over": true,
+            "heuristic_agreement": 1,
+            "maximum_tile": 2048,
+            "median_ms": 0,
+            "model_calls": 0,
+            "moves": 1797,
+            "score": 35364,
+            "seed": 1
+          },
+          {
+            "elapsed_s": 0.4042009115219116,
+            "game_over": true,
+            "heuristic_agreement": 1,
+            "maximum_tile": 1024,
+            "median_ms": 0,
+            "model_calls": 0,
+            "moves": 986,
+            "score": 16440,
+            "seed": 2
+          },
+          {
+            "elapsed_s": 0.29052698612213135,
+            "game_over": true,
+            "heuristic_agreement": 1,
+            "maximum_tile": 1024,
+            "median_ms": 0,
+            "model_calls": 0,
+            "moves": 729,
+            "score": 12212,
+            "seed": 3
+          }
+        ]
+      },
+      {
+        "model": "GLiClass Edge Apps v2 LUT8",
+        "runtime": "Core ML CPU+ANE",
+        "note": "32.7M; one joint comparison call",
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "mean_score": 14701.333333333334,
+        "mean_moves": 841.6666666666666,
+        "best_tile": 2048,
+        "mean_run_median_call_ms": 1.7828193333333333,
+        "mean_expectimax_agreement": 0.7707861926879165,
+        "games": [
+          {
+            "elapsed_s": 0.9885519742965698,
+            "game_over": true,
+            "heuristic_agreement": 0.755,
+            "maximum_tile": 256,
+            "median_ms": 1.781208,
+            "model_calls": 400,
+            "moves": 400,
+            "score": 5160,
+            "seed": 1
+          },
+          {
+            "elapsed_s": 1.273598074913025,
+            "game_over": true,
+            "heuristic_agreement": 0.7957198443579766,
+            "maximum_tile": 512,
+            "median_ms": 1.773541,
+            "model_calls": 514,
+            "moves": 514,
+            "score": 7280,
+            "seed": 2
+          },
+          {
+            "elapsed_s": 4.1987210512161255,
+            "game_over": true,
+            "heuristic_agreement": 0.7616387337057728,
+            "maximum_tile": 2048,
+            "median_ms": 1.793709,
+            "model_calls": 1611,
+            "moves": 1611,
+            "score": 31664,
+            "seed": 3
+          }
+        ]
+      },
+      {
+        "model": "Kev 0.8B",
+        "runtime": "PyTorch MPS",
+        "note": "Unconverted quality screen; one typed-choice call",
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "mean_score": 7486.666666666667,
+        "mean_moves": 494.6666666666667,
+        "best_tile": 1024,
+        "mean_run_median_call_ms": 144.78913881854774,
+        "mean_expectimax_agreement": 0.7934000368444089,
+        "games": [
+          {
+            "seed": 1,
+            "score": 3396,
+            "moves": 281,
+            "maximum_tile": 256,
+            "model_calls": 281,
+            "median_ms": 149.95754096889868,
+            "heuristic_agreement": 0.7758007117437722,
+            "elapsed_s": 46.39561279199552
+          },
+          {
+            "seed": 2,
+            "score": 12100,
+            "moves": 722,
+            "maximum_tile": 1024,
+            "model_calls": 721,
+            "median_ms": 143.03529198514298,
+            "heuristic_agreement": 0.7864077669902912,
+            "elapsed_s": 111.57678733300418
+          },
+          {
+            "seed": 3,
+            "score": 6964,
+            "moves": 481,
+            "maximum_tile": 512,
+            "model_calls": 478,
+            "median_ms": 141.3745835016016,
+            "heuristic_agreement": 0.8179916317991632,
+            "elapsed_s": 71.87093804200413
+          }
+        ]
+      },
+      {
+        "model": "Laya E8",
+        "runtime": "Core ML CPU+ANE",
+        "note": "322M; two independent noul calls per move",
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "mean_score": 3238.6666666666665,
+        "mean_moves": 253.33333333333334,
+        "best_tile": 512,
+        "mean_run_median_call_ms": 3.8436806666666667,
+        "mean_expectimax_agreement": 0.4411985632264277,
+        "games": [
+          {
+            "elapsed_s": 2.1290489435195923,
+            "game_over": true,
+            "heuristic_agreement": 0.45081967213114754,
+            "maximum_tile": 256,
+            "median_ms": 3.88675,
+            "model_calls": 488,
+            "moves": 244,
+            "score": 3032,
+            "seed": 1
+          },
+          {
+            "elapsed_s": 3.055999994277954,
+            "game_over": true,
+            "heuristic_agreement": 0.41823056300268097,
+            "maximum_tile": 512,
+            "median_ms": 3.834625,
+            "model_calls": 746,
+            "moves": 373,
+            "score": 5324,
+            "seed": 2
+          },
+          {
+            "elapsed_s": 1.197208046913147,
+            "game_over": true,
+            "heuristic_agreement": 0.45454545454545453,
+            "maximum_tile": 128,
+            "median_ms": 3.809667,
+            "model_calls": 286,
+            "moves": 143,
+            "score": 1360,
+            "seed": 3
+          }
+        ]
+      },
+      {
+        "model": "GLiNER 2.5 small",
+        "runtime": "PyTorch MPS",
+        "note": "73.9M; native classification schema",
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "mean_score": 1952,
+        "mean_moves": 175,
+        "best_tile": 256,
+        "mean_run_median_call_ms": 20.13339550467208,
+        "mean_expectimax_agreement": 0.04250380400139823,
+        "games": [
+          {
+            "seed": 1,
+            "score": 2068,
+            "moves": 172,
+            "maximum_tile": 256,
+            "model_calls": 172,
+            "median_ms": 20.176041987724602,
+            "heuristic_agreement": 0.029069767441860465,
+            "elapsed_s": 4.699524333002046
+          },
+          {
+            "seed": 2,
+            "score": 2424,
+            "moves": 208,
+            "maximum_tile": 256,
+            "model_calls": 208,
+            "median_ms": 20.11747850337997,
+            "heuristic_agreement": 0.04326923076923077,
+            "elapsed_s": 4.839219124987721
+          },
+          {
+            "seed": 3,
+            "score": 1364,
+            "moves": 145,
+            "maximum_tile": 128,
+            "model_calls": 145,
+            "median_ms": 20.106666022911668,
+            "heuristic_agreement": 0.05517241379310345,
+            "elapsed_s": 3.6954182910267264
+          }
+        ]
+      },
+      {
+        "model": "GLiClass Base v3",
+        "runtime": "PyTorch MPS",
+        "note": "Untuned 194M DeBERTa GLiClass",
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "mean_score": 1694.6666666666667,
+        "mean_moves": 163.33333333333334,
+        "best_tile": 256,
+        "mean_run_median_call_ms": 41.232034661031015,
+        "mean_expectimax_agreement": 0.2445918740648734,
+        "games": [
+          {
+            "seed": 1,
+            "score": 2860,
+            "moves": 232,
+            "maximum_tile": 256,
+            "model_calls": 232,
+            "median_ms": 40.941228973679245,
+            "heuristic_agreement": 0.1896551724137931,
+            "elapsed_s": 10.393720333988313
+          },
+          {
+            "seed": 2,
+            "score": 1500,
+            "moves": 159,
+            "maximum_tile": 128,
+            "model_calls": 159,
+            "median_ms": 41.176917031407356,
+            "heuristic_agreement": 0.3522012578616352,
+            "elapsed_s": 7.260970915958751
+          },
+          {
+            "seed": 3,
+            "score": 724,
+            "moves": 99,
+            "maximum_tile": 64,
+            "model_calls": 99,
+            "median_ms": 41.57795797800645,
+            "heuristic_agreement": 0.1919191919191919,
+            "elapsed_s": 4.580817374982871
+          }
+        ]
+      },
+      {
+        "model": "Kev 0.5B FP16",
+        "runtime": "Core ML CPU+ANE",
+        "note": "494M merged; one typed-choice call",
+        "seeds": [
+          1,
+          2,
+          3
+        ],
+        "mean_score": 1333.3333333333333,
+        "mean_moves": 139,
+        "best_tile": 128,
+        "mean_run_median_call_ms": 7.4874653267518925,
+        "mean_expectimax_agreement": 0.0633324444107811,
+        "games": [
+          {
+            "seed": 1,
+            "score": 1816,
+            "moves": 172,
+            "maximum_tile": 128,
+            "model_calls": 171,
+            "median_ms": 7.6665839878842235,
+            "heuristic_agreement": 0.04678362573099415,
+            "elapsed_s": 1.8516567919868976
+          },
+          {
+            "seed": 2,
+            "score": 1308,
+            "moves": 136,
+            "maximum_tile": 128,
+            "model_calls": 136,
+            "median_ms": 7.457478990545496,
+            "heuristic_agreement": 0.051470588235294115,
+            "elapsed_s": 1.356230916979257
+          },
+          {
+            "seed": 3,
+            "score": 876,
+            "moves": 109,
+            "maximum_tile": 64,
+            "model_calls": 109,
+            "median_ms": 7.3383330018259585,
+            "heuristic_agreement": 0.09174311926605505,
+            "elapsed_s": 1.1227208339842036
+          }
+        ]
+      }
+    ],
+    "decision": "Keep GLiClass Edge Apps v2. It leads every tested model on three-seed mean score, moves, maximum tile, and deployable latency. Do not convert GLiClass Base or GLiNER 2.5 small. Kev 0.8B is the strongest challenger but loses 2x on mean score and requires a new Qwen3.5 hybrid Core ML exporter."
+  }
+}
