@@ -123,13 +123,12 @@ struct LayaTetrisCommand {
                 layaManager = try await LayaManager.load(configuration: configuration)
             }
         } else if options.policy == "gliclass" {
-            let configuration = GLiClassManager.Configuration(lengths: options.lengths, precision: options.precision)
-            if let directory = options.modelDirectory {
-                gliClassManager = try await GLiClassManager.load(
-                    from: URL(fileURLWithPath: directory), configuration: configuration)
-            } else {
-                gliClassManager = try await GLiClassManager.load(configuration: configuration)
+            guard let directory = options.modelDirectory else {
+                throw GLiClassError.invalidAsset("--policy gliclass currently requires --model-dir")
             }
+            gliClassManager = try await GLiClassManager.load(
+                from: URL(fileURLWithPath: directory),
+                configuration: .init(lengths: options.lengths, precision: options.precision))
         }
         let gliClassLabels = [
             "a poor Tetris placement that creates holes or a dangerous tall stack",
@@ -370,9 +369,8 @@ struct LayaTetrisCommand {
             Plays headless 10x20 Tetris. With --policy laya (default) every legal landing is described in
             one sentence and scored by laya's P(clean); the best-scoring landing is played.
 
-            With --policy gliclass, the published GLiClass bucket downloads on first use. --model-dir
-            can instead point to local tokenizer.json and Core ML bucket assets. The same candidates
-            and descriptions are scored for an apples-to-apples game.
+            With --policy gliclass, --model-dir must hold tokenizer.json and the GLiClass Edge Apps v2
+            Core ML bucket. The same candidates and descriptions are scored for an apples-to-apples game.
               --gliclass-choice  compare candidate descriptions in one encoder pass
               --gliclass-candidates N  heuristic prefilter width for choice mode (default 2; max 25)
               --gliclass-margin P  minimum probability margin before GLiClass overrides the heuristic leader

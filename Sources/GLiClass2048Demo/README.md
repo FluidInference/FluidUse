@@ -5,13 +5,8 @@ heuristic shortlists the strongest legal swipes; GLiClass compares their resulti
 in one L128 encoder pass.
 
 ```bash
-swift run -c release GLiClass2048Demo
+GLICLASS_MODEL_DIR=/path/to/assets GLICLASS_PRECISION=lut8 swift run -c release GLiClass2048Demo
 ```
-
-The default L128 LUT8 package and tokenizer download from
-[FluidInference/gliclass-edge-apps-coreml](https://huggingface.co/FluidInference/gliclass-edge-apps-coreml)
-on first use and are cached locally. Set `GLICLASS_MODEL_DIR=/path/to/assets` to use local assets,
-or `GLICLASS_PRECISION=fp16` for the published FP16 bucket.
 
 Set `GAME2048_AUTORUN=1` to load and play immediately, `GAME2048_SEED=<n>` to choose the deterministic
 tile sequence, `GAME2048_CANDIDATES=2|3|4` to choose the comparison width, and

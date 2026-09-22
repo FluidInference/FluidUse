@@ -163,16 +163,13 @@ final class GameModel: ObservableObject {
                 let started = Date()
                 switch policy {
                 case .gliclass:
-                    let environment = ProcessInfo.processInfo.environment
-                    let precision = environment["GLICLASS_PRECISION"] ?? "fp16"
-                    let configuration = GLiClassManager.Configuration(lengths: [128], precision: precision)
-                    let loaded: GLiClassManager
-                    if let directory = environment["GLICLASS_MODEL_DIR"], !directory.isEmpty {
-                        loaded = try await GLiClassManager.load(
-                            from: URL(fileURLWithPath: directory), configuration: configuration)
-                    } else {
-                        loaded = try await GLiClassManager.load(configuration: configuration)
-                    }
+                    guard let directory = ProcessInfo.processInfo.environment["GLICLASS_MODEL_DIR"],
+                        !directory.isEmpty
+                    else { throw GLiClassError.invalidAsset("Set GLICLASS_MODEL_DIR for the GLiClass demo") }
+                    let precision = ProcessInfo.processInfo.environment["GLICLASS_PRECISION"] ?? "fp16"
+                    let loaded = try await GLiClassManager.load(
+                        from: URL(fileURLWithPath: directory),
+                        configuration: .init(lengths: [128], precision: precision))
                     _ = try await loaded.classify(
                         text: "The piece buries nothing and keeps the stack low.",
                         labels: ["a poor Tetris placement", "a clean Tetris placement"],
