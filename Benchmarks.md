@@ -281,6 +281,15 @@ seed scored 7,268 and stopped at tile 512. The default is intentionally disclose
 seed rather than a representative mean. Full per-seed results are in
 [`Benchmarks/gliclass-2048.json`](Benchmarks/gliclass-2048.json).
 
+Adding a one-move expectimax shortlist extends the game without delaying inference: the harness
+averages the best reply across every possible 2/4 tile spawn before offering its top two swipes to
+GLiClass. On seeds 1–10, expectimax alone averaged 25,382 points and 1,318 moves; GLiClass with a 0.50
+override margin averaged 18,970 points and 1,012 moves at 1.81 ms median. The longer visual-demo seed
+was selected from seeds 1–60: seed 46 scored 70,864 over **3,230 moves**, reached tile **4096**, and
+agreed with the expectimax leader on 97.7% of comparisons. This is 90% more moves than the original
+1,702-move seed-9 demo. The real SwiftUI run lasts **33.6 seconds** instead of 16.5 seconds, with no
+artificial delay and 2.10 ms of model work per move.
+
 ## Reproduce
 
 The benchmark command writes completion counts and returns a failure exit status when any

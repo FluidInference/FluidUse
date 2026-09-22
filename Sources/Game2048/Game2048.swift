@@ -56,6 +56,34 @@ public struct Game2048: Sendable {
 
     public func candidates() -> [Candidate] { Self.legalCandidates(on: board) }
 
+    /// Expected strength of the best following move after every possible random tile spawn.
+    /// Standard 2048 uses a 90% chance of spawning 2 and 10% chance of spawning 4.
+    public func expectedReplyHeuristic(after candidate: Candidate) -> Double {
+        var empty: [(Int, Int)] = []
+        for row in 0..<Self.size {
+            for column in 0..<Self.size where candidate.board[row][column] == 0 { empty.append((row, column)) }
+        }
+        guard !empty.isEmpty else { return candidate.features.heuristic }
+        var total = 0.0
+        for (row, column) in empty {
+            for (tile, probability) in [(2, 0.9), (4, 0.1)] {
+                var spawned = candidate.board
+                spawned[row][column] = tile
+                let replies = Self.legalCandidates(on: spawned)
+                let best =
+                    replies.map(\.features.heuristic).max()
+                    ?? Self.features(board: spawned, scoreGained: 0).heuristic
+                total += probability * best / Double(empty.count)
+            }
+        }
+        return total
+    }
+
+    public func strategicScore(_ candidate: Candidate, lookahead: Bool) -> Double {
+        guard lookahead else { return candidate.features.heuristic }
+        return candidate.features.heuristic * 0.35 + expectedReplyHeuristic(after: candidate) * 0.65
+    }
+
     public mutating func apply(_ candidate: Candidate) {
         guard !isOver else { return }
         board = candidate.board

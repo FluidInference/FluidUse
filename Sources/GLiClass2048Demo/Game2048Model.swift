@@ -29,9 +29,10 @@ final class Game2048Model: ObservableObject {
 
     @Published var policy: Policy = .gliclass
     @Published var candidateCount = 2
-    @Published var minimumMargin: Float = 0.40
+    @Published var minimumMargin: Float = 0.50
+    @Published var lookahead = true
     @Published var marathon = false
-    @Published var seed: UInt64 = 9
+    @Published var seed: UInt64 = 46
     @Published var moveDelayMs = 0.0
 
     private var game = Game2048(seed: 1)
@@ -75,8 +76,9 @@ final class Game2048Model: ObservableObject {
                 try? await Task.sleep(for: .seconds(seconds))
                 print(
                     String(
-                        format: "autorun: score %d · %d moves · max %d · %d calls · %.2f model ms/move · %@",
-                        score, moves, maximumTile, modelCalls, modelMillisecondsPerMove,
+                        format:
+                            "autorun: score %d · %d moves · max %d · %d calls · %.2f model ms/move · %.2f s · %@",
+                        score, moves, maximumTile, modelCalls, modelMillisecondsPerMove, elapsedSeconds,
                         (isOver ? "game over" : "still playing") as NSString))
                 exit(0)
             }
@@ -182,7 +184,9 @@ final class Game2048Model: ObservableObject {
             case .gliclass:
                 guard let manager else { return }
                 let offered = Array(
-                    legal.sorted { $0.features.heuristic > $1.features.heuristic }.prefix(candidateCount))
+                    legal.sorted {
+                        game.strategicScore($0, lookahead: lookahead) > game.strategicScore($1, lookahead: lookahead)
+                    }.prefix(candidateCount))
                 if offered.count == 1 {
                     chosen = offered[0]
                 } else {
@@ -207,7 +211,11 @@ final class Game2048Model: ObservableObject {
                     }
                 }
             case .heuristic:
-                guard let best = legal.max(by: { $0.features.heuristic < $1.features.heuristic }) else { return }
+                guard
+                    let best = legal.max(by: {
+                        game.strategicScore($0, lookahead: lookahead) < game.strategicScore($1, lookahead: lookahead)
+                    })
+                else { return }
                 chosen = best
             case .random:
                 chosen = legal[Int(random.next() % UInt64(legal.count))]

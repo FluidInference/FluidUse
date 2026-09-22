@@ -12,6 +12,7 @@ struct Game2048Command {
         var maximumMoves = 100_000
         var gliClassCandidates = 2
         var gliClassMargin: Float = 0
+        var lookahead = false
         var json = false
     }
 
@@ -46,6 +47,7 @@ struct Game2048Command {
             case "--moves": options.maximumMoves = Int(try value("--moves")) ?? 0
             case "--gliclass-candidates": options.gliClassCandidates = Int(try value("--gliclass-candidates")) ?? 0
             case "--gliclass-margin": options.gliClassMargin = Float(try value("--gliclass-margin")) ?? -1
+            case "--lookahead": options.lookahead = true
             case "--json": options.json = true
             default: throw GLiClassError.invalidAsset("Unknown argument \(arguments[index])")
             }
@@ -95,7 +97,10 @@ struct Game2048Command {
                 let chosen: Game2048.Candidate
                 switch options.policy {
                 case "gliclass":
-                    let ranked = legal.sorted { $0.features.heuristic > $1.features.heuristic }
+                    let ranked = legal.sorted {
+                        game.strategicScore($0, lookahead: options.lookahead)
+                            > game.strategicScore($1, lookahead: options.lookahead)
+                    }
                     let offered = Array(ranked.prefix(options.gliClassCandidates))
                     if offered.count == 1 {
                         chosen = offered[0]
@@ -119,7 +124,11 @@ struct Game2048Command {
                         chosen = offered[index]
                     }
                 case "heuristic":
-                    chosen = legal.max(by: { $0.features.heuristic < $1.features.heuristic }) ?? legal[0]
+                    chosen =
+                        legal.max(by: {
+                            game.strategicScore($0, lookahead: options.lookahead)
+                                < game.strategicScore($1, lookahead: options.lookahead)
+                        }) ?? legal[0]
                 default:
                     chosen = legal[Int(random.next() % UInt64(legal.count))]
                 }
@@ -173,7 +182,7 @@ struct Game2048Command {
             Usage: swift run -c release FluidUseLaya 2048 --model-dir DIR
                        [--precision fp16|fp16-mask|lut8|lut6] [--policy gliclass|heuristic|random]
                        [--games N] [--seed N] [--moves N] [--gliclass-candidates 2|3|4]
-                       [--gliclass-margin 0...1] [--json]
+                       [--gliclass-margin 0...1] [--lookahead] [--json]
 
             Plays deterministic 4x4 2048. GLiClass receives the strongest legal moves as concise
             descriptions and chooses one in a single L128 encoder pass.

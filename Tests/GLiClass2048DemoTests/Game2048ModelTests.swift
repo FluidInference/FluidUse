@@ -8,9 +8,10 @@ struct Game2048ModelTests {
         let model = Game2048Model()
         #expect(model.policy == .gliclass)
         #expect(model.candidateCount == 2)
-        #expect(model.minimumMargin == 0.40)
+        #expect(model.minimumMargin == 0.50)
+        #expect(model.lookahead)
         #expect(!model.marathon)
-        #expect(model.seed == 9)
+        #expect(model.seed == 46)
         #expect(model.moveDelayMs == 0)
     }
 

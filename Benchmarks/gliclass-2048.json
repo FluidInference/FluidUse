@@ -10,6 +10,127 @@
     "sequence_length": 128
   },
   "policies": {
+    "gliclass_lookahead_margin_0_50": {
+      "best_tile": 4096,
+      "games_reaching_2048": 3,
+      "games_reaching_4096": 1,
+      "mean_heuristic_agreement": 0.9730410668754683,
+      "mean_moves": 1011.9,
+      "mean_run_median_ms": 1.8129793,
+      "mean_score": 18970.4,
+      "runs": [
+        {
+          "elapsed_s": 2.421965003013611,
+          "game_over": true,
+          "heuristic_agreement": 0.9712574850299401,
+          "maximum_tile": 1024,
+          "median_ms": 2.068083,
+          "model_calls": 835,
+          "moves": 836,
+          "score": 14456,
+          "seed": 1
+        },
+        {
+          "elapsed_s": 2.213608980178833,
+          "game_over": true,
+          "heuristic_agreement": 0.9575892857142857,
+          "maximum_tile": 1024,
+          "median_ms": 1.808834,
+          "model_calls": 896,
+          "moves": 897,
+          "score": 15356,
+          "seed": 2
+        },
+        {
+          "elapsed_s": 2.464738965034485,
+          "game_over": true,
+          "heuristic_agreement": 0.9621848739495799,
+          "maximum_tile": 1024,
+          "median_ms": 1.787083,
+          "model_calls": 952,
+          "moves": 953,
+          "score": 16148,
+          "seed": 3
+        },
+        {
+          "elapsed_s": 0.5503580570220947,
+          "game_over": true,
+          "heuristic_agreement": 0.9774774774774775,
+          "maximum_tile": 128,
+          "median_ms": 1.778959,
+          "model_calls": 222,
+          "moves": 222,
+          "score": 2376,
+          "seed": 4
+        },
+        {
+          "elapsed_s": 2.210041046142578,
+          "game_over": true,
+          "heuristic_agreement": 0.9757639620653319,
+          "maximum_tile": 1024,
+          "median_ms": 1.762542,
+          "model_calls": 949,
+          "moves": 950,
+          "score": 16120,
+          "seed": 5
+        },
+        {
+          "elapsed_s": 0.9985370635986328,
+          "game_over": true,
+          "heuristic_agreement": 0.9728395061728395,
+          "maximum_tile": 512,
+          "median_ms": 1.752459,
+          "model_calls": 405,
+          "moves": 405,
+          "score": 6068,
+          "seed": 6
+        },
+        {
+          "elapsed_s": 3.8867650032043457,
+          "game_over": true,
+          "heuristic_agreement": 0.9764089121887287,
+          "maximum_tile": 2048,
+          "median_ms": 1.787291,
+          "model_calls": 1526,
+          "moves": 1528,
+          "score": 30592,
+          "seed": 7
+        },
+        {
+          "elapsed_s": 1.3323159217834473,
+          "game_over": true,
+          "heuristic_agreement": 0.9826254826254827,
+          "maximum_tile": 512,
+          "median_ms": 1.7715,
+          "model_calls": 518,
+          "moves": 518,
+          "score": 7516,
+          "seed": 8
+        },
+        {
+          "elapsed_s": 4.072347044944763,
+          "game_over": true,
+          "heuristic_agreement": 0.9822601839684626,
+          "maximum_tile": 2048,
+          "median_ms": 1.814,
+          "model_calls": 1522,
+          "moves": 1522,
+          "score": 30428,
+          "seed": 9
+        },
+        {
+          "elapsed_s": 5.650894999504089,
+          "game_over": true,
+          "heuristic_agreement": 0.9720034995625547,
+          "maximum_tile": 4096,
+          "median_ms": 1.799042,
+          "model_calls": 2286,
+          "moves": 2288,
+          "score": 50644,
+          "seed": 10
+        }
+      ]
+    },
     "gliclass_margin_0_40": {
       "best_tile": 2048,
       "games_reaching_2048": 2,
@@ -350,6 +471,127 @@
         }
       ]
     },
+    "heuristic_lookahead": {
+      "best_tile": 4096,
+      "games_reaching_2048": 5,
+      "games_reaching_4096": 1,
+      "mean_heuristic_agreement": 1,
+      "mean_moves": 1318.1,
+      "mean_run_median_ms": null,
+      "mean_score": 25381.6,
+      "runs": [
+        {
+          "elapsed_s": 0.6867939233779907,
+          "game_over": true,
+          "heuristic_agreement": 1,
+          "maximum_tile": 2048,
+          "median_ms": 0,
+          "model_calls": 0,
+          "moves": 1797,
+          "score": 35364,
+          "seed": 1
+        },
+        {
+          "elapsed_s": 0.4042009115219116,
+          "game_over": true,
+          "heuristic_agreement": 1,
+          "maximum_tile": 1024,
+          "median_ms": 0,
+          "model_calls": 0,
+          "moves": 986,
+          "score": 16440,
+          "seed": 2
+        },
+        {
+          "elapsed_s": 0.29052698612213135,
+          "game_over": true,
+          "heuristic_agreement": 1,
+          "maximum_tile": 1024,
+          "median_ms": 0,
+          "model_calls": 0,
+          "moves": 729,
+          "score": 12212,
+          "seed": 3
+        },
+        {
+          "elapsed_s": 0.4597339630126953,
+          "game_over": true,
+          "heuristic_agreement": 1,
+          "maximum_tile": 2048,
+          "median_ms": 0,
+          "model_calls": 0,
+          "moves": 1229,
+          "score": 23624,
+          "seed": 4
+        },
+        {
+          "elapsed_s": 0.29741203784942627,
+          "game_over": true,
+          "heuristic_agreement": 1,
+          "maximum_tile": 1024,
+          "median_ms": 0,
+          "model_calls": 0,
+          "moves": 646,
+          "score": 10920,
+          "seed": 5
+        },
+        {
+          "elapsed_s": 1.2580490112304688,
+          "game_over": true,
+          "heuristic_agreement": 1,
+          "maximum_tile": 4096,
+          "median_ms": 0,
+          "model_calls": 0,
+          "moves": 3072,
+          "score": 67808,
+          "seed": 6
+        },
+        {
+          "elapsed_s": 0.5141609907150269,
+          "game_over": true,
+          "heuristic_agreement": 1,
+          "maximum_tile": 2048,
+          "median_ms": 0,
+          "model_calls": 0,
+          "moves": 1188,
+          "score": 23372,
+          "seed": 7
+        },
+        {
+          "elapsed_s": 0.6428719758987427,
+          "game_over": true,
+          "heuristic_agreement": 1,
+          "maximum_tile": 2048,
+          "median_ms": 0,
+          "model_calls": 0,
+          "moves": 1595,
+          "score": 31312,
+          "seed": 8
+        },
+        {
+          "elapsed_s": 0.3867260217666626,
+          "game_over": true,
+          "heuristic_agreement": 1,
+          "maximum_tile": 1024,
+          "median_ms": 0,
+          "model_calls": 0,
+          "moves": 957,
+          "score": 16268,
+          "seed": 9
+        },
+        {
+          "elapsed_s": 0.3987259864807129,
+          "game_over": true,
+          "heuristic_agreement": 1,
+          "maximum_tile": 1024,
+          "median_ms": 0,
+          "model_calls": 0,
+          "moves": 982,
+          "score": 16496,
+          "seed": 10
+        }
+      ]
+    },
     "random": {
       "best_tile": 256,
       "games_reaching_2048": 0,
@@ -466,6 +708,7 @@
     "candidate_policy": "heuristic top two",
     "command": "FluidUseLaya 2048 --model-dir DIR --precision lut8 --policy POLICY --games 10 --seed 1 --json",
     "confidence_margin": 0.4,
+    "lookahead": "expected best reply across every empty-cell spawn, weighted 90% tile 2 / 10% tile 4",
     "played_to": "game_over",
     "seeds": [
       1,
@@ -480,5 +723,20 @@
       10
     ]
   },
-  "schema_version": 1
+  "schema_version": 1,
+  "selected_demo": {
+    "elapsed_s": 8.209902048110962,
+    "game_over": true,
+    "heuristic_agreement": 0.9767657992565055,
+    "maximum_tile": 4096,
+    "median_ms": 1.821417,
+    "model_calls": 3228,
+    "moves": 3230,
+    "policy": "gliclass_lookahead_margin_0_50",
+    "score": 70864,
+    "seed": 46,
+    "selection_pool": "seeds 1-60",
+    "visual_elapsed_s": 33.6,
+    "visual_model_ms_per_move": 2.1
+  }
 }

@@ -46,4 +46,12 @@ struct Game2048Tests {
             #expect(first.board == second.board)
         }
     }
+
+    @Test func expectedReplyScoreIsFiniteForEveryLegalMove() {
+        let game = Game2048(seed: 7)
+        for candidate in game.candidates() {
+            #expect(game.expectedReplyHeuristic(after: candidate).isFinite)
+            #expect(game.strategicScore(candidate, lookahead: true).isFinite)
+        }
+    }
 }

@@ -130,6 +130,9 @@ struct Game2048View: View {
             }
             Toggle("Marathon: start the next seeded game after game over", isOn: $model.marathon)
                 .font(.caption)
+            Toggle("One-move expectimax shortlist", isOn: $model.lookahead)
+                .font(.caption)
+                .disabled(model.isRunning)
             Picker("Policy", selection: $model.policy) {
                 ForEach(Game2048Model.Policy.allCases) { Text($0.rawValue).tag($0) }
             }
