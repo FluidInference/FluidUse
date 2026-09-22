@@ -5,14 +5,15 @@ struct ContentView: View {
     @EnvironmentObject private var model: GameModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // Always one column: header, board, scoreboard, controls. A side-by-side layout left a
+        // large dead gap beside the board at any window size worth recording.
+        VStack(alignment: .leading, spacing: 10) {
             header
-            BoardView(board: model.board, chosen: model.chosen, evaluating: model.evaluating)
-                .frame(width: 260, height: 520)
+            board
+            scoreboard
             controls
         }
-        // Anchor at the top so an undersized window clips the controls, never the header.
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(16)
         .alert(
             "laya",
@@ -24,6 +25,14 @@ struct ContentView: View {
         }
     }
 
+    private var board: some View {
+        // Capped so a tall window does not stretch the playfield into a sliver. The 10x20 ratio
+        // ties width to height, so this is also what keeps the cells a sensible size.
+        BoardView(board: model.board, chosen: model.chosen, evaluating: model.evaluating)
+            .aspectRatio(CGFloat(TetrisGame.width) / CGFloat(TetrisGame.height), contentMode: .fit)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("laya plays Tetris").font(.title2.bold())
@@ -31,10 +40,47 @@ struct ContentView: View {
                 "Every legal landing is described in one sentence; laya answers “Is this a clean placement?” and the highest P(true) is played."
             )
             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Text(model.loadStatus).font(.caption.monospaced()).foregroundStyle(
-                model.manager == nil ? Color.secondary : Color.green)
+            HStack(spacing: 6) {
+                Text(model.loadStatus).font(.caption.monospaced()).foregroundStyle(
+                    model.manager == nil ? Color.secondary : Color.green)
+                if model.marathon, model.gamesPlayed > 0 {
+                    Text("· game \(model.gamesPlayed + 1)").font(.caption.monospaced())
+                        .foregroundStyle(.orange)
+                }
+            }
         }
-        .frame(width: 260, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Live scoreboard under the board: the clock plus what a viewer needs to read the run.
+    private var scoreboard: some View {
+        HStack(spacing: 0) {
+            readout(model.elapsedText, model.isOver ? "topped out" : "time", model.isOver ? .red : .primary)
+            Divider().frame(height: 26)
+            readout("\(model.pieces)", "pieces", .secondary)
+            Divider().frame(height: 26)
+            readout("\(model.lines)", "lines", .green)
+            Divider().frame(height: 26)
+            readout(model.lastMs > 0 ? String(format: "%.1f", model.lastMs) : "–", "ms", .orange)
+            Divider().frame(height: 26)
+            readout("\(model.decisions)", "calls", .blue)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func readout(_ value: String, _ label: String, _ accent: Color) -> some View {
+        VStack(spacing: 1) {
+            Text(value)
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .foregroundStyle(accent)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var controls: some View {
@@ -46,6 +92,22 @@ struct ContentView: View {
                     .keyboardShortcut(.space, modifiers: [])
                     .disabled(model.policy == .laya && model.manager == nil)
                 Button("Reset") { model.reset() }.disabled(model.isRunning)
+            }
+            Toggle("Harness: withhold burying moves, graded wording", isOn: $model.harness)
+                .font(.caption)
+                .disabled(model.isRunning)
+            Toggle("Marathon: new board after each top-out", isOn: $model.marathon)
+                .font(.caption)
+            HStack {
+                Text("Lookahead").font(.caption)
+                Picker("", selection: $model.lookahead) {
+                    Text("off").tag(0)
+                    Text("2").tag(2)
+                    Text("4").tag(4)
+                    Text("6").tag(6)
+                }
+                .pickerStyle(.segmented)
+                .disabled(model.isRunning)
             }
             Picker("Policy", selection: $model.policy) {
                 ForEach(GameModel.Policy.allCases) { Text($0.rawValue).tag($0) }
@@ -64,7 +126,7 @@ struct ContentView: View {
                 Slider(value: $model.pieceDelayMs, in: 0...1000, step: 20)
             }
         }
-        .frame(width: 260)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
 }

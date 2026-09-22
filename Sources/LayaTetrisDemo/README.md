@@ -32,3 +32,15 @@ LAYA_DEMO_AUTORUN=1 LAYA_DEMO_STRESS=1 LAYA_DEMO_QUIT_AFTER=30 swift run -c rele
 piece sequence.
 
 The simulation (`Sources/LayaTetris`) is shared with `swift run FluidUseLaya tetris`.
+
+## Controls
+
+- **Harness** (on): withholds landings that bury a cell when a clean one exists, and uses wording
+  that stays discriminative on a tall board. Worth 76 -> 568 pieces, but only as a pair; each half
+  alone is a regression.
+- **Marathon** (off): starts a new board after each top-out and carries the totals forward. Useful
+  for a long recording; it does not make the model survive longer.
+- **Lookahead** (off): also scores the board each of the top N landings leaves for the next piece.
+  Worse on average, ~4x the calls per piece, so a single game runs much longer in wall time.
+- **Policy**: `heuristic` and `random` are controls that never call the model.
+- **Seed**: read when a fresh game starts, so set it before pressing Play.

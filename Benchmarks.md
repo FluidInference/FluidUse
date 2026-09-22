@@ -156,6 +156,37 @@ selected with `Configuration.precision = "e8"` or `--precision e8`. The encoder 
 ### Tetris demo
 
 `LayaTetrisDemo` / `FluidUseLaya tetris` score every legal landing with one `noul` question.
+
+The first version topped out at 76 pieces. Two changes fixed it, and the measured surprise is that
+neither works alone: the harness withholds landings that bury a cell when a clean one exists, and
+the wording stays discriminative on a tall board, where the original clause read identically for
+every option once the stack passed 15 rows. Ten seeds, uncapped:
+
+| Configuration | Mean pieces | Mean lines |
+| --- | ---: | ---: |
+| Original wording, no filter | 75.8 | 16.9 |
+| Graded wording only | 47.5 | 5.5 |
+| Harness filter only | 87.3 | 22.5 |
+| **Both** | **568.3** | **214.5** |
+| Dellacherie heuristic | 582.8 | 217.9 |
+| Random among the filtered moves | 17.2 | 0.0 |
+
+That last row is the control: the filter alone plays terribly, so the play quality is the model's.
+Per piece the model is offered 5.6 of 23.1 legal landings and is left a single forced option 5% of
+the time. It picks the heuristic's exact best landing 64–71% of the time, up from 41–52% before.
+
+One-piece lookahead (`--lookahead 4`) was tried and is worse on average, 444.5 pieces against 581.5
+over six seeds, in all three combine modes; ranking on the follow-up alone collapses to 73.7, which
+says the model judges a hypothetical future board far less well than the move in front of it. It is
+off by default and kept as a control. It does spend about four times the calls per piece, so on a
+seed that suits it a single game runs much longer: seed 24 gives 2,263 pieces over 50,487 calls.
+
+Speed of the demo loop changed too, though none of it is inference. A piece went from 159 ms to
+29 ms: a 120 ms cosmetic sleep was removed, and the filter cut calls per piece from 23.2 to 5.6.
+Removing the sleep also stopped the Neural Engine powering down between pieces, which took calls
+from 5.9 ms back to 3.8. The model answers each question in 3.8 ms either way, agreeing to within
+0.01 ms with the filter on or off.
+
 Sustained rate on the 128 bucket: **~15,800 decisions per minute at 3.8 ms median** (seeds 1, 2,
 3, 7), against the 1,799 per minute in the original laya Tetris post (~27 ms on an M1 Max GPU).
 Zero-shot laya clears 13–32 lines before topping out; the feature-weighted heuristic policy clears

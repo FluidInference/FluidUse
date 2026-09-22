@@ -45,14 +45,34 @@ final class GameModel: ObservableObject {
     @Published private(set) var decisionsPerMinute = 0.0
     @Published private(set) var promptTokens = 0
     @Published private(set) var bucket = 0
+    /// Wall-clock time this game has been running, paused time excluded.
+    @Published private(set) var elapsedSeconds: TimeInterval = 0
+    @Published private(set) var gamesPlayed = 0
+    /// Pieces and lines across every game in this run, including the one in progress.
+    @Published private(set) var totalPieces = 0
+    @Published private(set) var totalLines = 0
 
     // Controls
     @Published var policy: Policy = .laya
-    @Published var seed: UInt64 = 7
+    /// Harness on: landings that bury a cell are withheld when a clean one exists, and the
+    /// landing description stays discriminative on a tall board. 7.5x the pieces, measured.
+    @Published var harness = true
+    /// Re-rank the strongest landings by how good the board they leave is for the next piece.
+    /// Measured worse than greedy on every combine tried (444 pieces against 581), because the
+    /// model judges a hypothetical future board far less well than the move in front of it.
+    /// Kept as a control. On average it plays worse (444 pieces against 581), but it spends far
+    /// more model calls per piece, and on a good seed that buys a much longer single game:
+    /// seed 24 runs 2,263 pieces and 896 lines over 50,487 calls, about four minutes.
+    /// Off by default: greedy is the better player, and 1,199 pieces in 31 s is the honest demo.
+    @Published var lookahead = 0
+    /// Keep playing after a top-out: a new board on the next seed, totals carried forward.
+    /// A single game averages 568 pieces, so this is what makes a multi-minute clip possible.
+    @Published var marathon = false
+    @Published var seed: UInt64 = 24
     /// Extra delay per scored candidate so the scoring can be watched; 0 runs flat out.
     @Published var stepDelayMs = 0.0
     /// Pause after each placed piece.
-    @Published var pieceDelayMs = 120.0
+    @Published var pieceDelayMs = 0.0
 
     private var game = TetrisGame(seed: 7)
     private var rng = SplitMix64(seed: 8)
@@ -61,15 +81,25 @@ final class GameModel: ObservableObject {
     private var generation = 0
     private var latencies: [Double] = []
     private var runStart = Date()
+    private var accumulatedSeconds: TimeInterval = 0
+    private var clock: Task<Void, Never>?
     private var runDecisionSeconds = 0.0
 
     static let question = LayaTetris.question
+
+    /// `m:ss.t` so a demo clip reads a running clock rather than a raw double.
+    var elapsedText: String {
+        let minutes = Int(elapsedSeconds) / 60
+        let seconds = elapsedSeconds - Double(minutes * 60)
+        return String(format: "%d:%04.1f", minutes, seconds)  // 0:07.4
+    }
 
     /// `LAYA_DEMO_AUTOLOAD=1` loads the model on launch; `LAYA_DEMO_AUTORUN=1` loads and plays without clicks; `LAYA_DEMO_QUIT_AFTER=<s>`
     /// prints the stats and exits, which is how the demo is smoke-tested headlessly.
     func applyEnvironment() {
         let environment = ProcessInfo.processInfo.environment
         if let seedText = environment["LAYA_DEMO_SEED"], let value = UInt64(seedText) { seed = value }
+        if let text = environment["LAYA_DEMO_LOOKAHEAD"], let value = Int(text) { lookahead = value }
         if environment["LAYA_DEMO_AUTOLOAD"] == "1" { loadModel() }
         guard environment["LAYA_DEMO_AUTORUN"] == "1" else { return }
         loadModel()
@@ -99,8 +129,8 @@ final class GameModel: ObservableObject {
                 print(
                     String(
                         format:
-                            "autorun: %d pieces · %d lines · %d decisions · median %.2f ms · %.0f decisions/min · %@",
-                        pieces, lines, decisions, medianMs, decisionsPerMinute,
+                            "autorun: %d games · %d pieces · %d lines · %d decisions · median %.2f ms · %.0f decisions/min · %@",
+                        gamesPlayed + 1, totalPieces, totalLines, decisions, medianMs, decisionsPerMinute,
                         (isOver ? "topped out" : "still playing") as NSString))
                 exit(0)
             }
@@ -158,8 +188,16 @@ final class GameModel: ObservableObject {
         decisionsPerMinute = 0
         promptTokens = 0
         bucket = 0
+        gamesPlayed = 0
+        totalPieces = 0
+        totalLines = 0
         runDecisionSeconds = 0
         pieceCallMs = []
+        clock?.cancel()
+        clock = nil
+        accumulatedSeconds = 0
+        elapsedSeconds = 0
+        carriedLines = 0
         log = []
     }
 
@@ -167,6 +205,10 @@ final class GameModel: ObservableObject {
         if isRunning {
             task?.cancel()
             task = nil
+            clock?.cancel()
+            clock = nil
+            accumulatedSeconds += Date().timeIntervalSince(runStart)
+            elapsedSeconds = accumulatedSeconds
             isRunning = false
             return
         }
@@ -174,11 +216,21 @@ final class GameModel: ObservableObject {
             errorMessage = "Load the model first, or pick the heuristic policy."
             return
         }
-        if isOver { reset() }
+        // A fresh game must pick up the current seed. `game` is built in the property initialiser,
+        // so without this, pressing Play before Reset silently replays the initialiser's seed.
+        if isOver || pieces == 0 { reset() }
         generation += 1
         let run = generation
         isRunning = true
         runStart = Date()
+        clock?.cancel()
+        clock = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                guard let self, self.isRunning else { return }
+                self.elapsedSeconds = self.accumulatedSeconds + Date().timeIntervalSince(self.runStart)
+            }
+        }
         task = Task { [weak self] in
             await self?.play(run: run)
         }
@@ -187,18 +239,23 @@ final class GameModel: ObservableObject {
     private func play(run: Int) async {
         while !Task.isCancelled, run == generation, let piece = game.spawn() {
             currentPiece = piece.name
-            let all = game.candidates(for: piece)
+            var all = game.candidates(for: piece)
+            if harness {
+                let clean = all.filter { $0.features.newHoles == 0 }
+                if !clean.isEmpty { all = clean }
+            }
             guard !all.isEmpty else { break }
             candidates = []
             chosen = nil
             var best: (Float, TetrisGame.Candidate)?
+            var scoredPairs: [(TetrisGame.Candidate, Float)] = []
             switch policy {
             case .laya:
                 guard let manager else { break }
                 for candidate in all {
                     guard !Task.isCancelled, run == generation else { return }
                     evaluating = candidate
-                    let sentence = game.describe(candidate, piece: piece)
+                    let sentence = game.describe(candidate, piece: piece, style: harness ? .graded : .plain)
                     let t0 = DispatchTime.now().uptimeNanoseconds
                     do {
                         let answer = try await manager.answer(state: sentence, question: Self.question)
@@ -211,6 +268,7 @@ final class GameModel: ObservableObject {
                             ScoredCandidate(
                                 id: candidate.id, candidate: candidate, sentence: sentence, probability: p,
                                 milliseconds: ms))
+                        scoredPairs.append((candidate, p))
                         if best == nil || p > best!.0 { best = (p, candidate) }
                     } catch is CancellationError {
                         return
@@ -228,7 +286,8 @@ final class GameModel: ObservableObject {
                 best = (Float(pick.features.heuristic), pick)
                 candidates = all.map {
                     ScoredCandidate(
-                        id: $0.id, candidate: $0, sentence: game.describe($0, piece: piece),
+                        id: $0.id, candidate: $0,
+                        sentence: game.describe($0, piece: piece, style: harness ? .graded : .plain),
                         probability: Float($0.features.heuristic), milliseconds: 0)
                 }
             case .random:
@@ -237,11 +296,43 @@ final class GameModel: ObservableObject {
             }
             evaluating = nil
             guard run == generation else { return }
-            guard let (score, pick) = best else { break }
+            guard var (score, pick) = best else { break }
+            if policy == .laya, lookahead > 0, let manager, let next = game.nextPiece, scoredPairs.count > 1 {
+                let top = scoredPairs.sorted { $0.1 > $1.1 }.prefix(lookahead)
+                var bestPair: (Float, TetrisGame.Candidate)?
+                for (candidate, own) in top {
+                    var follow = game.candidates(for: next, on: candidate.board)
+                    if harness {
+                        let clean = follow.filter { $0.features.newHoles == 0 }
+                        if !clean.isEmpty { follow = clean }
+                    }
+                    guard !follow.isEmpty else { continue }
+                    var bestNext: Float = 0
+                    for option in follow.prefix(12) {
+                        if Task.isCancelled || run != generation { return }
+                        let sentence = game.describe(option, piece: next, style: harness ? .graded : .plain)
+                        let t0 = DispatchTime.now().uptimeNanoseconds
+                        guard let reply = try? await manager.answer(state: sentence, question: Self.question)
+                        else { continue }
+                        record(
+                            ms: Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6,
+                            tokens: reply.tokenCount, bucket: reply.bucketLength)
+                        bestNext = max(bestNext, reply.noul ?? 0)
+                    }
+                    let combined = own * bestNext
+                    if bestPair == nil || combined > bestPair!.0 { bestPair = (combined, candidate) }
+                }
+                if let bestPair {
+                    pick = bestPair.1
+                    score = bestPair.0
+                }
+            }
             chosen = pick
             game.apply(pick)
             pieces += 1
             lines = game.linesCleared
+            totalPieces += 1
+            totalLines = carriedLines + lines
             isOver = game.isOver
             let placed = String(
                 format: "%@ → column %d rot %d · %@ %.3f · %d lines", piece.name as NSString, pick.column,
@@ -251,13 +342,29 @@ final class GameModel: ObservableObject {
             if log.count > 12 { log.removeLast() }
             printConsole(piece: piece, chosen: pick, score: score)
             board = game.board
-            if isOver { break }
+            if isOver {
+                guard marathon else { break }
+                gamesPlayed += 1
+                carriedLines = totalLines
+                log.insert("game \(gamesPlayed) ended at \(pieces) pieces, \(lines) lines", at: 0)
+                game = TetrisGame(seed: seed &+ UInt64(gamesPlayed))
+                board = game.board
+                pieces = 0
+                lines = 0
+                isOver = false
+                candidates = []
+                chosen = nil
+            }
             if pieceDelayMs > 0 {
                 try? await Task.sleep(nanoseconds: UInt64(pieceDelayMs * 1_000_000))
             }
             guard run == generation else { return }
         }
         guard run == generation else { return }
+        accumulatedSeconds += Date().timeIntervalSince(runStart)
+        elapsedSeconds = accumulatedSeconds
+        clock?.cancel()
+        clock = nil
         isRunning = false
         if isOver { log.insert("Topped out after \(pieces) pieces, \(lines) lines.", at: 0) }
     }
@@ -265,8 +372,10 @@ final class GameModel: ObservableObject {
     /// Terminal console for presentations (tmux next to asitop): one block per placed piece,
     /// the model-call line in red like the CUA-S1-FORMS demo.
     private var pieceCallMs: [Double] = []
+    private var carriedLines = 0
 
     private func printConsole(piece: TetrisGame.Piece, chosen: TetrisGame.Candidate, score: Float) {
+        if isRunning { elapsedSeconds = accumulatedSeconds + Date().timeIntervalSince(runStart) }
         let cyan = "\u{1B}[36m"
         let red = "\u{1B}[1;31m"
         let yellow = "\u{1B}[33m"
@@ -291,7 +400,10 @@ final class GameModel: ObservableObject {
             print("  → column \(chosen.column) rot \(chosen.rotation) · score \(String(format: "%.2f", score))")
         }
         print(
-            "  \(dim)lines \(lines) · pieces \(pieces) · \(String(format: "%.0f", decisionsPerMinute)) decisions/min\(reset)"
+            // The wall clock goes in the console as well as the window: a viewer needs to see that
+            // the recording is real time and not sped up.
+            "  \(dim)\(elapsedText) elapsed · lines \(lines) · pieces \(pieces) · "
+                + "\(String(format: "%.0f", decisionsPerMinute)) decisions/min\(reset)"
         )
         pieceCallMs.removeAll(keepingCapacity: true)
     }
@@ -306,8 +418,8 @@ final class GameModel: ObservableObject {
             let sorted = latencies.sorted()
             medianMs = sorted[sorted.count / 2]
         }
-        let elapsed = Date().timeIntervalSince(runStart)
-        decisionsPerMinute = elapsed > 0 ? Double(decisions) / elapsed * 60 : 0
+        let running = accumulatedSeconds + Date().timeIntervalSince(runStart)
+        decisionsPerMinute = running > 0 ? Double(decisions) / running * 60 : 0
         promptTokens = max(promptTokens, tokens)
         self.bucket = bucket
     }
