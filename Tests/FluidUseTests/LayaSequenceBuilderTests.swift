@@ -76,7 +76,7 @@ final class LayaSequenceBuilderTests: XCTestCase {
         XCTAssertEqual(capped.markers[1] - capped.markers[0], 1 + 48)
 
         // Budget of 64 with 8 options of 40 chars leaves < 16, so each option shrinks to (64-16)/8 = 6 ids.
-        let options = (0..<8).map { _ in String(repeating: "x", count: 40) }
+        let options = (0..<8).map { String(repeating: "x", count: 39) + String($0) }
         let shrunk = try builder(headMaxLength: 64).sequence(
             state: "s", question: .choice("q", options: options), maximumLength: 512)
         for pair in zip(shrunk.markers, shrunk.markers.dropFirst()) {
@@ -96,6 +96,13 @@ final class LayaSequenceBuilderTests: XCTestCase {
             try builder().sequence(state: "s", question: .choice("q", options: options), maximumLength: 128)
         ) { error in
             guard case LayaError.promptTooLong = error else { return XCTFail("unexpected \(error)") }
+        }
+    }
+
+    func testNonpositiveSequenceLengthsThrowInsteadOfTrapping() {
+        for length in [0, -1, Int.min] {
+            XCTAssertThrowsError(
+                try builder().sequence(state: "s", question: .noul("q"), maximumLength: length))
         }
     }
 

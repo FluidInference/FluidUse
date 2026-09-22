@@ -86,6 +86,7 @@ public struct TetrisGame {
     public private(set) var linesCleared = 0
     public private(set) var isOver = false
     private var bag: [Int] = []
+    private var upcoming: [Piece] = []
     private var rng: SplitMix64
 
     public init(seed: UInt64) {
@@ -96,6 +97,14 @@ public struct TetrisGame {
     /// Next piece from a seven-bag randomizer, or nil once the stack has topped out.
     public mutating func spawn() -> Piece? {
         guard !isOver else { return nil }
+        while upcoming.count < 2 { upcoming.append(draw()) }
+        return upcoming.removeFirst()
+    }
+
+    /// The piece that will follow the one currently in play, which is what a Tetris player sees.
+    public var nextPiece: Piece? { upcoming.first }
+
+    private mutating func draw() -> Piece {
         if bag.isEmpty {
             bag = Array(0..<Self.pieces.count)
             for index in stride(from: bag.count - 1, to: 0, by: -1) {
@@ -106,6 +115,19 @@ public struct TetrisGame {
     }
 
     public func candidates(for piece: Piece) -> [Candidate] {
+        candidates(for: piece, on: board)
+    }
+
+    /// Apply the harness constraint consistently to model and control policies.
+    public static func shortlist(_ candidates: [Candidate]) -> [Candidate] {
+        let clean = candidates.filter { $0.features.newHoles == 0 }
+        return clean.isEmpty ? candidates : clean
+    }
+
+    /// Legal landings of `piece` on any board, used to evaluate the follow-up move.
+    public func candidates(for piece: Piece, on board: [[Bool]]) -> [Candidate] {
+        // A board that would end the current game cannot have a playable follow-up.
+        guard !board[0].contains(true), !board[1].contains(true) else { return [] }
         var result: [Candidate] = []
         let heightsBefore = columnHeights(board)
         let bumpinessBefore = bumpiness(heightsBefore)
@@ -115,7 +137,7 @@ public struct TetrisGame {
             for column in 0...(Self.width - pieceWidth) {
                 // Hard drop: lowest row offset where every cell is free.
                 var row = -pieceHeight
-                while fits(cells, column: column, row: row + 1) { row += 1 }
+                while fits(cells, column: column, row: row + 1, on: board) { row += 1 }
                 guard row >= 0 else { continue }
                 var next = board
                 let occupied = cells.map { (column + $0.0, row + $0.1) }
@@ -126,7 +148,7 @@ public struct TetrisGame {
                 let holesBefore = holes(board)
                 let holesAfter = holes(next)
                 let bump = bumpiness(heightsAfter)
-                let flush = flushSides(cells, column: column, row: row)
+                let flush = flushSides(cells, column: column, row: row, on: board)
                 result.append(
                     Candidate(
                         id: result.count, rotation: rotation, column: column, board: next, cells: occupied,
@@ -149,6 +171,49 @@ public struct TetrisGame {
     /// One natural sentence per landing, the only thing laya sees. Under the short question
     /// "Is this a clean placement?" the multilingual checkpoint ranks these sensibly: holes and a
     /// taller stack pull P(clean) down, a cleared line pushes it up; numeric feature dumps do not.
+    /// Description style. `.plain` is the original wording; `.graded` keeps every clause
+    /// discriminative when the board is tall, where `.plain` collapses to one identical sentence.
+    public enum DescriptionStyle: String, Sendable {
+        case plain, graded
+    }
+
+    public func describe(_ candidate: Candidate, piece: Piece, style: DescriptionStyle) -> String {
+        guard style == .graded else { return describe(candidate, piece: piece) }
+        let f = candidate.features
+        var clauses: [String] = []
+        // Line clears lead: they are the only move that reduces the stack, and in the original
+        // wording they were mentioned last, after the clauses that saturate.
+        if f.linesCleared > 0 {
+            clauses.append("clears \(Self.words(f.linesCleared)) line\(f.linesCleared == 1 ? "" : "s")")
+        }
+        clauses.append(
+            f.newHoles > 0
+                ? "buries \(Self.words(f.newHoles)) cell\(f.newHoles == 1 ? "" : "s") that cannot be reached again"
+                : "buries nothing")
+        // Fine-grained height so two candidates on a tall board still read differently.
+        let remaining = Self.height - f.maxHeight
+        switch remaining {
+        case ...1: clauses.append("fills the board to the very top")
+        case 2...3: clauses.append("leaves only \(remaining) rows of space")
+        case 4...6: clauses.append("leaves \(remaining) rows of space")
+        case 7...10: clauses.append("leaves comfortable room above")
+        default: clauses.append("keeps the stack low")
+        }
+        if f.bumpinessDelta > 2 {
+            clauses.append("makes the surface much more uneven")
+        } else if f.bumpinessDelta > 0 {
+            clauses.append("makes the surface more uneven")
+        } else if f.bumpinessDelta < 0 {
+            clauses.append("evens out the surface")
+        } else {
+            clauses.append("leaves the surface as even as before")
+        }
+        if f.wellDepth >= 3 { clauses.append("leaves a deep gap \(f.wellDepth) rows deep") }
+        let body =
+            clauses.count > 1 ? clauses.dropLast().joined(separator: ", ") + ", and " + clauses.last! : clauses[0]
+        return "The \(piece.name) piece dropped at column \(candidate.column) " + body + "."
+    }
+
     public func describe(_ candidate: Candidate, piece: Piece) -> String {
         let f = candidate.features
         var clauses: [String] = []
@@ -199,7 +264,7 @@ public struct TetrisGame {
 
     // MARK: Geometry
 
-    private func fits(_ cells: [(Int, Int)], column: Int, row: Int) -> Bool {
+    private func fits(_ cells: [(Int, Int)], column: Int, row: Int, on board: [[Bool]]) -> Bool {
         for (dx, dy) in cells {
             let x = column + dx
             let y = row + dy
@@ -248,7 +313,7 @@ public struct TetrisGame {
         return deepest
     }
 
-    private func flushSides(_ cells: [(Int, Int)], column: Int, row: Int) -> Int {
+    private func flushSides(_ cells: [(Int, Int)], column: Int, row: Int, on board: [[Bool]]) -> Int {
         var count = 0
         for (dx, dy) in cells {
             for neighbour in [(column + dx - 1, row + dy), (column + dx + 1, row + dy)] {
