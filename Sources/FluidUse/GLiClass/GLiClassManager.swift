@@ -141,7 +141,11 @@ public actor GLiClassManager {
         }
         let ids = Array(untruncated.prefix(bucket.length))
         let markers = ids.indices.filter { ids[$0] == tokenizer.classTokenId }
-        guard markers.count == labels.count else {
+        let labelsHaveTerminator =
+            markers.last.map {
+                ids[ids.index(after: $0)...].contains(tokenizer.labelSeparatorTokenId)
+            } ?? false
+        guard markers.count == labels.count, labelsHaveTerminator else {
             throw GLiClassError.promptTooLong(optionCount: labels.count, maximumLength: bucket.length)
         }
         let output = try autoreleasepool { try predict(ids: ids, markers: markers, bucket: bucket) }

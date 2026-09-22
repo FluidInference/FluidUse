@@ -18,6 +18,10 @@ moves, but long pauses let the Neural Engine idle and raise measured latency. Th
 landing* slider slows laya's candidate-by-candidate scoring so it can be watched on the board (orange
 outline); the chosen landing is drawn in green.
 
+The GLiClass training, Core ML conversion, compression, and parity reports are in
+[mobius PR #101](https://github.com/FluidInference/mobius/pull/101). The GLiClass packages are not yet
+auto-downloaded, so build or obtain those assets before running this policy.
+
 **Policy** switches among GLiClass, laya, a feature-weighted heuristic, and random play. The harness
 toggle applies to every policy. See [Benchmarks.md](../../Benchmarks.md) for the reported runs.
 

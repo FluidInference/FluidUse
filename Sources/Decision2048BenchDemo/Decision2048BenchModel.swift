@@ -207,14 +207,7 @@ final class Decision2048BenchModel: ObservableObject {
         var chosen = first
         if offered.count > 1 {
             let descriptions = offered.map(gliClassGame.describe)
-            let inference = Task.detached(priority: .userInitiated) {
-                let started = DispatchTime.now().uptimeNanoseconds
-                let answer = try await manager.classify(
-                    text: "Build the largest tile without filling the board.", labels: descriptions,
-                    prompt: "Choose the safest 2048 swipe. Preserve empty cells, ordered high tiles, and merges.")
-                return (answer.selectedIndex, Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6)
-            }
-            let result = try await inference.value
+            let result = try await classify(manager: manager, labels: descriptions)
             guard generation == run, !Task.isCancelled else { throw CancellationError() }
             chosen = offered[result.0]
             gliClass.modelCalls += 1
@@ -234,19 +227,7 @@ final class Decision2048BenchModel: ObservableObject {
         var chosen = first
         if offered.count > 1 {
             let descriptions = offered.map(layaGame.describe)
-            let inference = Task.detached(priority: .userInitiated) {
-                var scores: [Float] = []
-                var milliseconds = 0.0
-                for description in descriptions {
-                    let started = DispatchTime.now().uptimeNanoseconds
-                    let answer = try await manager.answer(state: description, question: Self.layaQuestion)
-                    milliseconds += Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6
-                    scores.append(answer.noul ?? 0)
-                }
-                let selected = scores.indices.max { scores[$0] < scores[$1] } ?? 0
-                return (selected, scores.count, milliseconds)
-            }
-            let result = try await inference.value
+            let result = try await score(manager: manager, descriptions: descriptions)
             guard generation == run, !Task.isCancelled else { throw CancellationError() }
             chosen = offered[result.0]
             laya.modelCalls += result.1
@@ -254,6 +235,46 @@ final class Decision2048BenchModel: ObservableObject {
         }
         layaGame.apply(chosen)
         update(&laya, from: layaGame)
+    }
+
+    private func classify(
+        manager: GLiClassManager, labels: [String]
+    ) async throws -> (selected: Int, milliseconds: Double) {
+        let inference = Task.detached(priority: .userInitiated) {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let answer = try await manager.classify(
+                text: "Build the largest tile without filling the board.", labels: labels,
+                prompt: "Choose the safest 2048 swipe. Preserve empty cells, ordered high tiles, and merges.")
+            return (answer.selectedIndex, Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6)
+        }
+        return try await withTaskCancellationHandler {
+            try await inference.value
+        } onCancel: {
+            inference.cancel()
+        }
+    }
+
+    private func score(
+        manager: LayaManager, descriptions: [String]
+    ) async throws -> (selected: Int, calls: Int, milliseconds: Double) {
+        let inference = Task.detached(priority: .userInitiated) {
+            var scores: [Float] = []
+            var milliseconds = 0.0
+            for description in descriptions {
+                try Task.checkCancellation()
+                let started = DispatchTime.now().uptimeNanoseconds
+                let answer = try await manager.answer(state: description, question: Self.layaQuestion)
+                milliseconds += Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6
+                scores.append(answer.noul ?? 0)
+            }
+            let selected = scores.indices.max { scores[$0] < scores[$1] } ?? 0
+            return (selected, scores.count, milliseconds)
+        }
+        return try await withTaskCancellationHandler {
+            try await inference.value
+        } onCancel: {
+            inference.cancel()
+        }
     }
 
     private func shortlist(game: Game2048) -> [Game2048.Candidate] {

@@ -36,7 +36,7 @@ struct LayaTetrisCommand {
         var policy = "laya"
         var question: String?
         var gliClassChoice = false
-        var gliClassCandidates = GLiClassManager.maximumOptions
+        var gliClassCandidates = 2
         var gliClassMargin: Float = 0
         var shortlist = false
         var agreement = false
@@ -237,9 +237,13 @@ struct LayaTetrisCommand {
                         print(String(format: "  %.3f  %@", score, state))
                     }
                     candidatesScored.append((candidate, score))
-                    if best == nil || score > best!.score { best = (score, candidate) }
+                    if let current = best, score <= current.score { continue }
+                    best = (score, candidate)
                 }
-                chosen = best!.candidate
+                guard let scoredBest = best else {
+                    throw LayaError.invalidModel("The model did not score any Tetris candidates")
+                }
+                chosen = scoredBest.candidate
                 // One-piece lookahead: re-rank the strongest landings by how good the board they
                 // leave behind is for the piece that follows, which is the information a human has
                 // and a one-shot judge does not.
@@ -265,7 +269,8 @@ struct LayaTetrisCommand {
                         case "next": combined = bestNext  // rank purely by what it leaves behind
                         default: combined = own * bestNext
                         }
-                        if bestPair == nil || combined > bestPair!.0 { bestPair = (combined, candidate) }
+                        if let current = bestPair, combined <= current.0 { continue }
+                        bestPair = (combined, candidate)
                     }
                     if let bestPair { chosen = bestPair.1 }
                 }
@@ -283,7 +288,10 @@ struct LayaTetrisCommand {
                     print("  -> column \(chosen.column) rotation \(chosen.rotation)\n\(game.render(after: chosen))")
                 }
             case "heuristic":
-                chosen = candidates.max { $0.features.heuristic < $1.features.heuristic }!
+                guard let best = candidates.max(by: { $0.features.heuristic < $1.features.heuristic }) else {
+                    throw LayaError.invalidModel("No legal Tetris candidates")
+                }
+                chosen = best
             default:
                 chosen = candidates[Int(rng.next() % UInt64(candidates.count))]
             }
@@ -363,8 +371,8 @@ struct LayaTetrisCommand {
 
             With --policy gliclass, --model-dir must hold tokenizer.json and the GLiClass Edge Apps v2
             Core ML bucket. The same candidates and descriptions are scored for an apples-to-apples game.
-              --gliclass-choice  compare up to 25 candidate descriptions in one encoder pass; use L512
-              --gliclass-candidates N  heuristic prefilter width for choice mode (default 25)
+              --gliclass-choice  compare candidate descriptions in one encoder pass
+              --gliclass-candidates N  heuristic prefilter width for choice mode (default 2; max 25)
               --gliclass-margin P  minimum probability margin before GLiClass overrides the heuristic leader
 
             The two flags that matter, and only together (76 -> 568 pieces over ten seeds):

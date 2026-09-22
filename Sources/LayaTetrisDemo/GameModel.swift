@@ -498,8 +498,14 @@ final class GameModel: ObservableObject {
         let yellow = "\u{1B}[33m"
         let dim = "\u{1B}[2m"
         let reset = "\u{1B}[0m"
-        let modelName = policy == .gliclass ? "GLiClass Edge Apps v2" : "laya-multilingual"
-        print("\(cyan)▶ \(modelName)\(reset) · \(piece.name) piece · \(candidates.count) landings scored")
+        let policyName: String
+        switch policy {
+        case .gliclass: policyName = "GLiClass Edge Apps v2"
+        case .laya: policyName = "laya-multilingual"
+        case .heuristic: policyName = "heuristic control"
+        case .random: policyName = "random control"
+        }
+        print("\(cyan)▶ \(policyName)\(reset) · \(piece.name) piece · \(candidates.count) landings scored")
         if policy == .laya || policy == .gliclass {
             let sorted = candidates.sorted { $0.probability > $1.probability }
             for scored in sorted.prefix(3) {

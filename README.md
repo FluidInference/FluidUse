@@ -84,17 +84,16 @@ swift run -c release FluidUseLaya answer --state "…" --type choice \
 swift run -c release FluidUseLaya tetris --shortlist --describe graded --pieces 200  # headless Tetris, P(clean) per landing
 swift run -c release FluidUseLaya 2048 --model-dir /path/to/gliclass --precision lut8 --games 10
 swift run -c release FluidUseLaya benchmark --suites <mobius>/benchmark/suites.jsonl --reference <mobius>/benchmark/reference-rows.jsonl
-swift run -c release LayaTetrisDemo                              # SwiftUI: laya plays Tetris, live decisions
+swift run -c release LayaTetrisDemo                              # SwiftUI: GLiClass/laya play Tetris
 swift run -c release GLiClass2048Demo                            # SwiftUI: GLiClass plays 2048
 swift run -c release Decision2048BenchDemo                       # SwiftUI: GLiClass vs laya at 2048
 ```
 
 `LayaTetrisDemo` ([Sources/LayaTetrisDemo](Sources/LayaTetrisDemo), [25 s clip](Media/laya-tetris.mp4))
-scores every legal landing of the current piece with *"Is this a clean placement?"* and plays the
-best one: the landing being scored is outlined in orange, the chosen one is green. The window is a
-single column so it sits next to a terminal; the app prints one block per placed piece to stdout
-(top landings with their clean %, and the `model call … ms on Neural Engine` line in red), which
-pairs with `asitop` in a tmux split for presentations:
+defaults to GLiClass comparing the heuristic's two strongest legal landings in one call. Its policy
+control can instead run laya, which scores each surviving landing independently with *"Is this a
+clean placement?"*, or the heuristic and random baselines. The window is a single column so it sits
+next to a terminal; the app prints decisions and model latency to stdout for presentations:
 
 ```bash
 tmux new-session -d -s laya -c . && tmux send-keys -t laya 'sudo asitop' C-m
@@ -102,8 +101,9 @@ tmux split-window -v -l 22 -c . && tmux send-keys -t laya:0.1 'LAYA_DEMO_AUTOLOA
 tmux attach -t laya
 ```
 
-Zero-shot laya clears a few dozen lines before topping out; the built-in heuristic policy plays
-indefinitely. It is a latency demo, not a Tetris player.
+The current ten-seed capped run averages 3,667 pieces for GLiClass LUT8 and 2,874 for the corrected
+heuristic control. See [Benchmarks.md](Benchmarks.md) for the exact policy, per-seed results, and the
+limits of comparison with the older laya measurements.
 
 ## Demo
 
@@ -117,10 +117,12 @@ Requires Accessibility access for the launching terminal.
 
 ## Benchmarks
 
-Both models, same Mac, every number with a checked-in report: [Benchmarks.md](Benchmarks.md).
+The on-device models, measured on the same Mac with checked-in reports: [Benchmarks.md](Benchmarks.md).
 CUA-S1-FORMS: 0.9 ms per decision on the Neural Engine, accuracy identical to PyTorch on the
 24,370-row synthetic test. laya: 3.6 ms per short question, identical to PyTorch on laya's ten
-published suites, e8 buckets 30% smaller at the same accuracy.
+published suites, e8 buckets 30% smaller at the same accuracy. GLiClass Edge Apps v2: 1.61 ms FP16
+or 1.81 ms LUT8 for a two-option L128 decision, with its conversion pipeline in
+[mobius PR #101](https://github.com/FluidInference/mobius/pull/101).
 
 ## Scope
 

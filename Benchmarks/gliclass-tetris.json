@@ -2,7 +2,8 @@
   "schema_version": 1,
   "date": "2026-09-22",
   "machine": "Apple M5 Pro",
-  "source_commit": "24615f41a7a848936f13280439b50d571854b7ab",
+  "source_base_commit": "24615f41a7a848936f13280439b50d571854b7ab",
+  "source_note": "Measurements were collected from the uncommitted GLiClass working tree based on source_base_commit; the implementation was subsequently committed in this pull request.",
   "model": {
     "name": "GLiClass Edge Apps v2",
     "base_model": "knowledgator/gliclass-edge-v3.0",

@@ -235,8 +235,9 @@ struct Game2048Command {
                        [--games N] [--seed N] [--moves N] [--candidates 2|3|4]
                        [--model-margin 0...1] [--lookahead] [--json]
 
-            Plays deterministic 4x4 2048. Every model receives the same expectimax shortlist.
-            GLiClass and laya-choice compare it in one pass; laya scores each candidate independently.
+            Plays deterministic 4x4 2048. Every model receives the same heuristic shortlist;
+            --lookahead enables one-move expectimax. GLiClass and laya-choice compare the shortlist
+            in one pass; laya scores each candidate independently.
             """)
     }
 }

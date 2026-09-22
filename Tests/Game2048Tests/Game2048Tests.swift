@@ -8,11 +8,11 @@ struct Game2048Tests {
         let left = try #require(game.candidates().first { $0.direction == .left })
         #expect(left.board[0] == [4, 4, 0, 0])
         #expect(left.board[1] == [8, 8, 0, 0])
-        #expect(left.features.scoreGained == 12)
+        #expect(left.features.scoreGained == 16)
     }
 
     @Test func rejectsMovesThatDoNotChangeBoard() {
-        let game = Game2048(board: [[2, 4, 8, 16], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]])
+        let game = Game2048(board: [[2, 4, 8, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]])
         let directions = Set(game.candidates().map(\.direction))
         #expect(!directions.contains(.left))
         #expect(directions.contains(.right))

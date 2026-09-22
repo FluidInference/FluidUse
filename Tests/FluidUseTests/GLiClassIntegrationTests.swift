@@ -112,6 +112,18 @@ final class GLiClassIntegrationTests: XCTestCase {
         XCTAssertEqual(repeated.selectedIndex, first.selectedIndex)
     }
 
+    func testRejectsAnOptionWhoseTextDoesNotFitTheBucket() async throws {
+        let manager = try await GLiClassManager.load(from: try modelDirectory())
+        let labels = ["short option", String(repeating: "long option ", count: 200)]
+
+        do {
+            _ = try await manager.classify(text: "state", labels: labels)
+            XCTFail("Expected the incomplete final option to be rejected")
+        } catch let error as GLiClassError {
+            XCTAssertEqual(error, .promptTooLong(optionCount: 2, maximumLength: 128))
+        }
+    }
+
     func testModelNamesCoverPublishedPrecisions() throws {
         XCTAssertEqual(
             try GLiClassManager.modelName(length: 128, precision: "fp16"),

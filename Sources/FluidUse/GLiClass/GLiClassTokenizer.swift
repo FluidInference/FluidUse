@@ -7,7 +7,7 @@ public final class GLiClassTokenizer: Sendable {
     public let clsTokenId: Int
     public let sepTokenId: Int
     public let padTokenId: Int
-    private let labelSeparatorTokenId: Int
+    let labelSeparatorTokenId: Int
 
     private struct AddedToken: Sendable {
         let content: String
@@ -235,6 +235,9 @@ public final class GLiClassTokenizer: Sendable {
             scalars[byte] = 256 + offset
             offset += 1
         }
-        return scalars.map { String(UnicodeScalar($0)!) }
+        return scalars.map { value in
+            guard let scalar = UnicodeScalar(value) else { return "\u{FFFD}" }
+            return String(scalar)
+        }
     }
 }

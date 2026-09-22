@@ -115,7 +115,7 @@ struct ContentView: View {
                 ForEach(GameModel.Policy.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
-            .disabled(model.isRunning)
+            .disabled(model.isRunning || model.isLoading)
             HStack {
                 Text("Seed").font(.caption)
                 TextField("seed", value: $model.seed, format: .number).frame(width: 70).disabled(model.isRunning)
