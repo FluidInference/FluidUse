@@ -1,0 +1,356 @@
+# Benchmarks
+
+Both decision models FluidUse runs on device, measured on the same machine: **Apple M5 Pro,
+24 GB, macOS 27.0**, September 2026. Model benchmark reports, conversion pipelines and verification
+harnesses live in
+[mobius `models/computer-use/`](https://github.com/FluidInference/mobius/tree/main/models/computer-use)
+(`cua-s1-forms/coreml/reports`, `laya/coreml/reports`; the laya suites and PyTorch reference rows
+are in `laya/coreml/benchmark`). The Tetris gameplay measurements below are historical PR reports
+and do not have checked-in per-seed artifacts.
+
+| | CUA-S1-FORMS | laya-multilingual |
+| --- | --- | --- |
+| What it decides | one form-element action out of the supplied options (fill / check / click / skip) | typed `choice` / `score` / `noul` questions about any text state |
+| Architecture | byte-level 2-layer encoder + option attention, 706,048 params | mmBERT-base encoder + 2-layer decision head, 322M params |
+| Core ML package | 1.5 MB fp16 | 614 MB fp16 per bucket, 448 MB with int8 embedding (`e8`) |
+| Warm latency, CPU+ANE | **0.9 ms** | **3.6 ms** (128 tokens) |
+| Accuracy vs PyTorch | identical (24,370-row synthetic test) | identical (3,899 questions, 10 suites) |
+| Ops on the Neural Engine | 149 / 173 | 973 / 978 |
+| Swift API | `CuaS1FormsManager` (FluidAudio) | `LayaManager` (this repo) |
+
+## CUA-S1-FORMS
+
+Cua's from-scratch form scorer (`cua-ai/cua-s1-forms`, MIT), converted to a fixed-shape FP16 Core ML
+package with 32 option slots. Context is truncated at 224 UTF-8 bytes and each option at 96, exactly
+as the checkpoint was trained.
+
+### Accuracy
+
+| Test | Rows | Upstream PyTorch | Core ML fp16 | Core ML int8 weights |
+| --- | ---: | ---: | ---: | ---: |
+| Pinned demo (3 forms, 3 PDFs) | 196 | 196 / 196 | 196 / 196 | 196 / 196 |
+| Full published synthetic test | 24,370 | 24,359 (0.99955) | 24,359 (0.99955) | 24,359 (0.99955) |
+
+The synthetic test is the complete released file with no filtering or resampling; the model card
+claims 0.9995 on "about 15,000 decisions" and the full file reproduces that. The upstream Cua
+evaluator reports 0 wrong actions and 0 wrong targets on the demo; its 23.5% coverage is because it
+counts `skip` as abstention (150 of the 196 decisions are skips). Max per-row probability error vs
+PyTorch: 0.020 (fp16), 0.068 (int8); the fp32 export adapter alone is within 1.1e-6, so all of that
+is compute precision.
+
+### Latency and placement
+
+Synchronous `predict` on pre-encoded inputs, 30 timed passes after warm-up (`ane-profile.json`);
+Swift figures are `CuaS1FormsManager.score` end to end, release build, 200 calls
+(`swift-variant-comparison.json`).
+
+| Configuration | Warm median | p95 | Load | Ops on ANE |
+| --- | ---: | ---: | ---: | ---: |
+| CPU only | 1.53 ms | 1.60 ms | 71 ms | 0 |
+| CPU + GPU | 0.93 ms | 2.38 ms | 70 ms | 0 |
+| CPU + ANE | **0.93 ms** | 0.97 ms | 567 ms | 149 / 173 |
+| All units | 0.91 ms | 1.23 ms | 116 ms | – |
+| Swift, CPU + ANE | **0.91 ms** | 0.93 ms | 600 ms | |
+
+The 24 CPU ops are integer/mask preparation and the byte-embedding gathers. Host encoding is
+0.03 ms per decision. Live browser validation (WKWebView DOM observation, real Core ML choices,
+dispatched events, DOM readback) reproduced 100/100 of the original decisions across six runs.
+
+### Compression
+
+int8 weights keep accuracy identical (24,359 / 24,370), but at 1.5 MB there is nothing to gain;
+the shipped package stays fp16.
+
+## laya-multilingual
+
+Convai Innovations' open Jev-style decision model (`convaiinnovations/laya` `multilingual/`,
+Apache-2.0), converted to fixed-length FP16 buckets of 128 / 256 / 512 / 1024 tokens with 32 option
+slots. `LayaManager` runs a prompt on the smallest loaded bucket that fits.
+
+### Accuracy on laya's published suites
+
+The 3,899 questions are rebuilt from laya's own research scripts (same datasets, seed 13, 400 cases
+per task, 300 MASSIVE cases with 20 options; banking77 excluded because its 77 labels exceed the 32
+slots). "Upstream" is the laya-multilingual column of laya's BENCHMARKS.md (Tesla T4, PyTorch).
+
+| Suite | n | Upstream (T4) | PyTorch CPU (M5 Pro) | Core ML fp16 | Core ML e8 | p50 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| AG News (4 labels) | 400 | 0.930 | 0.935 | **0.935** | 0.935 | 3.8 ms |
+| DAIR Emotion (6) | 400 | 0.530 | 0.537 | **0.537** | 0.535 | 3.7 ms |
+| MASSIVE intent (20 options) | 300 | 0.657 | 0.657 | **0.657** | 0.653 | 5.2 ms |
+| Support triage (10 queues) | 400 | 0.522 | 0.540 | **0.542** | 0.537 | 5.3 ms |
+| Email spam (noul) | 400 | 0.993 | 0.993 | **0.993** | 0.993 | 5.8 ms |
+| Phishing (noul) | 400 | 0.993 | 0.993 | **0.993** | 0.993 | 9.0 ms |
+| Guardrails / jailbreak (noul, held out) | 400 | 0.755 | 0.805 | **0.808** | 0.810 | 3.8 ms |
+| Moderation / toxicity (noul, held out) | 400 | 0.525 | 0.535 | **0.535** | 0.535 | 3.8 ms |
+| RAG passage relevance (noul) | 400 | 0.657 | 0.672 | **0.672** | 0.675 | 5.3 ms |
+| Model routing domain (6) | 399 | 0.123 | 0.441 | **0.441** | 0.454 | 5.3 ms |
+
+Core ML fp16 matches the PyTorch reference on every suite, with 100% row-level argmax agreement on
+eight suites and 99.8% on the other two. Whole run from Swift: **3,899 questions in 22.9 s,
+p50 5.2 ms, p95 18.0 ms** (bucket picked per prompt), versus 61.6 ms per question for PyTorch FP32
+on the same CPU and 32.8 ms per question upstream reports on a T4. The PyTorch column reproduces
+upstream's table except model routing, where the published 0.123 looks like an upstream run
+artefact (their own script gives 0.441 here).
+
+### The "Laya vs Jev, measured" five tasks
+
+The laya Tetris post compares laya to Jev on five tasks, 100 labelled examples each, laya 0.3.4
+English checkpoint on an M1 Max GPU. It names the tasks but not the datasets, sampling or wording,
+so this reproduction uses the obvious public dataset for each (AG News, UCI SMS Spam, DAIR Emotion,
+Yelp Review Full, deepset prompt-injections), the first 100 rows of the test split, and laya's own
+question wording; Jev is closed and its column is copied from the post. The multilingual checkpoint
+is the one FluidUse ships, so its PyTorch column is the reference for the Core ML column.
+
+| Task | Post: laya (M1 Max) | Post: Jev | laya English, PyTorch here | laya multilingual, PyTorch here | Core ML multilingual (M5 Pro) | p50 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| News topic · choice | 93% | 92% | 95% | 97% | **97%** | 5.5 ms |
+| SMS spam · noul | 96% | 96% | 88% | 58% | **58%** | 4.2 ms |
+| Emotion · choice | 45% | 53% | 65% | 58% | **58%** | 4.1 ms |
+| Review star rating · score | 35% | 70% | 39% | 35% | **35%** | 5.9 ms |
+| Prompt injection · noul | 65% | 71% | 79% | 64% | **65%** | 4.4 ms |
+| **All 500** | 66.8% | 76.4% | 73.2% | 62.4% | **62.6%** | 4.5 ms |
+
+Core ML matches its PyTorch reference on every task (100% row agreement on four, 99% on prompt
+injection) at 4.5 ms median per question. The English checkpoint lands close to the post on the
+three tasks where a dataset is unambiguous (news, SMS spam, review stars) and above it on emotion
+and prompt injection, which suggests the post drew those from different data. The multilingual
+checkpoint is markedly weaker on SMS spam: the first 100 UCI rows are 83% ham and it flags 57 of
+them as spam. The 5-way star rating is near chance for both checkpoints, consistent with laya's own
+note that its `score` questions are weak.
+
+### Latency and placement per bucket
+
+16 fixture questions vs PyTorch (`verification-multilingual-L*.json`) and `coreml-cli` profiles
+(`ane-profile-L*.json`, 20 iterations). Argmax agreement is 16/16 everywhere; Δprob is the max
+per-row probability error.
+
+| Bucket | CPU only | CPU + GPU | CPU + ANE | ANE / CPU runtime share | All units | Δprob ANE / ALL | Cold compile |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| L128 | 14.1 ms | 4.6 ms | **3.6 ms** | 33% / 67% | 3.9 ms | 0.013 / 0.002 | 4.9 s |
+| L256 | 27.1 ms | 5.3 ms | 9.9 ms | 52% / 48% | **5.2 ms** | 0.013 / 0.002 | 5.5 s |
+| L512 | 58.9 ms | 8.8 ms | 27.5 ms | 71% / 29% | **9.0 ms** | 0.013 / 0.002 | 6.0 s |
+| L1024 | 149.6 ms | 18.1 ms | 80.1 ms | 87% / 13% | **17.9 ms** | 0.013 / 0.002 | 8.5 s |
+
+973 of 978 ops (99.5%) are placed on the ANE for every bucket; the five CPU ops are the int32
+casts and the embedding gather. The runtime share is the profiler's estimate for the CPU+ANE
+configuration: at 128 tokens the ANE finishes its ops fast enough that the CPU-side gather and
+casts are the larger slice, and the share only climbs with length because the ANE's attention
+gets slower, not because it does more useful work. `all` runs 100% on the GPU, and the ANE only
+wins at 128 tokens because the L×L attention cost grows faster on it. `LayaManager` therefore defaults the 128 bucket to CPU+ANE
+and longer buckets to all units. A single short question from Swift, release build, including
+tokenization: 3.7 ms.
+
+### Compression
+
+`quantize.py` applies post-training compression and `verify.py --precision <tag>` re-runs the
+parity gates. The published variants (L128; every bucket passes the same gates):
+
+| Variant | Package | CPU+ANE argmax · Δprob | ALL argmax · Δprob | Full-suite accuracy |
+| --- | ---: | ---: | ---: | --- |
+| fp16 | 644 MB | 16/16 · 0.013 | 16/16 · 0.002 | reference |
+| **e8** int8 embedding table, fp16 encoder + head | **448 MB** | 16/16 · 0.014 | 16/16 · 0.015 | within 0.5 pt on every suite, same latency |
+
+e8 is 30% smaller per bucket (the default 128 + 512 download drops from 1.32 GB to 0.93 GB) and is
+selected with `Configuration.precision = "e8"` or `--precision e8`. The encoder stays fp16.
+
+### Tetris demo
+
+`LayaTetrisDemo` / `FluidUseLaya tetris` score each offered landing with one `noul` question.
+The demo enables the harness by default; the CLI enables it with `--shortlist --describe graded`.
+
+The original configuration averaged 75.8 pieces. Two changes together substantially improve survival:
+the harness withholds landings that bury a cell when a clean one exists, and
+the wording stays discriminative on a tall board, where the original clause read identically for
+every option once the stack passed 15 rows. Reported results over ten seeds, uncapped:
+
+| Configuration | Mean pieces | Mean lines |
+| --- | ---: | ---: |
+| Original wording, no filter | 75.8 | 16.9 |
+| Graded wording only | 47.5 | 5.5 |
+| Harness filter only | 87.3 | 22.5 |
+| **Both** | **568.3** | **214.5** |
+| Dellacherie heuristic | 582.8 | 217.9 |
+
+Wording alone regresses; filtering alone improves modestly from 75.8 to 87.3 pieces. Neither
+approaches the combined result. The PR also reported 17.2 pieces for random choice among filtered
+moves, but its CLI ignored `--shortlist` for random and heuristic policies. That control is excluded
+from the table until it is rerun with the corrected CLI and the original seed manifest; it cannot
+currently support a claim about how much of the gain comes from model ranking.
+Per piece the model is offered 5.6 of 23.1 legal landings and is left a single forced option 5% of
+the time. It picks the heuristic's exact best landing 64–71% of the time, up from 41–52% before.
+
+One-piece lookahead (`--lookahead 4`) was tried and is worse on average, 444.5 pieces against 581.5
+over six seeds for product scoring; all three combine modes performed worse than greedy play.
+Ranking on the follow-up alone reaches 73.7. The search scores at most the first 12 follow-up
+landings in enumeration order, so these results do not isolate the model's ability to judge future
+boards. It is
+off by default and kept as a control. It does spend about four times the calls per piece, so on a
+seed that suits it a single game runs much longer: seed 24 gives 2,263 pieces over 50,487 calls.
+
+Speed of the demo loop changed too, though none of it is inference. A piece went from 159 ms to
+29 ms: a 120 ms cosmetic sleep was removed, and the filter cut calls per piece from 23.2 to 5.6.
+Removing the sleep also stopped the Neural Engine powering down between pieces, which took calls
+from 5.9 ms back to 3.8. The model answers each question in 3.8 ms either way, agreeing to within
+0.01 ms with the filter on or off.
+
+Sustained rate on the 128 bucket: **~15,800 decisions per minute at 3.8 ms median** (seeds 1, 2,
+3, 7), against the 1,799 per minute in the original laya Tetris post (~27 ms on an M1 Max GPU).
+In the earlier, unfiltered 200-piece runs, zero-shot laya cleared 13–32 lines before topping out;
+the feature-weighted heuristic cleared 71–77 lines. Those capped runs use a different configuration
+from the uncapped table above.
+
+The Tetris figures above are the PR author's historical measurements, not a new v0.2.1 benchmark.
+Per-seed Tetris reports are not checked into this repository. Release verification covers logic,
+controls and build correctness; the historical lookahead results predate the terminal-board fix.
+
+#### GLiClass Edge Apps v2
+
+The GLiClass demo uses the 32.7M-parameter application-tuned checkpoint and a 66 MB FP16 L128
+Core ML package. It first applies the same no-new-hole harness, keeps the heuristic's two strongest
+surviving landings, then asks GLiClass to choose between their natural-language descriptions in one
+encoder pass. This is a different policy from laya's independent score for every surviving landing.
+
+Seeds 1–10, with a 5,000-piece cap:
+
+| Policy | Mean pieces | Mean lines | Seeds reaching cap | Model calls / non-forced piece |
+| --- | ---: | ---: | ---: | ---: |
+| Corrected Dellacherie heuristic | 2,874.4 | 1,140.2 | 3/10 | 0 |
+| **GLiClass FP16, heuristic top-two** | **3,482.3** | **1,385.4** | **4/10** | **1** |
+| **GLiClass LUT8, heuristic top-two** | **3,666.7** | **1,459.2** | **5/10** | **1** |
+
+GLiClass's per-seed piece counts were 5,000, 1,840, 5,000, 4,103, 1,863, 2,377, 860,
+5,000, 3,780, and 5,000. The capped mean is therefore a lower bound. It chose the heuristic's first
+candidate 98.2% of the time; the remaining choices improved mean survival by 21.1% over the corrected
+heuristic control. End-to-end model-call latency averaged 4.86 ms median across the ten runs. That is
+slower per call than laya's historical 3.8 ms, but GLiClass makes about one call per piece instead of
+laya's 5.6 calls, so the complete decision loop is substantially faster.
+
+The 8-bit per-tensor LUT package is 33.0 MB instead of 65.7 MB. It preserves 97.1% of FP16 choices
+on the L128 application-suite rows and averages 4.92 ms per Tetris model call. Its different choices
+produce a higher capped Tetris mean, but the game is path-sensitive and that result should be read as
+survival parity rather than an accuracy gain. Six-bit is 24.8 MB with 91.7% choice agreement; four-bit
+is rejected after application accuracy fell by 15.75 points.
+
+A controlled speed run used the same release binary, L128 bucket, shortlist, graded descriptions and
+seeds 1–3, with a 1,000-piece cap. GLiClass FP16 completed all 3,000 pieces in 14.52 seconds, or
+4.84 ms of wall time per piece. Optimized laya e8 topped out after 1,023 total pieces in 21.44 seconds,
+or 20.96 ms per piece. GLiClass therefore ran the complete simulation **4.33× faster** (206.6 versus
+47.7 pieces/second). Its individual Swift model call was slower—4.87 ms versus laya's 3.76 ms—but it
+made 0.92 calls per piece instead of 5.44 because it ranks the top two landings jointly.
+
+The Swift runtime now reuses fixed-shape Core ML input buffers and encodes the GLiClass label
+template by segment, avoiding a full scan against every tokenizer added token. Repeating seed 24 to
+the 1,000-piece cap preserved the original 399 lines and 937 model calls. Median complete-call latency
+for `fp16-mask` fell from 5.10 ms to **1.62 ms**. Plain FP16 measured **1.61 ms** (1.51 seconds for
+the full simulation), and LUT8 measured **1.81 ms**. This makes GLiClass faster than the 3.76 ms laya
+comparison per call as well as per placed piece.
+
+An ANE placement experiment replaces the integer attention mask with a ready-to-add floating-point
+bias. It removes one CPU cast, raises operation placement from 98.9% to 99.1% ANE and exactly preserves
+all 3,899 application-suite choices. Alternating FP16 and `fp16-mask` on seeds 1–3 reduced aggregate
+Tetris time from 14.585 to 14.495 seconds for 3,000 pieces, a **0.62% speedup**. A second experiment
+reached 100% ANE by gathering token embeddings on the host, but its larger input made median complete
+calls 2–3% slower, so it is not exposed by FluidUse.
+
+The historical laya mean above is 568.3 pieces, but its per-seed artifacts are unavailable. Treat the
+GLiClass comparison to that number as directional; the GLiClass and corrected heuristic rows were run
+together with the current terminal-board fix and are the controlled comparison. The complete run data,
+model size, command, and machine are in [`Benchmarks/gliclass-tetris.json`](Benchmarks/gliclass-tetris.json).
+
+#### GLiClass 2048
+
+`FluidUseLaya 2048` and `GLiClass2048Demo` share a deterministic 4×4 engine. A conventional safety
+heuristic ranks legal swipes from empty cells, merge score, corner placement, monotonicity, and
+roughness. GLiClass compares the top two descriptions in one LUT8 L128 pass. A 0.40 probability-margin
+gate keeps the heuristic leader unless the model strongly prefers the alternative.
+
+Seeds 1–10, played to game over:
+
+| Policy | Mean score | Mean moves | Games reaching 2048 | Mean run-median latency |
+| --- | ---: | ---: | ---: | ---: |
+| Random | 1,187 | 125.8 | 0/10 | — |
+| Heuristic | **14,104** | **818.2** | **2/10** | — |
+| GLiClass LUT8, no margin | 7,688 | 499.8 | 0/10 | 1.76 ms |
+| GLiClass LUT8, margin 0.40 | 13,419 | 786.2 | **2/10** | 1.80 ms |
+
+The confidence gate recovers most of the heuristic's average performance while allowing selective
+model intervention; it does not beat the heuristic on average. Seed 9 is the measured visual-demo
+case: GLiClass scored 33,812 over 1,702 moves and reached tile 2048, while the heuristic on the same
+seed scored 7,268 and stopped at tile 512. The default is intentionally disclosed as a selected demo
+seed rather than a representative mean. Full per-seed results are in
+[`Benchmarks/gliclass-2048.json`](Benchmarks/gliclass-2048.json).
+
+Adding a one-move expectimax shortlist extends the game without delaying inference: the harness
+averages the best reply across every possible 2/4 tile spawn before offering its top two swipes to
+GLiClass. On seeds 1–10, expectimax alone averaged 25,382 points and 1,318 moves; GLiClass with a 0.50
+override margin averaged 18,970 points and 1,012 moves at 1.81 ms median. The longer visual-demo seed
+was selected from seeds 1–60: seed 46 scored 70,864 over **3,230 moves**, reached tile **4096**, and
+agreed with the expectimax leader on 97.7% of comparisons. This is 90% more moves than the original
+1,702-move seed-9 demo. The real SwiftUI run lasts **33.6 seconds** instead of 16.5 seconds, with no
+artificial delay and 2.10 ms of model work per move.
+
+#### 2048 Bench: GLiClass vs laya
+
+`Decision2048BenchDemo` runs GLiClass Edge Apps v2 LUT8 and laya Multilingual E8 side by side. Both
+boards start from the same seed and use the same top-two one-move expectimax shortlist. The comparison
+uses each model's raw final decision without a confidence fallback: GLiClass compares both descriptions
+in one call, while laya applies its established `noul` question to each description in two calls.
+
+Isolated Core ML runs over seeds 1–10 avoid accelerator contention:
+
+| Model | Mean score | Mean moves | Best tile | Model ms/move | Expectimax agreement |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **GLiClass LUT8** | **10,740** | **651.5** | **2048** | **1.77** | **79.2%** |
+| laya E8 | 2,834 | 232.5 | 512 | 7.63 | 46.9% |
+
+GLiClass scores **3.79×** as many points, survives **2.80×** as many moves, and uses **4.31×** less
+model time per move. The speed difference combines a smaller model with fewer calls: GLiClass is 32.7M
+parameters and compares the candidates jointly, while laya is about 322M parameters and scores each
+candidate independently. A calibration run of laya's one-pass `choice` head performed worse on seed 1
+(1,416 points and 144 moves versus 3,032 points and 244 moves for `noul`), so the demo retains laya's
+existing candidate-scoring contract. The shortlist remains a strong conventional policy and is a
+material part of both results; this measures fit for the same constrained decision, not general model
+quality. Full results and protocol are in
+[`Benchmarks/decision-models-2048.json`](Benchmarks/decision-models-2048.json).
+
+A separate conversion gate screened every locally runnable sub-1B candidate on seeds 1–3 with the
+same raw top-two choice. It uses Core ML where a verified package already exists and PyTorch MPS only
+to reject candidates before investing in a new exporter. PyTorch latency is therefore not a Core ML
+projection.
+
+| Candidate | Runtime | Mean score | Mean moves | Best tile | Median call | Expectimax agreement |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Expectimax control | no model | **21,339** | **1,170.7** | **2048** | — | 100% |
+| **GLiClass Edge Apps v2 LUT8** | **Core ML** | **14,701** | **841.7** | **2048** | **1.78 ms** | 77.1% |
+| Kev 0.8B | PyTorch MPS | 7,487 | 494.7 | 1024 | 144.79 ms | 79.3% |
+| laya E8 | Core ML | 3,239 | 253.3 | 512 | 3.84 ms × 2 | 44.1% |
+| GLiNER 2.5 small | PyTorch MPS | 1,952 | 175.0 | 256 | 20.13 ms | 4.3% |
+| GLiClass Base v3 | PyTorch MPS | 1,695 | 163.3 | 256 | 41.23 ms | 24.5% |
+| Kev 0.5B FP16 | Core ML | 1,333 | 139.0 | 128 | 7.49 ms | 6.3% |
+
+GLiClass Edge is the conversion winner: it scores almost twice as high as the second-place model and
+is roughly 81× faster than Kev 0.8B's current Apple path. GLiClass Base and GLiNER small failed the
+quality gate, so their incompatible DeBERTa exporters were not pursued. Kev 0.8B is the only useful
+future challenger, but it needs a new Qwen3.5 hybrid exporter and still loses decisively on this game.
+The higher expectimax-only result shows that 2048-specific training of the existing Edge model is a
+better next quality experiment than converting another untuned general model.
+
+## Reproduce
+
+The benchmark command writes completion counts and returns a failure exit status when any
+question fails. Per-suite accuracy describes completed questions only; inspect `complete`,
+`completed` and `dropped` before comparing runs. `--limit N` requires a positive integer.
+
+```bash
+# laya: suites.jsonl + reference-rows.jsonl come from mobius models/computer-use/laya/coreml/benchmark
+# (generated by its benchmark.py); the buckets download on first run
+swift run -c release FluidUseLaya benchmark --suites <mobius>/benchmark/suites.jsonl \
+    --reference <mobius>/benchmark/reference-rows.jsonl --report /tmp/laya.json
+swift run -c release FluidUseLaya benchmark --suites <mobius>/benchmark/suites.jsonl \
+    --reference <mobius>/benchmark/reference-rows.jsonl --precision e8
+
+# CUA-S1-FORMS and the laya conversion / PyTorch reference, from mobius
+cd models/computer-use/cua-s1-forms/coreml && uv sync --frozen && uv run python verify.py && uv run python benchmark-synthetic.py
+cd models/computer-use/laya/coreml && uv sync --frozen && uv run python verify.py --length 128 && uv run python benchmark.py
+```

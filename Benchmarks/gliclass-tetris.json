@@ -1,0 +1,591 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-22",
+  "machine": "Apple M5 Pro",
+  "source_base_commit": "24615f41a7a848936f13280439b50d571854b7ab",
+  "source_note": "Measurements were collected from the uncommitted GLiClass working tree based on source_base_commit; the implementation was subsequently committed in this pull request.",
+  "model": {
+    "name": "GLiClass Edge Apps v2",
+    "base_model": "knowledgator/gliclass-edge-v3.0",
+    "parameters": 32705154,
+    "coreml_package": "gliclass_edge_apps_fp16_L128_options25.mlpackage",
+    "coreml_package_bytes": 65675264,
+    "precision": "fp16",
+    "compute_units": "cpuAndNeuralEngine"
+  },
+  "command": "FluidUseLaya tetris --policy gliclass --gliclass-choice --gliclass-candidates 2 --lengths 128 --pieces 5000 --shortlist --describe graded --agreement --json",
+  "piece_cap": 5000,
+  "gliclass": {
+    "summary": {
+      "mean_pieces": 3482.3,
+      "median_pieces": 3941.5,
+      "mean_lines": 1385.4,
+      "seeds_reaching_cap": 4,
+      "mean_of_run_median_ms": 4.8640541,
+      "mean_heuristic_top_agreement": 0.9819464559
+    },
+    "runs": [
+      {
+        "seed": 1,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 4.94975,
+        "heuristic_top_agreement": 0.9792790848
+      },
+      {
+        "seed": 2,
+        "pieces": 1840,
+        "lines": 726,
+        "game_over": true,
+        "median_ms": 4.747416,
+        "heuristic_top_agreement": 0.9821958457
+      },
+      {
+        "seed": 3,
+        "pieces": 5000,
+        "lines": 1997,
+        "game_over": false,
+        "median_ms": 4.74375,
+        "heuristic_top_agreement": 0.9831497084
+      },
+      {
+        "seed": 4,
+        "pieces": 4103,
+        "lines": 1628,
+        "game_over": true,
+        "median_ms": 4.838417,
+        "heuristic_top_agreement": 0.9824973877
+      },
+      {
+        "seed": 5,
+        "pieces": 1863,
+        "lines": 734,
+        "game_over": true,
+        "median_ms": 4.962542,
+        "heuristic_top_agreement": 0.9819557625
+      },
+      {
+        "seed": 6,
+        "pieces": 2377,
+        "lines": 939,
+        "game_over": true,
+        "median_ms": 4.935708,
+        "heuristic_top_agreement": 0.9821755027
+      },
+      {
+        "seed": 7,
+        "pieces": 860,
+        "lines": 333,
+        "game_over": true,
+        "median_ms": 4.877875,
+        "heuristic_top_agreement": 0.9821882952
+      },
+      {
+        "seed": 8,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 4.833083,
+        "heuristic_top_agreement": 0.9815924658
+      },
+      {
+        "seed": 9,
+        "pieces": 3780,
+        "lines": 1502,
+        "game_over": true,
+        "median_ms": 4.927875,
+        "heuristic_top_agreement": 0.9834616481
+      },
+      {
+        "seed": 10,
+        "pieces": 5000,
+        "lines": 1999,
+        "game_over": false,
+        "median_ms": 4.824125,
+        "heuristic_top_agreement": 0.9809688581
+      }
+    ]
+  },
+  "heuristic_control": {
+    "summary": {
+      "mean_pieces": 2874.4,
+      "mean_lines": 1140.2,
+      "seeds_reaching_cap": 3
+    },
+    "runs": [
+      {
+        "seed": 1,
+        "pieces": 1969,
+        "lines": 775
+      },
+      {
+        "seed": 2,
+        "pieces": 5000,
+        "lines": 1997
+      },
+      {
+        "seed": 3,
+        "pieces": 2540,
+        "lines": 1004
+      },
+      {
+        "seed": 4,
+        "pieces": 3275,
+        "lines": 1296
+      },
+      {
+        "seed": 5,
+        "pieces": 5000,
+        "lines": 1998
+      },
+      {
+        "seed": 6,
+        "pieces": 959,
+        "lines": 371
+      },
+      {
+        "seed": 7,
+        "pieces": 460,
+        "lines": 173
+      },
+      {
+        "seed": 8,
+        "pieces": 5000,
+        "lines": 1998
+      },
+      {
+        "seed": 9,
+        "pieces": 1014,
+        "lines": 392
+      },
+      {
+        "seed": 10,
+        "pieces": 3527,
+        "lines": 1398
+      }
+    ]
+  },
+  "model_variants": {
+    "fp16": {
+      "coreml_package": "gliclass_edge_apps_fp16_L128_options25.mlpackage",
+      "coreml_package_bytes": 65675264
+    },
+    "lut8": {
+      "coreml_package": "gliclass_edge_apps_lut8_kmeans_per_tensor_L128_options25.mlpackage",
+      "coreml_package_bytes": 32959320,
+      "fp16_argmax_agreement": 0.9710182098,
+      "l128_micro_accuracy": 0.7217235189
+    },
+    "lut6": {
+      "coreml_package": "gliclass_edge_apps_lut6_kmeans_per_tensor_L128_options25.mlpackage",
+      "coreml_package_bytes": 24753633,
+      "fp16_argmax_agreement": 0.9169017697,
+      "l128_micro_accuracy": 0.7137727622
+    },
+    "lut4_rejected": {
+      "coreml_package_bytes": 16564321,
+      "fp16_argmax_agreement": 0.6347781482,
+      "l128_micro_accuracy": 0.5619389587
+    },
+    "fp16-mask": {
+      "coreml_package": "gliclass_edge_apps_float_mask_fp16_L128_options25.mlpackage",
+      "coreml_package_bytes": 65664273,
+      "application_argmax_agreement": 1.0,
+      "ane_ops": 430,
+      "cpu_ops": 4
+    }
+  },
+  "gliclass_lut8": {
+    "command": "FluidUseLaya tetris --policy gliclass --precision lut8 --gliclass-choice --gliclass-candidates 2 --lengths 128 --pieces 5000 --shortlist --describe graded --agreement --json",
+    "summary": {
+      "mean_pieces": 3666.7,
+      "median_pieces": 4802.5,
+      "mean_lines": 1459.2,
+      "seeds_reaching_cap": 5,
+      "mean_of_run_median_ms": 4.9186873,
+      "mean_heuristic_top_agreement": 0.98387596057
+    },
+    "runs": [
+      {
+        "seed": 1,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 4.851333
+      },
+      {
+        "seed": 2,
+        "pieces": 1840,
+        "lines": 726,
+        "game_over": true,
+        "median_ms": 4.796208
+      },
+      {
+        "seed": 3,
+        "pieces": 5000,
+        "lines": 1997,
+        "game_over": false,
+        "median_ms": 4.7985
+      },
+      {
+        "seed": 4,
+        "pieces": 3196,
+        "lines": 1264,
+        "game_over": true,
+        "median_ms": 4.882208
+      },
+      {
+        "seed": 5,
+        "pieces": 4605,
+        "lines": 1828,
+        "game_over": true,
+        "median_ms": 4.809708
+      },
+      {
+        "seed": 6,
+        "pieces": 338,
+        "lines": 122,
+        "game_over": true,
+        "median_ms": 4.908542
+      },
+      {
+        "seed": 7,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 4.823458
+      },
+      {
+        "seed": 8,
+        "pieces": 1688,
+        "lines": 663,
+        "game_over": true,
+        "median_ms": 5.413958
+      },
+      {
+        "seed": 9,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 4.871
+      },
+      {
+        "seed": 10,
+        "pieces": 5000,
+        "lines": 1998,
+        "game_over": false,
+        "median_ms": 5.031958
+      }
+    ]
+  },
+  "controlled_speed_comparison": {
+    "piece_cap_per_seed": 1000,
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "shared_configuration": "release binary, L128, shortlist, graded descriptions, no lookahead",
+    "gliclass_fp16": {
+      "command": "FluidUseLaya tetris --policy gliclass --precision fp16 --gliclass-choice --gliclass-candidates 2 --lengths 128 --pieces 1000 --shortlist --describe graded --agreement --json",
+      "summary": {
+        "total_pieces": 3000,
+        "total_lines": 1195,
+        "total_model_calls": 2761,
+        "total_elapsed_s": 14.517404079437256,
+        "calls_per_piece": 0.9203333333333333,
+        "wall_ms_per_piece": 4.839134693145752,
+        "pieces_per_second": 206.64851536710069,
+        "median_of_run_medians_ms": 4.871458,
+        "games_reaching_cap": 3
+      },
+      "runs": [
+        {
+          "seed": 1,
+          "pieces": 1000,
+          "lines": 397,
+          "model_calls": 931,
+          "elapsed_s": 4.671892046928406,
+          "median_call_ms": 4.777042,
+          "p95_call_ms": 5.65325,
+          "game_over": false
+        },
+        {
+          "seed": 2,
+          "pieces": 1000,
+          "lines": 399,
+          "model_calls": 919,
+          "elapsed_s": 5.160014986991882,
+          "median_call_ms": 5.197208,
+          "p95_call_ms": 7.437541,
+          "game_over": false
+        },
+        {
+          "seed": 3,
+          "pieces": 1000,
+          "lines": 399,
+          "model_calls": 911,
+          "elapsed_s": 4.685497045516968,
+          "median_call_ms": 4.871458,
+          "p95_call_ms": 6.229958,
+          "game_over": false
+        }
+      ]
+    },
+    "laya_e8": {
+      "command": "FluidUseLaya tetris --policy laya --precision e8 --lengths 128 --pieces 1000 --shortlist --describe graded --agreement --json",
+      "summary": {
+        "total_pieces": 1023,
+        "total_lines": 369,
+        "total_model_calls": 5561,
+        "total_elapsed_s": 21.44147491455078,
+        "calls_per_piece": 5.435972629521016,
+        "wall_ms_per_piece": 20.959408518622464,
+        "pieces_per_second": 47.71127005380417,
+        "median_of_run_medians_ms": 3.763667,
+        "games_reaching_cap": 0
+      },
+      "runs": [
+        {
+          "seed": 1,
+          "pieces": 351,
+          "lines": 128,
+          "model_calls": 1938,
+          "elapsed_s": 7.5369579792022705,
+          "median_call_ms": 3.775167,
+          "p95_call_ms": 4.493583,
+          "game_over": true
+        },
+        {
+          "seed": 2,
+          "pieces": 383,
+          "lines": 139,
+          "model_calls": 2111,
+          "elapsed_s": 8.054324984550476,
+          "median_call_ms": 3.763667,
+          "p95_call_ms": 4.054291,
+          "game_over": true
+        },
+        {
+          "seed": 3,
+          "pieces": 289,
+          "lines": 102,
+          "model_calls": 1512,
+          "elapsed_s": 5.850191950798035,
+          "median_call_ms": 3.763333,
+          "p95_call_ms": 4.069834,
+          "game_over": true
+        }
+      ]
+    },
+    "gliclass_wall_time_speedup": 4.331230653345895,
+    "note": "Policies follow different board paths. Wall time is normalized per placed piece; model-call latency and calls per piece explain the loop-level difference."
+  },
+  "ane_placement_experiment": {
+    "piece_cap_per_seed": 1000,
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "method": "alternating FP16 then fp16-mask in one release-process sequence per seed; otherwise identical GLiClass Tetris configuration",
+    "fp16": {
+      "summary": {
+        "total_pieces": 3000,
+        "total_model_calls": 2761,
+        "total_elapsed_s": 14.58543586730957,
+        "wall_ms_per_piece": 4.8618119557698565,
+        "pieces_per_second": 205.68463138793945,
+        "calls_per_piece": 0.9203333333333333,
+        "median_of_run_medians_ms": 4.914125,
+        "mean_of_run_p95_ms": 6.606055666666666
+      },
+      "runs": [
+        {
+          "agreement": true,
+          "combine": "product",
+          "decisions": 931,
+          "decisions_per_minute": 11191.500189228755,
+          "describe": "graded",
+          "elapsed_s": 4.99128794670105,
+          "forced_single_option_fraction": 0.069,
+          "game_over": false,
+          "heuristic_percentile_mean": 0.9774436090225563,
+          "heuristic_top_agreement": 0.9774436090225563,
+          "landings_after_filter_mean": 5.423,
+          "landings_before_filter_mean": 23.157,
+          "landings_offered_to_model_mean": 1.931,
+          "lines": 397,
+          "lookahead": 0,
+          "max_tokens": 102,
+          "median_ms": 4.899834,
+          "p95_ms": 6.689208,
+          "pieces": 1000,
+          "policy": "gliclass",
+          "seed": 1,
+          "shortlist": true,
+          "precision": "fp16"
+        },
+        {
+          "agreement": true,
+          "combine": "product",
+          "decisions": 919,
+          "decisions_per_minute": 11320.554946933014,
+          "describe": "graded",
+          "elapsed_s": 4.87078595161438,
+          "forced_single_option_fraction": 0.081,
+          "game_over": false,
+          "heuristic_percentile_mean": 0.9836779107725789,
+          "heuristic_top_agreement": 0.9836779107725789,
+          "landings_after_filter_mean": 5.371,
+          "landings_before_filter_mean": 23.149,
+          "landings_offered_to_model_mean": 1.919,
+          "lines": 399,
+          "lookahead": 0,
+          "max_tokens": 103,
+          "median_ms": 4.987708,
+          "p95_ms": 6.804334,
+          "pieces": 1000,
+          "policy": "gliclass",
+          "seed": 2,
+          "shortlist": true,
+          "precision": "fp16"
+        },
+        {
+          "agreement": true,
+          "combine": "product",
+          "decisions": 911,
+          "decisions_per_minute": 11572.265762990015,
+          "describe": "graded",
+          "elapsed_s": 4.723361968994141,
+          "forced_single_option_fraction": 0.089,
+          "game_over": false,
+          "heuristic_percentile_mean": 0.9747530186608123,
+          "heuristic_top_agreement": 0.9747530186608123,
+          "landings_after_filter_mean": 5.282,
+          "landings_before_filter_mean": 23.132,
+          "landings_offered_to_model_mean": 1.911,
+          "lines": 399,
+          "lookahead": 0,
+          "max_tokens": 104,
+          "median_ms": 4.914125,
+          "p95_ms": 6.324625,
+          "pieces": 1000,
+          "policy": "gliclass",
+          "seed": 3,
+          "shortlist": true,
+          "precision": "fp16"
+        }
+      ]
+    },
+    "fp16-mask": {
+      "summary": {
+        "total_pieces": 3000,
+        "total_model_calls": 2761,
+        "total_elapsed_s": 14.495246887207031,
+        "wall_ms_per_piece": 4.831748962402344,
+        "pieces_per_second": 206.9643948353642,
+        "calls_per_piece": 0.9203333333333333,
+        "median_of_run_medians_ms": 4.892667,
+        "mean_of_run_p95_ms": 6.571764
+      },
+      "runs": [
+        {
+          "agreement": true,
+          "combine": "product",
+          "decisions": 931,
+          "decisions_per_minute": 11696.02888830582,
+          "describe": "graded",
+          "elapsed_s": 4.775979995727539,
+          "forced_single_option_fraction": 0.069,
+          "game_over": false,
+          "heuristic_percentile_mean": 0.9774436090225563,
+          "heuristic_top_agreement": 0.9774436090225563,
+          "landings_after_filter_mean": 5.423,
+          "landings_before_filter_mean": 23.157,
+          "landings_offered_to_model_mean": 1.931,
+          "lines": 397,
+          "lookahead": 0,
+          "max_tokens": 102,
+          "median_ms": 4.821709,
+          "p95_ms": 6.082667,
+          "pieces": 1000,
+          "policy": "gliclass",
+          "seed": 1,
+          "shortlist": true,
+          "precision": "fp16-mask"
+        },
+        {
+          "agreement": true,
+          "combine": "product",
+          "decisions": 919,
+          "decisions_per_minute": 10775.451636796515,
+          "describe": "graded",
+          "elapsed_s": 5.117186903953552,
+          "forced_single_option_fraction": 0.081,
+          "game_over": false,
+          "heuristic_percentile_mean": 0.9836779107725789,
+          "heuristic_top_agreement": 0.9836779107725789,
+          "landings_after_filter_mean": 5.371,
+          "landings_before_filter_mean": 23.149,
+          "landings_offered_to_model_mean": 1.919,
+          "lines": 399,
+          "lookahead": 0,
+          "max_tokens": 103,
+          "median_ms": 5.044917,
+          "p95_ms": 7.818667,
+          "pieces": 1000,
+          "policy": "gliclass",
+          "seed": 2,
+          "shortlist": true,
+          "precision": "fp16-mask"
+        },
+        {
+          "agreement": true,
+          "combine": "product",
+          "decisions": 911,
+          "decisions_per_minute": 11877.23815060959,
+          "describe": "graded",
+          "elapsed_s": 4.60207998752594,
+          "forced_single_option_fraction": 0.089,
+          "game_over": false,
+          "heuristic_percentile_mean": 0.9747530186608123,
+          "heuristic_top_agreement": 0.9747530186608123,
+          "landings_after_filter_mean": 5.282,
+          "landings_before_filter_mean": 23.132,
+          "landings_offered_to_model_mean": 1.911,
+          "lines": 399,
+          "lookahead": 0,
+          "max_tokens": 104,
+          "median_ms": 4.892667,
+          "p95_ms": 5.813958,
+          "pieces": 1000,
+          "policy": "gliclass",
+          "seed": 3,
+          "shortlist": true,
+          "precision": "fp16-mask"
+        }
+      ]
+    },
+    "wall_time_speedup": 1.006221969229247,
+    "placement": {
+      "fp16": {
+        "ane_ops": 432,
+        "cpu_ops": 5,
+        "ane_percent": 98.9
+      },
+      "fp16-mask": {
+        "ane_ops": 430,
+        "cpu_ops": 4,
+        "ane_percent": 99.1
+      },
+      "preembedded_rejected": {
+        "ane_ops": 431,
+        "cpu_ops": 0,
+        "ane_percent": 100.0
+      }
+    },
+    "note": "The 100% ANE preembedded graph was rejected because host embedding transfer made median complete calls slower."
+  }
+}
