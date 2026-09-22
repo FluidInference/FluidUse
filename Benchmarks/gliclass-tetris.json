@@ -270,5 +270,108 @@
         "median_ms": 5.031958
       }
     ]
+  },
+  "controlled_speed_comparison": {
+    "piece_cap_per_seed": 1000,
+    "seeds": [
+      1,
+      2,
+      3
+    ],
+    "shared_configuration": "release binary, L128, shortlist, graded descriptions, no lookahead",
+    "gliclass_fp16": {
+      "command": "FluidUseLaya tetris --policy gliclass --precision fp16 --gliclass-choice --gliclass-candidates 2 --lengths 128 --pieces 1000 --shortlist --describe graded --agreement --json",
+      "summary": {
+        "total_pieces": 3000,
+        "total_lines": 1195,
+        "total_model_calls": 2761,
+        "total_elapsed_s": 14.517404079437256,
+        "calls_per_piece": 0.9203333333333333,
+        "wall_ms_per_piece": 4.839134693145752,
+        "pieces_per_second": 206.64851536710069,
+        "median_of_run_medians_ms": 4.871458,
+        "games_reaching_cap": 3
+      },
+      "runs": [
+        {
+          "seed": 1,
+          "pieces": 1000,
+          "lines": 397,
+          "model_calls": 931,
+          "elapsed_s": 4.671892046928406,
+          "median_call_ms": 4.777042,
+          "p95_call_ms": 5.65325,
+          "game_over": false
+        },
+        {
+          "seed": 2,
+          "pieces": 1000,
+          "lines": 399,
+          "model_calls": 919,
+          "elapsed_s": 5.160014986991882,
+          "median_call_ms": 5.197208,
+          "p95_call_ms": 7.437541,
+          "game_over": false
+        },
+        {
+          "seed": 3,
+          "pieces": 1000,
+          "lines": 399,
+          "model_calls": 911,
+          "elapsed_s": 4.685497045516968,
+          "median_call_ms": 4.871458,
+          "p95_call_ms": 6.229958,
+          "game_over": false
+        }
+      ]
+    },
+    "laya_e8": {
+      "command": "FluidUseLaya tetris --policy laya --precision e8 --lengths 128 --pieces 1000 --shortlist --describe graded --agreement --json",
+      "summary": {
+        "total_pieces": 1023,
+        "total_lines": 369,
+        "total_model_calls": 5561,
+        "total_elapsed_s": 21.44147491455078,
+        "calls_per_piece": 5.435972629521016,
+        "wall_ms_per_piece": 20.959408518622464,
+        "pieces_per_second": 47.71127005380417,
+        "median_of_run_medians_ms": 3.763667,
+        "games_reaching_cap": 0
+      },
+      "runs": [
+        {
+          "seed": 1,
+          "pieces": 351,
+          "lines": 128,
+          "model_calls": 1938,
+          "elapsed_s": 7.5369579792022705,
+          "median_call_ms": 3.775167,
+          "p95_call_ms": 4.493583,
+          "game_over": true
+        },
+        {
+          "seed": 2,
+          "pieces": 383,
+          "lines": 139,
+          "model_calls": 2111,
+          "elapsed_s": 8.054324984550476,
+          "median_call_ms": 3.763667,
+          "p95_call_ms": 4.054291,
+          "game_over": true
+        },
+        {
+          "seed": 3,
+          "pieces": 289,
+          "lines": 102,
+          "model_calls": 1512,
+          "elapsed_s": 5.850191950798035,
+          "median_call_ms": 3.763333,
+          "p95_call_ms": 4.069834,
+          "game_over": true
+        }
+      ]
+    },
+    "gliclass_wall_time_speedup": 4.331230653345895,
+    "note": "Policies follow different board paths. Wall time is normalized per placed piece; model-call latency and calls per piece explain the loop-level difference."
   }
 }

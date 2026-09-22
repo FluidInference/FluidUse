@@ -232,6 +232,13 @@ produce a higher capped Tetris mean, but the game is path-sensitive and that res
 survival parity rather than an accuracy gain. Six-bit is 24.8 MB with 91.7% choice agreement; four-bit
 is rejected after application accuracy fell by 15.75 points.
 
+A controlled speed run used the same release binary, L128 bucket, shortlist, graded descriptions and
+seeds 1–3, with a 1,000-piece cap. GLiClass FP16 completed all 3,000 pieces in 14.52 seconds, or
+4.84 ms of wall time per piece. Optimized laya e8 topped out after 1,023 total pieces in 21.44 seconds,
+or 20.96 ms per piece. GLiClass therefore ran the complete simulation **4.33× faster** (206.6 versus
+47.7 pieces/second). Its individual Swift model call was slower—4.87 ms versus laya's 3.76 ms—but it
+made 0.92 calls per piece instead of 5.44 because it ranks the top two landings jointly.
+
 The historical laya mean above is 568.3 pieces, but its per-seed artifacts are unavailable. Treat the
 GLiClass comparison to that number as directional; the GLiClass and corrected heuristic rows were run
 together with the current terminal-board fix and are the controlled comparison. The complete run data,
