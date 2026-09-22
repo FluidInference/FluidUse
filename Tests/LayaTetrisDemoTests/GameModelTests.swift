@@ -6,6 +6,14 @@ import LayaTetris
 @Suite(.serialized)
 struct GameModelTests {
     @MainActor
+    @Test func testDemoDefaultsRunContinuouslyAtFullSpeed() {
+        let model = GameModel()
+        #expect(model.marathon)
+        #expect(model.seed == 1)
+        #expect(model.pieceDelayMs == 0)
+    }
+
+    @MainActor
     private func waitUntil(_ condition: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(5)
         while !condition(), ContinuousClock.now < deadline {

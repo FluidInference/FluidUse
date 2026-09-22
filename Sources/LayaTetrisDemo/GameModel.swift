@@ -12,16 +12,17 @@ struct ScoredCandidate: Identifiable {
     let milliseconds: Double
 }
 
-/// Drives the game loop: laya scores every legal landing of the current piece, the best wins.
+/// Drives the game loop for laya, GLiClass, and the non-model controls.
 @MainActor
 final class GameModel: ObservableObject {
     enum Policy: String, CaseIterable, Identifiable {
-        case laya, heuristic, random
+        case gliclass, laya, heuristic, random
         var id: String { rawValue }
     }
 
     // Model
     @Published private(set) var manager: LayaManager?
+    @Published private(set) var gliClassManager: GLiClassManager?
     @Published private(set) var loadStatus = "Not loaded"
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
@@ -53,7 +54,7 @@ final class GameModel: ObservableObject {
     @Published private(set) var totalLines = 0
 
     // Controls
-    @Published var policy: Policy = .laya
+    @Published var policy: Policy = .gliclass
     /// Harness on: landings that bury a cell are withheld when a clean one exists, and the
     /// landing description stays discriminative on a tall board. 7.5x the pieces, measured.
     @Published var harness = true
@@ -66,9 +67,9 @@ final class GameModel: ObservableObject {
     /// Off by default: greedy is the better player, and 1,199 pieces in 31 s is the honest demo.
     @Published var lookahead = 0
     /// Keep playing after a top-out: a new board on the next seed, totals carried forward.
-    /// A single game averages 568 pieces, so this is what makes a multi-minute clip possible.
-    @Published var marathon = false
-    @Published var seed: UInt64 = 24
+    /// Enabled for the visual demo so a run continues even when one seed tops out early.
+    @Published var marathon = true
+    @Published var seed: UInt64 = 1
     /// Extra delay per scored candidate so the scoring can be watched; 0 runs flat out.
     @Published var stepDelayMs = 0.0
     /// Pause after each placed piece.
@@ -88,6 +89,20 @@ final class GameModel: ObservableObject {
 
     static let question = LayaTetris.question
 
+    /// End-to-end model time per placed piece. This is the comparable speed number: GLiClass
+    /// usually needs one encoder call while laya scores several surviving landings separately.
+    var modelMillisecondsPerPiece: Double {
+        totalPieces > 0 ? runDecisionSeconds * 1000 / Double(totalPieces) : 0
+    }
+
+    var hasLoadedModel: Bool {
+        switch policy {
+        case .gliclass: return gliClassManager != nil
+        case .laya: return manager != nil
+        case .heuristic, .random: return true
+        }
+    }
+
     /// `m:ss.t` so a demo clip reads a running clock rather than a raw double.
     var elapsedText: String {
         let minutes = Int(elapsedSeconds) / 60
@@ -99,14 +114,15 @@ final class GameModel: ObservableObject {
     /// prints the stats and exits, which is how the demo is smoke-tested headlessly.
     func applyEnvironment() {
         let environment = ProcessInfo.processInfo.environment
+        if environment["TETRIS_POLICY"] == "laya" { policy = .laya }
         if let seedText = environment["LAYA_DEMO_SEED"], let value = UInt64(seedText) { seed = value }
         if let text = environment["LAYA_DEMO_LOOKAHEAD"], let value = Int(text) { lookahead = value }
         if environment["LAYA_DEMO_AUTOLOAD"] == "1" { loadModel() }
         guard environment["LAYA_DEMO_AUTORUN"] == "1" else { return }
         loadModel()
         Task {
-            while manager == nil && isLoading { try? await Task.sleep(nanoseconds: 100_000_000) }
-            guard manager != nil else {
+            while !hasLoadedModel && isLoading { try? await Task.sleep(nanoseconds: 100_000_000) }
+            guard hasLoadedModel else {
                 if environment["LAYA_DEMO_QUIT_AFTER"] != nil {
                     print("autorun: model load failed: \(errorMessage ?? "unknown error")")
                     exit(1)
@@ -139,26 +155,46 @@ final class GameModel: ObservableObject {
     }
 
     func loadModel() {
-        guard !isLoading, manager == nil else { return }
+        guard !isLoading, !hasLoadedModel else { return }
         isLoading = true
-        loadStatus = "Loading laya (128-token bucket, CPU + Neural Engine)…"
+        loadStatus = "Loading \(policy.rawValue) (128-token bucket, CPU + Neural Engine)…"
         Task {
             do {
                 let started = Date()
-                let configuration = LayaManager.Configuration(lengths: [128])
-                let loaded: LayaManager
-                if let directory = ProcessInfo.processInfo.environment["LAYA_MODEL_DIR"], !directory.isEmpty {
-                    loaded = try await LayaManager.load(
-                        from: URL(fileURLWithPath: directory), configuration: configuration)
-                } else {
-                    loaded = try await LayaManager.load(configuration: configuration)
+                switch policy {
+                case .gliclass:
+                    guard let directory = ProcessInfo.processInfo.environment["GLICLASS_MODEL_DIR"],
+                        !directory.isEmpty
+                    else { throw GLiClassError.invalidAsset("Set GLICLASS_MODEL_DIR for the GLiClass demo") }
+                    let precision = ProcessInfo.processInfo.environment["GLICLASS_PRECISION"] ?? "fp16"
+                    let loaded = try await GLiClassManager.load(
+                        from: URL(fileURLWithPath: directory),
+                        configuration: .init(lengths: [128], precision: precision))
+                    _ = try await loaded.classify(
+                        text: "The piece buries nothing and keeps the stack low.",
+                        labels: ["a poor Tetris placement", "a clean Tetris placement"],
+                        prompt: "Choose the better placement.")
+                    gliClassManager = loaded
+                    loadStatus = String(
+                        format: "GLiClass Edge Apps v2 · %@ · L128 · CPU + ANE · loaded in %.1f s",
+                        precision as NSString, Date().timeIntervalSince(started))
+                case .laya:
+                    let configuration = LayaManager.Configuration(lengths: [128])
+                    let loaded: LayaManager
+                    if let directory = ProcessInfo.processInfo.environment["LAYA_MODEL_DIR"], !directory.isEmpty {
+                        loaded = try await LayaManager.load(
+                            from: URL(fileURLWithPath: directory), configuration: configuration)
+                    } else {
+                        loaded = try await LayaManager.load(configuration: configuration)
+                    }
+                    _ = try await loaded.answer(state: "The piece leaves no holes.", question: Self.question)
+                    manager = loaded
+                    loadStatus = String(
+                        format: "laya-multilingual · L128 · CPU + ANE · loaded in %.1f s",
+                        Date().timeIntervalSince(started))
+                case .heuristic, .random:
+                    break
                 }
-                // First call pays the Core ML warm-up; keep it out of the game stats.
-                _ = try await loaded.answer(state: "The piece leaves no holes.", question: Self.question)
-                manager = loaded
-                loadStatus = String(
-                    format: "laya-multilingual · L128 · CPU + ANE · loaded in %.1f s", Date().timeIntervalSince(started)
-                )
             } catch {
                 errorMessage = error.localizedDescription
                 loadStatus = "Load failed"
@@ -211,7 +247,7 @@ final class GameModel: ObservableObject {
             finishRun()
             return
         }
-        guard policy != .laya || manager != nil else {
+        guard hasLoadedModel else {
             errorMessage = "Load the model first, or pick the heuristic policy."
             return
         }
@@ -264,18 +300,47 @@ final class GameModel: ObservableObject {
             var best: (Float, TetrisGame.Candidate)?
             var scoredPairs: [(TetrisGame.Candidate, Float)] = []
             switch policy {
+            case .gliclass:
+                guard let gliClassManager else { break }
+                let scored = Array(all.sorted { $0.features.heuristic > $1.features.heuristic }.prefix(2))
+                if scored.count == 1 {
+                    best = (Float(scored[0].features.heuristic), scored[0])
+                    break
+                }
+                let sentences = scored.map { game.describe($0, piece: piece, style: harness ? .graded : .plain) }
+                evaluating = scored[0]
+                do {
+                    let (answer, ms) = try await timedClassification(
+                        manager: gliClassManager,
+                        text: "Avoid holes, keep the stack low and smooth, and clear lines.", labels: sentences,
+                        prompt: "Choose the best Tetris placement.")
+                    guard run == generation, !Task.isCancelled else { return }
+                    record(ms: ms, tokens: answer.tokenCount, bucket: answer.bucketLength)
+                    for (index, candidate) in scored.enumerated() {
+                        candidates.append(
+                            ScoredCandidate(
+                                id: candidate.id, candidate: candidate, sentence: sentences[index],
+                                probability: answer.probabilities[index], milliseconds: ms))
+                    }
+                    best = (answer.probabilities[answer.selectedIndex], scored[answer.selectedIndex])
+                } catch is CancellationError {
+                    return
+                } catch {
+                    guard run == generation, !Task.isCancelled else { return }
+                    errorMessage = error.localizedDescription
+                    return
+                }
             case .laya:
                 guard let manager else { break }
                 for candidate in all {
                     guard !Task.isCancelled, run == generation else { return }
                     evaluating = candidate
                     let sentence = game.describe(candidate, piece: piece, style: harness ? .graded : .plain)
-                    let t0 = DispatchTime.now().uptimeNanoseconds
                     do {
-                        let answer = try await manager.answer(state: sentence, question: Self.question)
+                        let (answer, ms) = try await timedAnswer(
+                            manager: manager, state: sentence, question: Self.question)
                         // Paused or reset while the model was busy: drop the result quietly.
                         guard run == generation, !Task.isCancelled else { return }
-                        let ms = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6
                         record(ms: ms, tokens: answer.tokenCount, bucket: answer.bucketLength)
                         let p = answer.noul ?? 0
                         candidates.append(
@@ -324,13 +389,11 @@ final class GameModel: ObservableObject {
                     for option in follow.prefix(12) {
                         if Task.isCancelled || run != generation { return }
                         let sentence = game.describe(option, piece: next, style: harness ? .graded : .plain)
-                        let t0 = DispatchTime.now().uptimeNanoseconds
                         do {
-                            let reply = try await manager.answer(state: sentence, question: Self.question)
+                            let (reply, ms) = try await timedAnswer(
+                                manager: manager, state: sentence, question: Self.question)
                             guard run == generation, !Task.isCancelled else { return }
-                            record(
-                                ms: Double(DispatchTime.now().uptimeNanoseconds - t0) / 1e6,
-                                tokens: reply.tokenCount, bucket: reply.bucketLength)
+                            record(ms: ms, tokens: reply.tokenCount, bucket: reply.bucketLength)
                             bestNext = max(bestNext, reply.noul ?? 0)
                         } catch is CancellationError {
                             return
@@ -360,7 +423,7 @@ final class GameModel: ObservableObject {
             let placed = String(
                 format: "%@ → column %d rot %d · %@ %.3f · %d lines", piece.name as NSString, pick.column,
                 pick.rotation,
-                (policy == .laya ? "P(clean)" : "score") as NSString, score, lines)
+                ([.laya, .gliclass].contains(policy) ? "model" : "score") as NSString, score, lines)
             log.insert(placed, at: 0)
             if log.count > 12 { log.removeLast() }
             printConsole(piece: piece, chosen: pick, score: score)
@@ -392,6 +455,37 @@ final class GameModel: ObservableObject {
         if isOver { log.insert("Topped out after \(pieces) pieces, \(lines) lines.", at: 0) }
     }
 
+    /// Measure away from MainActor so SwiftUI rendering time is not reported as model latency.
+    private func timedClassification(
+        manager: GLiClassManager, text: String, labels: [String], prompt: String
+    ) async throws -> (GLiClassAnswer, Double) {
+        let inference = Task.detached(priority: .userInitiated) {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let answer = try await manager.classify(text: text, labels: labels, prompt: prompt)
+            return (answer, Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6)
+        }
+        return try await withTaskCancellationHandler {
+            try await inference.value
+        } onCancel: {
+            inference.cancel()
+        }
+    }
+
+    private func timedAnswer(
+        manager: LayaManager, state: String, question: LayaQuestion
+    ) async throws -> (LayaAnswer, Double) {
+        let inference = Task.detached(priority: .userInitiated) {
+            let started = DispatchTime.now().uptimeNanoseconds
+            let answer = try await manager.answer(state: state, question: question)
+            return (answer, Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6)
+        }
+        return try await withTaskCancellationHandler {
+            try await inference.value
+        } onCancel: {
+            inference.cancel()
+        }
+    }
+
     /// Terminal console for presentations (tmux next to asitop): one block per placed piece,
     /// the model-call line in red like the CUA-S1-FORMS demo.
     private var pieceCallMs: [Double] = []
@@ -404,8 +498,15 @@ final class GameModel: ObservableObject {
         let yellow = "\u{1B}[33m"
         let dim = "\u{1B}[2m"
         let reset = "\u{1B}[0m"
-        print("\(cyan)▶ laya-multilingual\(reset) · \(piece.name) piece · \(candidates.count) landings scored")
-        if policy == .laya {
+        let policyName: String
+        switch policy {
+        case .gliclass: policyName = "GLiClass Edge Apps v2"
+        case .laya: policyName = "laya-multilingual"
+        case .heuristic: policyName = "heuristic control"
+        case .random: policyName = "random control"
+        }
+        print("\(cyan)▶ \(policyName)\(reset) · \(piece.name) piece · \(candidates.count) landings scored")
+        if policy == .laya || policy == .gliclass {
             let sorted = candidates.sorted { $0.probability > $1.probability }
             for scored in sorted.prefix(3) {
                 let marker = scored.candidate.id == chosen.id ? "→" : " "
@@ -416,7 +517,7 @@ final class GameModel: ObservableObject {
             if !pieceCallMs.isEmpty {
                 let median = pieceCallMs.sorted()[pieceCallMs.count / 2]
                 print(
-                    "  \(red)model call \(String(format: "%.2f", median)) ms on Neural Engine\(reset) \(dim)(\(pieceCallMs.count) calls, \(String(format: "%.0f", pieceCallMs.reduce(0, +))) ms for this piece)\(reset)"
+                    "  \(red)model call \(String(format: "%.2f", median)) ms on CPU + ANE\(reset) \(dim)(\(pieceCallMs.count) calls, \(String(format: "%.0f", pieceCallMs.reduce(0, +))) ms for this piece)\(reset)"
                 )
             }
         } else {

@@ -16,7 +16,7 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(16)
         .alert(
-            "laya",
+            "Tetris model",
             isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })
         ) {
             Button("OK") { model.errorMessage = nil }
@@ -35,14 +35,14 @@ struct ContentView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("laya plays Tetris").font(.title2.bold())
+            Text("on-device models play Tetris").font(.title2.bold())
             Text(
-                "Each offered landing is described in one sentence; laya answers “Is this a clean placement?” and the highest P(true) is played."
+                "GLiClass compares the two strongest legal landings in one encoder pass; laya can score every landing for comparison."
             )
             .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
                 Text(model.loadStatus).font(.caption.monospaced()).foregroundStyle(
-                    model.manager == nil ? Color.secondary : Color.green)
+                    model.hasLoadedModel ? Color.green : Color.secondary)
                 if model.marathon, model.gamesPlayed > 0 {
                     Text("· game \(model.gamesPlayed + 1)").font(.caption.monospaced())
                         .foregroundStyle(.orange)
@@ -61,7 +61,9 @@ struct ContentView: View {
             Divider().frame(height: 26)
             readout("\(model.totalLines)", "lines", .green)
             Divider().frame(height: 26)
-            readout(model.lastMs > 0 ? String(format: "%.1f", model.lastMs) : "–", "ms", .orange)
+            readout(
+                model.modelMillisecondsPerPiece > 0 ? String(format: "%.1f", model.modelMillisecondsPerPiece) : "–",
+                "model ms/move", .orange)
             Divider().frame(height: 26)
             readout("\(model.decisions)", "calls", .blue)
         }
@@ -86,11 +88,11 @@ struct ContentView: View {
     private var controls: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Button(model.manager == nil ? "Load model" : "Loaded") { model.loadModel() }
-                    .disabled(model.isLoading || model.manager != nil)
+                Button(model.hasLoadedModel ? "Loaded" : "Load model") { model.loadModel() }
+                    .disabled(model.isLoading || model.hasLoadedModel || [.heuristic, .random].contains(model.policy))
                 Button(model.isRunning ? "Pause" : (model.isOver ? "Restart" : "Play")) { model.toggle() }
                     .keyboardShortcut(.space, modifiers: [])
-                    .disabled(model.policy == .laya && model.manager == nil)
+                    .disabled(!model.hasLoadedModel)
                 Button("Reset") { model.reset() }.disabled(model.isRunning)
             }
             Toggle("Harness: withhold burying moves, graded wording", isOn: $model.harness)
@@ -113,7 +115,7 @@ struct ContentView: View {
                 ForEach(GameModel.Policy.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
-            .disabled(model.isRunning)
+            .disabled(model.isRunning || model.isLoading)
             HStack {
                 Text("Seed").font(.caption)
                 TextField("seed", value: $model.seed, format: .number).frame(width: 70).disabled(model.isRunning)
@@ -122,7 +124,8 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(format: "Delay per scored landing: %.0f ms", model.stepDelayMs)).font(.caption)
                 Slider(value: $model.stepDelayMs, in: 0...300, step: 10)
-                Text(String(format: "Pause per piece: %.0f ms", model.pieceDelayMs)).font(.caption)
+                Text(String(format: "Pause per piece: %.0f ms (may raise model latency)", model.pieceDelayMs))
+                    .font(.caption)
                 Slider(value: $model.pieceDelayMs, in: 0...1000, step: 20)
             }
         }

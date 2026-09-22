@@ -204,6 +204,138 @@ The Tetris figures above are the PR author's historical measurements, not a new 
 Per-seed Tetris reports are not checked into this repository. Release verification covers logic,
 controls and build correctness; the historical lookahead results predate the terminal-board fix.
 
+#### GLiClass Edge Apps v2
+
+The GLiClass demo uses the 32.7M-parameter application-tuned checkpoint and a 66 MB FP16 L128
+Core ML package. It first applies the same no-new-hole harness, keeps the heuristic's two strongest
+surviving landings, then asks GLiClass to choose between their natural-language descriptions in one
+encoder pass. This is a different policy from laya's independent score for every surviving landing.
+
+Seeds 1–10, with a 5,000-piece cap:
+
+| Policy | Mean pieces | Mean lines | Seeds reaching cap | Model calls / non-forced piece |
+| --- | ---: | ---: | ---: | ---: |
+| Corrected Dellacherie heuristic | 2,874.4 | 1,140.2 | 3/10 | 0 |
+| **GLiClass FP16, heuristic top-two** | **3,482.3** | **1,385.4** | **4/10** | **1** |
+| **GLiClass LUT8, heuristic top-two** | **3,666.7** | **1,459.2** | **5/10** | **1** |
+
+GLiClass's per-seed piece counts were 5,000, 1,840, 5,000, 4,103, 1,863, 2,377, 860,
+5,000, 3,780, and 5,000. The capped mean is therefore a lower bound. It chose the heuristic's first
+candidate 98.2% of the time; the remaining choices improved mean survival by 21.1% over the corrected
+heuristic control. End-to-end model-call latency averaged 4.86 ms median across the ten runs. That is
+slower per call than laya's historical 3.8 ms, but GLiClass makes about one call per piece instead of
+laya's 5.6 calls, so the complete decision loop is substantially faster.
+
+The 8-bit per-tensor LUT package is 33.0 MB instead of 65.7 MB. It preserves 97.1% of FP16 choices
+on the L128 application-suite rows and averages 4.92 ms per Tetris model call. Its different choices
+produce a higher capped Tetris mean, but the game is path-sensitive and that result should be read as
+survival parity rather than an accuracy gain. Six-bit is 24.8 MB with 91.7% choice agreement; four-bit
+is rejected after application accuracy fell by 15.75 points.
+
+A controlled speed run used the same release binary, L128 bucket, shortlist, graded descriptions and
+seeds 1–3, with a 1,000-piece cap. GLiClass FP16 completed all 3,000 pieces in 14.52 seconds, or
+4.84 ms of wall time per piece. Optimized laya e8 topped out after 1,023 total pieces in 21.44 seconds,
+or 20.96 ms per piece. GLiClass therefore ran the complete simulation **4.33× faster** (206.6 versus
+47.7 pieces/second). Its individual Swift model call was slower—4.87 ms versus laya's 3.76 ms—but it
+made 0.92 calls per piece instead of 5.44 because it ranks the top two landings jointly.
+
+The Swift runtime now reuses fixed-shape Core ML input buffers and encodes the GLiClass label
+template by segment, avoiding a full scan against every tokenizer added token. Repeating seed 24 to
+the 1,000-piece cap preserved the original 399 lines and 937 model calls. Median complete-call latency
+for `fp16-mask` fell from 5.10 ms to **1.62 ms**. Plain FP16 measured **1.61 ms** (1.51 seconds for
+the full simulation), and LUT8 measured **1.81 ms**. This makes GLiClass faster than the 3.76 ms laya
+comparison per call as well as per placed piece.
+
+An ANE placement experiment replaces the integer attention mask with a ready-to-add floating-point
+bias. It removes one CPU cast, raises operation placement from 98.9% to 99.1% ANE and exactly preserves
+all 3,899 application-suite choices. Alternating FP16 and `fp16-mask` on seeds 1–3 reduced aggregate
+Tetris time from 14.585 to 14.495 seconds for 3,000 pieces, a **0.62% speedup**. A second experiment
+reached 100% ANE by gathering token embeddings on the host, but its larger input made median complete
+calls 2–3% slower, so it is not exposed by FluidUse.
+
+The historical laya mean above is 568.3 pieces, but its per-seed artifacts are unavailable. Treat the
+GLiClass comparison to that number as directional; the GLiClass and corrected heuristic rows were run
+together with the current terminal-board fix and are the controlled comparison. The complete run data,
+model size, command, and machine are in [`Benchmarks/gliclass-tetris.json`](Benchmarks/gliclass-tetris.json).
+
+#### GLiClass 2048
+
+`FluidUseLaya 2048` and `GLiClass2048Demo` share a deterministic 4×4 engine. A conventional safety
+heuristic ranks legal swipes from empty cells, merge score, corner placement, monotonicity, and
+roughness. GLiClass compares the top two descriptions in one LUT8 L128 pass. A 0.40 probability-margin
+gate keeps the heuristic leader unless the model strongly prefers the alternative.
+
+Seeds 1–10, played to game over:
+
+| Policy | Mean score | Mean moves | Games reaching 2048 | Mean run-median latency |
+| --- | ---: | ---: | ---: | ---: |
+| Random | 1,187 | 125.8 | 0/10 | — |
+| Heuristic | **14,104** | **818.2** | **2/10** | — |
+| GLiClass LUT8, no margin | 7,688 | 499.8 | 0/10 | 1.76 ms |
+| GLiClass LUT8, margin 0.40 | 13,419 | 786.2 | **2/10** | 1.80 ms |
+
+The confidence gate recovers most of the heuristic's average performance while allowing selective
+model intervention; it does not beat the heuristic on average. Seed 9 is the measured visual-demo
+case: GLiClass scored 33,812 over 1,702 moves and reached tile 2048, while the heuristic on the same
+seed scored 7,268 and stopped at tile 512. The default is intentionally disclosed as a selected demo
+seed rather than a representative mean. Full per-seed results are in
+[`Benchmarks/gliclass-2048.json`](Benchmarks/gliclass-2048.json).
+
+Adding a one-move expectimax shortlist extends the game without delaying inference: the harness
+averages the best reply across every possible 2/4 tile spawn before offering its top two swipes to
+GLiClass. On seeds 1–10, expectimax alone averaged 25,382 points and 1,318 moves; GLiClass with a 0.50
+override margin averaged 18,970 points and 1,012 moves at 1.81 ms median. The longer visual-demo seed
+was selected from seeds 1–60: seed 46 scored 70,864 over **3,230 moves**, reached tile **4096**, and
+agreed with the expectimax leader on 97.7% of comparisons. This is 90% more moves than the original
+1,702-move seed-9 demo. The real SwiftUI run lasts **33.6 seconds** instead of 16.5 seconds, with no
+artificial delay and 2.10 ms of model work per move.
+
+#### 2048 Bench: GLiClass vs laya
+
+`Decision2048BenchDemo` runs GLiClass Edge Apps v2 LUT8 and laya Multilingual E8 side by side. Both
+boards start from the same seed and use the same top-two one-move expectimax shortlist. The comparison
+uses each model's raw final decision without a confidence fallback: GLiClass compares both descriptions
+in one call, while laya applies its established `noul` question to each description in two calls.
+
+Isolated Core ML runs over seeds 1–10 avoid accelerator contention:
+
+| Model | Mean score | Mean moves | Best tile | Model ms/move | Expectimax agreement |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **GLiClass LUT8** | **10,740** | **651.5** | **2048** | **1.77** | **79.2%** |
+| laya E8 | 2,834 | 232.5 | 512 | 7.63 | 46.9% |
+
+GLiClass scores **3.79×** as many points, survives **2.80×** as many moves, and uses **4.31×** less
+model time per move. The speed difference combines a smaller model with fewer calls: GLiClass is 32.7M
+parameters and compares the candidates jointly, while laya is about 322M parameters and scores each
+candidate independently. A calibration run of laya's one-pass `choice` head performed worse on seed 1
+(1,416 points and 144 moves versus 3,032 points and 244 moves for `noul`), so the demo retains laya's
+existing candidate-scoring contract. The shortlist remains a strong conventional policy and is a
+material part of both results; this measures fit for the same constrained decision, not general model
+quality. Full results and protocol are in
+[`Benchmarks/decision-models-2048.json`](Benchmarks/decision-models-2048.json).
+
+A separate conversion gate screened every locally runnable sub-1B candidate on seeds 1–3 with the
+same raw top-two choice. It uses Core ML where a verified package already exists and PyTorch MPS only
+to reject candidates before investing in a new exporter. PyTorch latency is therefore not a Core ML
+projection.
+
+| Candidate | Runtime | Mean score | Mean moves | Best tile | Median call | Expectimax agreement |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Expectimax control | no model | **21,339** | **1,170.7** | **2048** | — | 100% |
+| **GLiClass Edge Apps v2 LUT8** | **Core ML** | **14,701** | **841.7** | **2048** | **1.78 ms** | 77.1% |
+| Kev 0.8B | PyTorch MPS | 7,487 | 494.7 | 1024 | 144.79 ms | 79.3% |
+| laya E8 | Core ML | 3,239 | 253.3 | 512 | 3.84 ms × 2 | 44.1% |
+| GLiNER 2.5 small | PyTorch MPS | 1,952 | 175.0 | 256 | 20.13 ms | 4.3% |
+| GLiClass Base v3 | PyTorch MPS | 1,695 | 163.3 | 256 | 41.23 ms | 24.5% |
+| Kev 0.5B FP16 | Core ML | 1,333 | 139.0 | 128 | 7.49 ms | 6.3% |
+
+GLiClass Edge is the conversion winner: it scores almost twice as high as the second-place model and
+is roughly 81× faster than Kev 0.8B's current Apple path. GLiClass Base and GLiNER small failed the
+quality gate, so their incompatible DeBERTa exporters were not pursued. Kev 0.8B is the only useful
+future challenger, but it needs a new Qwen3.5 hybrid exporter and still loses decisively on this game.
+The higher expectimax-only result shows that 2048-specific training of the existing Edge model is a
+better next quality experiment than converting another untuned general model.
+
 ## Reproduce
 
 The benchmark command writes completion counts and returns a failure exit status when any
