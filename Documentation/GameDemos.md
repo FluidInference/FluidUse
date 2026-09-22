@@ -94,6 +94,34 @@ setting and starting positions. Record legal-move rate, move time, game result,
 and engine evaluation loss per move. Supply legal moves from a chess rules engine
 so the model is judged on choosing among them, not on formatting notation.
 
+## Two-player games
+
+Offer three viewer modes, but keep the benchmark mode separate from the show match:
+
+| Mode | Purpose | How it works |
+| --- | --- | --- |
+| Human vs model | Interactive demo. | The person picks a side and a legal move; show the model's top choices, probabilities when available, and response time. Do not count these self-selected games in model rankings. |
+| Model vs fixed opponent | Primary comparison. | Each candidate faces the same version and settings of a reference policy. Run paired games from the same starting positions with colors or first turn swapped. |
+| Model vs model | Spectator match. | Run a round robin with paired colors and matched opening positions. Show wins, draws, losses, illegal or timed-out decisions, and move time; do not infer a global ranking from one head-to-head game. |
+
+Start with **Connect Four**: it has a small action set, short games, and no clock
+pressure. Use a rules engine to provide legal columns, then a fixed search policy
+as the reference opponent. Add **chess** second. [chess.js](https://github.com/jhlywa/chess.js)
+can provide legal moves, validation, and game-end detection in a browser demo;
+[Stockfish](https://github.com/official-stockfish/Stockfish) can be the fixed
+reference opponent at a stated strength and time budget. Models see the same FEN,
+move history limit, legal move list, and clock information. Rotate colors and
+use a fixed set of opening positions. Keep any engine evaluation out of the
+model's input; calculate it afterward for the viewer.
+
+For hidden-information games, keep roles and observations honest. In Battleship,
+each player sees only its own ships and prior shots. In Codenames, score clue
+giver and guesser separately, with a fixed partner for comparable runs. Hanabi
+is cooperative rather than adversarial: use fixed teammate policies and report
+team score, not win rate against another model. Record opponent version, seeds,
+starting positions, rules, action deadline, and every move so a result can be
+replayed.
+
 Wordle and Battleship add information-gathering decisions; Frogger adds moving
 hazards; Connect Four is a compact turn-based duel. For reusable planning
 environments, [MiniGrid DoorKey](https://minigrid.farama.org/environments/minigrid/DoorKeyEnv/)
