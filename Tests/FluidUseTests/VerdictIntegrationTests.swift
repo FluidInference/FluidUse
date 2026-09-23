@@ -21,35 +21,23 @@ final class VerdictIntegrationTests: XCTestCase {
                 + "\n\nContext:\nNo information is available.")
     }
 
-    func testScoreValuesKeepNativeIntegerRendering() throws {
-        let request = try VerdictManager.render(
-            context: "The delivery was late.",
-            question: .score(
-                question: "How severe?",
-                levels: [
-                    .init(id: "low", description: "Low urgency", value: 0),
-                    .init(id: "high", description: "High urgency", value: 2),
-                ]))
-        XCTAssertTrue(request.text.contains("<<LABEL>>Low urgency (Value: 0)"))
-        XCTAssertTrue(request.text.contains("<<LABEL>>High urgency (Value: 2)"))
-    }
-
-    func testScoreValuesKeepPythonFloatRendering() throws {
+    func testScoreValuesRenderAsUpstreamFloats() throws {
+        // The author's engine validates level values as floats, so integers render with a fraction.
         let request = try VerdictManager.render(
             context: "c",
             question: .score(
                 question: "q",
                 levels: [
-                    .init(id: "a", description: "A", value: .real(2)),
+                    .init(id: "a", description: "A", value: 0),
                     .init(id: "b", description: "B", value: 2.5),
                     .init(id: "c", description: "C", value: 1e-05),
                     .init(id: "d", description: "D", value: -3),
                 ]))
-        XCTAssertTrue(request.text.contains("<<LABEL>>A (Value: 2.0)"))
+        XCTAssertTrue(request.text.contains("<<LABEL>>A (Value: 0.0)"))
         XCTAssertTrue(request.text.contains("<<LABEL>>B (Value: 2.5)"))
         XCTAssertTrue(request.text.contains("<<LABEL>>C (Value: 1e-05)"))
-        XCTAssertTrue(request.text.contains("<<LABEL>>D (Value: -3)"))
-        XCTAssertEqual(request.values, [2, 2.5, 1e-05, -3])
+        XCTAssertTrue(request.text.contains("<<LABEL>>D (Value: -3.0)"))
+        XCTAssertEqual(request.values, [0, 2.5, 1e-05, -3])
     }
 
     func testPinnedChecksumsAreSHA256() {

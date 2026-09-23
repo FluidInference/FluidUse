@@ -9,10 +9,16 @@ public actor VerdictManager {
     public struct Configuration: Sendable {
         public var lengths: [Int]
         public var computeUnits: MLComputeUnits
+        /// Defaults to the author's released calibrator; see `VerdictCalibration`.
+        public var calibration: VerdictCalibration
 
-        public init(lengths: [Int] = [128, 512], computeUnits: MLComputeUnits = .cpuAndNeuralEngine) {
+        public init(
+            lengths: [Int] = [128, 512], computeUnits: MLComputeUnits = .cpuAndNeuralEngine,
+            calibration: VerdictCalibration = .shipped
+        ) {
             self.lengths = lengths
             self.computeUnits = computeUnits
+            self.calibration = calibration
         }
     }
 
@@ -40,20 +46,21 @@ public actor VerdictManager {
 
     private let buckets: [Bucket]
     private let tokenizer: GLiClassTokenizer
-    private let defaultTemperature: Double
-    private let temperatureByCount: [String: Double]
+    private let calibrator: VerdictCalibrator
+    public nonisolated let calibration: VerdictCalibration
 
     /// Load already opened Core ML buckets and the released tokenizer/calibrator.
-    public init(models: [MLModel], tokenizer: GLiClassTokenizer, calibratorData: Data) throws {
+    public init(
+        models: [MLModel], tokenizer: GLiClassTokenizer, calibratorData: Data,
+        calibration: VerdictCalibration = .shipped
+    ) throws {
         guard !models.isEmpty else { throw VerdictError.invalidModel("At least one bucket is required") }
-        guard let raw = try JSONSerialization.jsonObject(with: calibratorData) as? [String: Any],
-            let temperature = raw["temperature"] as? Double, temperature.isFinite, temperature > 0,
-            let byCount = raw["per_k"] as? [String: Double],
-            byCount.values.allSatisfy({ $0.isFinite && $0 > 0 })
-        else { throw VerdictError.invalidAsset("Invalid calibrator.json") }
+        if case .temperature(let value) = calibration, !(value.isFinite && value > 0) {
+            throw VerdictError.invalidInput("Calibration temperature must be finite and positive")
+        }
         self.tokenizer = tokenizer
-        defaultTemperature = temperature
-        temperatureByCount = byCount
+        calibrator = try VerdictCalibrator(data: calibratorData)
+        self.calibration = calibration
         buckets = try models.map { model in
             let description = model.modelDescription
             guard let shape = description.inputDescriptionsByName["input_ids"]?.multiArrayConstraint?.shape,
@@ -108,7 +115,8 @@ public actor VerdictManager {
             modelConfiguration.computeUnits = configuration.computeUnits
             models.append(try await MLModel.load(contentsOf: url, configuration: modelConfiguration))
         }
-        return try VerdictManager(models: models, tokenizer: tokenizer, calibratorData: calibrator)
+        return try VerdictManager(
+            models: models, tokenizer: tokenizer, calibratorData: calibrator, calibration: configuration.calibration)
     }
 
     /// Compile once and keep the result beside the package; a read-only directory uses the temporary copy.
@@ -169,13 +177,9 @@ public actor VerdictManager {
         }
         let logits = try autoreleasepool { try predict(ids: ids, markers: markers, bucket: bucket) }
         let count = request.ids.count
-        let scale = temperatureByCount[String(count)] ?? defaultTemperature
-        let scaled = logits.prefix(count).map { Double($0) / scale }
-        let peak = scaled.max() ?? 0
-        let exponentials = scaled.map { exp($0 - peak) }
-        let total = exponentials.reduce(0, +)
-        guard total.isFinite, total > 0 else { throw VerdictError.invalidOutput("Invalid calibrated probabilities") }
-        let probabilities = exponentials.map { $0 / total }
+        let probabilities = try VerdictCalibrator.probabilities(
+            logits: Array(logits.prefix(count)),
+            temperature: calibrator.temperature(candidates: count, calibration: calibration))
         let selected = probabilities.indices.max { probabilities[$0] < probabilities[$1] } ?? 0
         let abstained = selected == count - 1
         let substantive = probabilities.dropLast().reduce(0, +)
@@ -245,9 +249,10 @@ public actor VerdictManager {
             guard (1...maximumSubstantiveOptions).contains(levels.count) else {
                 throw VerdictError.invalidInput("Score needs 1–24 levels")
             }
-            labels = levels.map { "\($0.description) (Value: \($0.value.rendered))" }
+            // Python f"{float}": Swift's shortest round-trip description matches repr(float).
+            labels = levels.map { "\($0.description) (Value: \($0.value.description))" }
             ids = levels.map(\.id)
-            values = levels.map(\.value.doubleValue)
+            values = levels.map(\.value)
             text = "Question: \(prompt)\n\nContext:\n\(context)"
         case .noul(let proposition):
             labels = ["true: \(proposition)", "false: not \(proposition)"]

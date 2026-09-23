@@ -43,7 +43,7 @@ Behavior to know:
   - Kai and Lex release one typed package before loading the next, because holding two crashed Core ML during conversion. A request that mixes question types therefore reloads packages.
   - LFM must stay on `.all`. Jeff's scores are independent sigmoids.
 
-`VerdictNumber` score levels keep Python's rendering: `.integer(2)` renders as `2` and `.real(2)` as `2.0`. Integer and float literals map to the matching case. Verdict caches its compiled model beside the package, and a re-downloaded package invalidates that cache.
+Verdict score levels are `Double` and render like the author's engine, which validates them as floats: `0` renders as `0.0`. `VerdictManager.Configuration.calibration` chooses between the released per-K calibrator (`.shipped`, the default and the author's serving behavior), `.uncalibrated`, and `.temperature(T)`; see [OfficialBenchmarks.md](OfficialBenchmarks.md) for why the shipped calibrator is under-confident on the author's in-domain test set. Verdict caches its compiled model beside the package, and a re-downloaded package invalidates that cache.
 
 ## Validation (Apple M5 Pro, macOS 27.0)
 
