@@ -53,6 +53,9 @@ struct LaneRunnerView: View {
                 HStack {
                     metric("DISTANCE", "\(model.game.distance)")
                     metric("COINS", "\(model.game.coins)")
+                    TimelineView(.periodic(from: .now, by: 0.1)) { context in
+                        metric("TIME", LaneRunnerModel.clock(model.elapsed(at: context.date)))
+                    }
                 }
                 HStack {
                     metric("MODEL CALL", model.calls == 0 ? "—" : String(format: "%.1f ms", model.modelMs))
@@ -102,7 +105,8 @@ struct LaneRunnerView: View {
                             .font(.title2.bold())
                         Text(
                             model.game.isOver
-                                ? "\(model.game.distance) rows · \(model.game.coins) coins"
+                                ? "\(model.game.distance) rows · \(model.game.coins) coins · "
+                                    + LaneRunnerModel.clock(model.elapsed(at: Date()))
                                 : "Choose a runner, then press Run"
                         )
                         .font(.caption)

@@ -31,6 +31,9 @@ final class LaneRunnerModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var loadedModels: Set<DecisionModel> = []
     @Published private(set) var calls = 0
+    /// Run time excluding pauses; `runStartedAt` is set while running.
+    @Published private(set) var runSeconds = 0.0
+    @Published private(set) var runStartedAt: Date?
     @Published private(set) var lateRows = 0
     @Published private(set) var unsafeChoices = 0
     @Published private(set) var modelMs = 0.0
@@ -50,6 +53,14 @@ final class LaneRunnerModel: ObservableObject {
     private var queuedAction: LaneRunner.Action = .stay
     private var decisionNumber = 0
     private var autostart = false
+
+    func elapsed(at date: Date) -> Double {
+        runSeconds + (runStartedAt.map { date.timeIntervalSince($0) } ?? 0)
+    }
+
+    static func clock(_ seconds: Double) -> String {
+        String(format: "%d:%04.1f", Int(seconds) / 60, seconds.truncatingRemainder(dividingBy: 60))
+    }
 
     var usesModel: Bool { control.model != nil }
     var canPlay: Bool { control.model.map { loadedModels.contains($0) } ?? true }
@@ -102,6 +113,7 @@ final class LaneRunnerModel: ObservableObject {
         game = LaneRunner(seed: seed)
         runner.show(game, passed: nil, action: nil, duration: 0)
         calls = 0
+        runSeconds = 0
         lateRows = 0
         unsafeChoices = 0
         modelMs = 0
@@ -119,6 +131,8 @@ final class LaneRunnerModel: ObservableObject {
         inFlight = false
         queuedAction = .stay
         isRunning = false
+        if let runStartedAt { runSeconds += Date().timeIntervalSince(runStartedAt) }
+        runStartedAt = nil
     }
 
     func toggle() {
@@ -129,6 +143,7 @@ final class LaneRunnerModel: ObservableObject {
         guard canPlay else { return }
         if game.isOver || game.distance == 0 { reset() }
         isRunning = true
+        runStartedAt = Date()
         let run = generation
         loopTask = Task { [weak self] in
             while let self, self.isRunning, self.generation == run, !Task.isCancelled {
