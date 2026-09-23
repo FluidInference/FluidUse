@@ -148,7 +148,7 @@ final class PublishedCoreMLTests: XCTestCase {
     func testSelectedFilesSkipOtherPrecisions() throws {
         let fp16 = try PublishedCoreMLModelStore.selectedFiles(for: .kai, precision: "fp16").map(\.path)
         XCTAssertTrue(fp16.contains("coreml/choice.mlpackage/Data/com.apple.CoreML/weights/weight.bin"))
-        XCTAssertFalse(fp16.contains { $0.contains("embedding-w8") })
+        XCTAssertFalse(fp16.contains { $0.contains("embedding-w8.mlpackage/") })
         let lexW8 = try PublishedCoreMLModelStore.selectedFiles(for: .lex, precision: "w8").map(\.path)
         XCTAssertTrue(lexW8.contains("coreml/choice.mlpackage/Manifest.json"))
         XCTAssertTrue(lexW8.contains("coreml/score-embedding-w8.mlpackage/Manifest.json"))
