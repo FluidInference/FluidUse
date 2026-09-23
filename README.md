@@ -105,6 +105,29 @@ The current ten-seed capped run averages 3,667 pieces for GLiClass LUT8 and 2,87
 heuristic control. See [Benchmarks.md](Benchmarks.md) for the exact policy, per-seed results, and the
 limits of comparison with the older laya measurements.
 
+## GLiNER 2.5 classification
+
+`GLiNER2Manager` runs the published base or multilingual classification head on device. Both
+packages use an L128 bucket, support up to eight labels, and quantize only the embedding table
+to eight bits. The manager downloads pinned, SHA-256 checked Core ML assets, source config files,
+and the matching Unigram tokenizer from [base](https://huggingface.co/FluidInference/gliner2-5-base-coreml) or
+[multilingual](https://huggingface.co/FluidInference/gliner2-5-multi-coreml) on first use.
+
+```swift
+let classifier = try await GLiNER2Manager.load(variant: .base)
+let answer = try await classifier.classify(
+    text: "The rocket launched successfully.",
+    task: "topic",
+    labels: ["science", "sports", "politics"])
+print(answer.selectedLabel, answer.probabilities)
+```
+
+Use `.multilingual` for the multilingual checkpoint. The base package is 291 MB and the
+multilingual package is 385 MB. Inputs that exceed 128 tokens raise an error. These packages
+contain the classification path; the native entity, relation, and record extraction heads
+are not exposed by this Swift manager. A ten-seed 2048 comparison with GLiClass is in
+[Benchmarks.md](Benchmarks.md).
+
 ## Demo
 
 ```bash

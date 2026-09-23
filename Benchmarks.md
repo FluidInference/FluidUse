@@ -329,12 +329,36 @@ projection.
 | GLiClass Base v3 | PyTorch MPS | 1,695 | 163.3 | 256 | 41.23 ms | 24.5% |
 | Kev 0.5B FP16 | Core ML | 1,333 | 139.0 | 128 | 7.49 ms | 6.3% |
 
-GLiClass Edge is the conversion winner: it scores almost twice as high as the second-place model and
+GLiClass Edge was the conversion winner in that initial three-seed gate: it scores almost twice as high as the second-place model and
 is roughly 81× faster than Kev 0.8B's current Apple path. GLiClass Base and GLiNER small failed the
 quality gate, so their incompatible DeBERTa exporters were not pursued. Kev 0.8B is the only useful
 future challenger, but it needs a new Qwen3.5 hybrid exporter and still loses decisively on this game.
 The higher expectimax-only result shows that 2048-specific training of the existing Edge model is a
 better next quality experiment than converting another untuned general model.
+
+#### 2048 Bench: GLiNER 2.5 base and multilingual vs GLiClass
+
+A later ten-seed run used the same `Game2048.swift` engine and top-two one-move expectimax
+shortlist, with each model choosing the higher-probability option directly. The GLiNER packages
+were embedding-only W8 L128/K8; GLiClass was LUT8 L128. Every newly run request fit L128.
+Latency here is Python preprocessing plus Core ML prediction in one bridge protocol, so it
+should be compared within this table rather than against the older Swift timing above.
+
+| Policy | Mean score | Games reaching 2048 | Mean per-game median model call | Package size |
+| --- | ---: | ---: | ---: | ---: |
+| GLiNER 2.5 base W8 | 11,084 | 1/10 | 5.13 ms | 291 MB |
+| GLiNER 2.5 multilingual W8 | 13,306 | 1/10 | 4.51 ms | 385 MB |
+| GLiClass Edge Apps v2 LUT8 | 10,740 | 1/10 | 1.06 ms | 33 MB |
+| Expectimax alone | 25,382 | 5/10 | — | — |
+
+The multilingual model has the highest raw mean in this small sample, while GLiClass is
+4–5× faster and 9–12× smaller. The model policies each reach 2048 once; this does not
+establish a quality winner. With a 0.50 confidence fallback, both GLiNER variants exactly
+follow expectimax on every move, so their resulting 25,382 mean does not show added value.
+Reversing option order on 131 sampled game states preserved the chosen move on only 35
+base, 11 multilingual, and 44 GLiClass cases, which limits interpretation of the raw
+scores. The GLiClass raw per-seed scores match the earlier report. Protocol and per-seed
+results are in [`Benchmarks/gliner2-gliclass-2048.json`](Benchmarks/gliner2-gliclass-2048.json).
 
 ## Reproduce
 
