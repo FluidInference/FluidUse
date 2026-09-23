@@ -43,6 +43,7 @@ public actor PublishedCoreMLManager {
     private let replies: LineChannel
     private let standardError: OutputTail
     private var closedReason: String?
+    private var writeInFlight = false
     private var busy = false
     private var queue: [CheckedContinuation<Void, Never>] = []
 
@@ -153,7 +154,24 @@ public actor PublishedCoreMLManager {
     }
 
     deinit {
-        if process.isRunning { process.terminate() }
+        Self.stop(process)
+    }
+
+    /// Whether the session has ended (timeout, cancellation, worker exit, or `shutdown`).
+    public var isClosed: Bool { closedReason != nil }
+
+    /// Worker process identifier, for tests that stall the worker.
+    nonisolated var workerProcessIdentifier: Int32 { process.processIdentifier }
+
+    /// SIGTERM, then SIGKILL after a grace period: a stopped or wedged worker ignores SIGTERM, and only its
+    /// death unblocks a write into its full stdin pipe.
+    static func stop(_ process: Process) {
+        guard process.isRunning else { return }
+        process.terminate()
+        let identifier = process.processIdentifier
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+            if process.isRunning { kill(identifier, SIGKILL) }
+        }
     }
 
     private func waitUntilReady() async throws {
@@ -186,16 +204,35 @@ public actor PublishedCoreMLManager {
         // Raw line breaks can only be insignificant whitespace in valid JSON.
         var line = Data(request.map { $0 == 0x0A || $0 == 0x0D ? 0x20 : $0 })
         line.append(0x0A)
-        // A worker that stops reading stdin would block a large write indefinitely; terminating it at the
-        // request deadline makes the write fail with EPIPE instead.
-        let watchdog = Task { [process, timeout = configuration.requestTimeout] in
+        // A worker that stops reading stdin blocks a large write indefinitely. Stopping it at the request
+        // deadline, or when the caller cancels, makes the write fail with EPIPE. The watchdog covers only the
+        // write; the reply has its own deadline below.
+        let started = ContinuousClock.now
+        let process = process
+        let watchdog = Task { [timeout = configuration.requestTimeout] in
             try? await Task.sleep(for: timeout)
-            if !Task.isCancelled, process.isRunning { process.terminate() }
+            if !Task.isCancelled { Self.stop(process) }
         }
-        defer { watchdog.cancel() }
+        writeInFlight = true
         do {
-            try await Self.write(line, to: input)
+            try await withTaskCancellationHandler {
+                try await Self.write(line, to: input)
+            } onCancel: {
+                Self.stop(process)
+            }
+            writeInFlight = false
+            watchdog.cancel()
         } catch {
+            writeInFlight = false
+            watchdog.cancel()
+            if Task.isCancelled {
+                close(reason: "a request was cancelled")
+                throw CancellationError()
+            }
+            if ContinuousClock.now - started >= configuration.requestTimeout {
+                close(reason: "a request timed out")
+                throw PublishedCoreMLError.timedOut("writing a request")
+            }
             close(reason: "worker stopped accepting requests")
             throw exitError("Worker stopped accepting requests")
         }
@@ -230,8 +267,9 @@ public actor PublishedCoreMLManager {
     private func close(reason: String) {
         guard closedReason == nil else { return }
         closedReason = reason
-        try? input.close()
-        if process.isRunning { process.terminate() }
+        Self.stop(process)
+        // Closing the descriptor under a blocked write could let it be reused; the write fails once the worker dies.
+        if !writeInFlight { try? input.close() }
     }
 
     private func exitError(_ message: String) -> PublishedCoreMLError {

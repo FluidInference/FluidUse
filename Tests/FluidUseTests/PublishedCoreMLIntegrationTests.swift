@@ -97,6 +97,74 @@ final class PublishedCoreMLIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(result.probabilities[0], 0.9)
     }
 
+    /// A request larger than the stdin pipe buffer, so writing it blocks once the worker stops reading.
+    private func oversizedRequest() throws -> Data {
+        try PublishedJSON.object([
+            .init("context", .string(String(repeating: "stalled worker ", count: 20_000))),
+            .init("schema", try ConstrainedField.schema([.boolean("stalled")])),
+        ]).encoded()
+    }
+
+    private func stalledSession(timeout: Duration) async throws -> (PublishedCoreMLManager, pid_t) {
+        guard let path = ProcessInfo.processInfo.environment["FLUIDUSE_PUBLISHED_COREML_CACHE"], !path.isEmpty else {
+            throw XCTSkip("Set FLUIDUSE_PUBLISHED_COREML_CACHE to run published Core ML bridge tests")
+        }
+        let manager = try await PublishedCoreMLManager.load(
+            model: .lfm350, cacheDirectory: URL(fileURLWithPath: path, isDirectory: true),
+            configuration: .init(requestTimeout: timeout))
+        let identifier = manager.workerProcessIdentifier
+        // SIGSTOP: the worker neither reads stdin nor replies, and ignores SIGTERM until killed.
+        XCTAssertEqual(kill(identifier, SIGSTOP), 0)
+        return (manager, identifier)
+    }
+
+    private func waitForExit(_ identifier: pid_t, within seconds: Double) async -> Bool {
+        let deadline = ContinuousClock.now + .milliseconds(Int(seconds * 1000))
+        while ContinuousClock.now < deadline {
+            if kill(identifier, 0) != 0 { return true }
+            var status: Int32 = 0
+            if waitpid(identifier, &status, WNOHANG) == identifier { return true }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return false
+    }
+
+    func testStalledWorkerTimesOutDuringWrite() async throws {
+        let (manager, identifier) = try await stalledSession(timeout: .seconds(2))
+        let started = ContinuousClock.now
+        do {
+            _ = try await manager.evaluate(try oversizedRequest())
+            XCTFail("Expected a timeout")
+        } catch {
+            XCTAssertEqual(error as? PublishedCoreMLError, .timedOut("writing a request"))
+        }
+        XCTAssertLessThan(ContinuousClock.now - started, .seconds(6))
+        let closed = await manager.isClosed
+        XCTAssertTrue(closed)
+        let exited = await waitForExit(identifier, within: 5)
+        XCTAssertTrue(exited, "the stopped worker must be killed")
+    }
+
+    func testCancellationStopsBlockedWrite() async throws {
+        let (manager, identifier) = try await stalledSession(timeout: .seconds(120))
+        let request = try oversizedRequest()
+        let task = Task { try await manager.evaluate(request) }
+        try await Task.sleep(for: .milliseconds(300))
+        let cancelled = ContinuousClock.now
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("Expected cancellation")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "\(error)")
+        }
+        XCTAssertLessThan(ContinuousClock.now - cancelled, .seconds(4))
+        let closed = await manager.isClosed
+        XCTAssertTrue(closed)
+        let exited = await waitForExit(identifier, within: 5)
+        XCTAssertTrue(exited, "the stopped worker must be killed")
+    }
+
     func testNanoJevLocalConversion() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let directory = environment["FLUIDUSE_NANOJEV_DIR"], let python = environment["FLUIDUSE_NANOJEV_PYTHON"]

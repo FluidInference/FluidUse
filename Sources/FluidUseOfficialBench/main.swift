@@ -17,6 +17,7 @@ do {
             MODEL: verdict or a PublishedCoreMLModel raw value (kev-0-5b, kev-0.6b, lfm2-5-350m-rlcd, jeff, …)
             options: --precision P  --cache DIR  --lengths 128,512 (verdict)  --root DIR --python PATH (local bridge)
                      --strict-context (reject instead of shortening Kev state)  --meta meta.json
+                     --request-timeout SECONDS (bridge; a closed session is restarted and timed separately)
             """)
         exit(2)
     }
@@ -89,8 +90,11 @@ enum LoadedModel {
         }
         var environment: [String: String] = [:]
         if options.flag("strict-context") { environment["FLUIDUSE_STRICT_CONTEXT"] = "1" }
-        let configuration = PublishedCoreMLManager.Configuration(
+        var configuration = PublishedCoreMLManager.Configuration(
             precision: options["precision"], environment: environment)
+        if let seconds = options["request-timeout"].flatMap(Double.init) {
+            configuration.requestTimeout = .milliseconds(Int(seconds * 1000))
+        }
         let manager: PublishedCoreMLManager
         if let root = options["root"] {
             manager = try await PublishedCoreMLManager.start(
@@ -151,13 +155,30 @@ func milliseconds(_ duration: Duration) -> Double {
     Double(duration.components.seconds) * 1000 + Double(duration.components.attoseconds) / 1e15
 }
 
+@discardableResult
+func writeSummary(
+    _ meta: [String: Any], _ requests: Int, _ counts: [String: Int], _ restarts: [[String: Any]], _ options: Options,
+    failure: String? = nil
+) throws -> [String: Any] {
+    var summary = meta
+    summary["requests"] = requests
+    summary["counts"] = counts
+    summary["worker_restarts"] = restarts
+    if let failure { summary["aborted"] = "worker restart failed: \(failure)" }
+    if let path = options["meta"] {
+        try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
+            .write(to: URL(fileURLWithPath: path))
+    }
+    return summary
+}
+
 enum RunCommand {
     static func run(_ options: Options) async throws {
         let input = URL(fileURLWithPath: try options.required("in"))
         let output = URL(fileURLWithPath: try options.required("out"))
         let lines = try Data(contentsOf: input).split(separator: 0x0A, omittingEmptySubsequences: true)
         var (model, meta) = try await LoadedModel.load(options)
-        var restarts = 0
+        var restarts: [[String: Any]] = []
         FileManager.default.createFile(atPath: output.path, contents: nil)
         let handle = try FileHandle(forWritingTo: output)
         defer { try? handle.close() }
@@ -172,29 +193,31 @@ enum RunCommand {
             } catch {
                 row["status"] = "error"
                 row["error"] = error.localizedDescription
-                // The bridge closes its session after a timeout; later lines need a fresh worker.
-                if case .timedOut? = error as? PublishedCoreMLError {
-                    (model, _) = try await LoadedModel.load(options)
-                    restarts += 1
-                }
             }
             row["latency_ms"] = milliseconds(ContinuousClock.now - started)
             counts[row["status"] as! String, default: 0] += 1
             var encoded = try JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])
             encoded.append(0x0A)
             try handle.write(contentsOf: encoded)
+            // A timeout, cancellation, or worker exit closes the bridge session. Restart after the row is
+            // recorded, and time the restart separately from any request.
+            if case .bridge(let manager) = model, await manager.isClosed, index + 1 < lines.count {
+                let restartStarted = ContinuousClock.now
+                do {
+                    (model, _) = try await LoadedModel.load(options)
+                } catch {
+                    try writeSummary(meta, lines.count, counts, restarts, options, failure: error.localizedDescription)
+                    throw error
+                }
+                restarts.append([
+                    "after_index": index, "startup_ms": milliseconds(ContinuousClock.now - restartStarted),
+                ])
+            }
             if (index + 1) % 100 == 0 {
                 FileHandle.standardError.write(Data("\(index + 1)/\(lines.count) \(counts)\n".utf8))
             }
         }
-        var summary = meta
-        summary["requests"] = lines.count
-        summary["counts"] = counts
-        summary["worker_restarts"] = restarts
-        if let path = options["meta"] {
-            try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
-                .write(to: URL(fileURLWithPath: path))
-        }
+        let summary = try writeSummary(meta, lines.count, counts, restarts, options)
         print(
             String(decoding: try JSONSerialization.data(withJSONObject: summary, options: [.sortedKeys]), as: UTF8.self)
         )
