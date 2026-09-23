@@ -8,12 +8,12 @@ public enum VerdictModelStore {
     private static let repository = "FluidInference/verdict-coreml"
     private static let revision = "835208c443699f1f95c4bed1b177dc916300cffe"
 
-    private struct Asset {
+    struct Asset {
         let path: String
         let sha256: String
     }
 
-    private static let shared: [Asset] = [
+    static let shared: [Asset] = [
         Asset(path: "config.json", sha256: "303f8eef1009cfdcb0cfba3e653247e625f16a4501e2351bad1a633f1f644695"),
         Asset(path: "tokenizer.json", sha256: "8bb449eb0c037aae44115b65905bb339b8f3f74eb37067c19127feb3c0755723"),
         Asset(
@@ -21,14 +21,14 @@ public enum VerdictModelStore {
         Asset(path: "calibrator.json", sha256: "af2a876993148efa0726b6ccf710fe2303897d20c0ce8c7c9036eb50f64d23de"),
     ]
 
-    private static let buckets: [Int: [Asset]] = [
+    static let buckets: [Int: [Asset]] = [
         128: [
             Asset(
                 path: "verdict_fp16_L128_candidates25.mlpackage/Manifest.json",
                 sha256: "fc5d31df174a9f450bfb9ba406307c379c30fabba5cad38fcaf8717b806c69a8"),
             Asset(
                 path: "verdict_fp16_L128_candidates25.mlpackage/Data/com.apple.CoreML/model.mlmodel",
-                sha256: "6cc079930a63c1069a7c259f4c086879981021047767f2bb4d68b6d1f02b00"),
+                sha256: "6cc079930a63c1069a7a2c259f4c086879981021047767f2bb4d68b6d1f02b00"),
             Asset(
                 path: "verdict_fp16_L128_candidates25.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
                 sha256: "a982e14147982df9abb99a3637075a0193835c6b99edc396a52c1a43c2a4854a"),
@@ -84,6 +84,12 @@ public enum VerdictModelStore {
             let size =
                 (try FileManager.default.attributesOfItem(atPath: temporary.path)[.size] as? NSNumber)?.int64Value ?? 0
             try LayaModelStore.installDownloadedFile(temporary, at: destination)
+            // A changed package invalidates the compiled model that `VerdictManager.load` cached beside it.
+            if let package = asset.path.split(separator: "/").first, package.hasSuffix(".mlpackage") {
+                let compiled = directory.appendingPathComponent(
+                    package.replacingOccurrences(of: ".mlpackage", with: ".mlmodelc"))
+                try? FileManager.default.removeItem(at: compiled)
+            }
             progress?(asset.path, size)
         }
         return directory

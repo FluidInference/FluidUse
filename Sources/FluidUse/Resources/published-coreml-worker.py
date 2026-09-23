@@ -2,14 +2,19 @@
 
 This process only loads local Core ML packages; no upstream PyTorch checkpoint is loaded.
 The caller supplies an environment containing the published runtime's dependencies.
+
+Protocol: after loading, one `ready` line. Then, for each request line, exactly one reply line:
+`ok <answer JSON>` or `error <message JSON string>`. Replies use a private copy of the original
+standard output; file descriptor 1 is redirected to standard error so that native or library
+prints cannot corrupt the protocol.
 """
 
 from __future__ import annotations
 
 import argparse
-import contextlib
 import importlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -18,10 +23,7 @@ def runtime(model: str, root: Path, precision: str):
     if model == "kev-0-5b":
         sys.path.insert(0, str(root))
         module = importlib.import_module("runtime")
-        package = root / (
-            "kev_0_5b_e8_L128_options32.mlpackage" if precision == "e8"
-            else "kev_0_5b_fp16_L128_options32.mlpackage"
-        )
+        package = root / f"kev_0_5b_{precision}_L128_options32.mlpackage"
         session = module.KevCoreML(root, package=package)
         return session.predict
 
@@ -38,6 +40,7 @@ def runtime(model: str, root: Path, precision: str):
         shape = module.Shape()
         coreml = module.ct.models.MLModel(str(package), compute_units=module.COMPUTE_UNITS["all"])
 
+        # Mirrors runtime.predict, which reloads the tokenizer and package on every call.
         def kev06(request):
             arrays, encoded, metadata, parsed = module.prepare_runtime_inputs(tokenizer, request, shape)
             probabilities = module.np.asarray(coreml.predict(arrays)["probabilities"], dtype=module.np.float64)
@@ -55,15 +58,10 @@ def runtime(model: str, root: Path, precision: str):
     if model in {"decision-1.0-kai", "decision-1.0-lex"}:
         sys.path.insert(0, str(root / "conversion"))
         module = importlib.import_module("run_coreml")
-        compressed = ("noul", "score") if precision == "w8" else ()
-        if precision == "w8" and model == "decision-1.0-kai":
-            compressed = ("choice", "noul", "score")
-        try:
-            session = module.CoreMLSystemOne(root, compressed)
-        except TypeError:
-            if compressed:
-                raise
-            session = module.CoreMLSystemOne(root)
+        compressed = ()
+        if precision == "w8":
+            compressed = ("choice", "noul", "score") if model == "decision-1.0-kai" else ("noul", "score")
+        session = module.CoreMLSystemOne(root, compressed)
         return session.evaluate
 
     if model == "lfm2-5-350m-rlcd":
@@ -136,18 +134,23 @@ def main() -> None:
     parser.add_argument("--root", required=True, type=Path)
     parser.add_argument("--precision", default="fp16")
     args = parser.parse_args()
-    root = args.root.resolve(strict=True)
-    with contextlib.redirect_stdout(sys.stderr):
-        predict = runtime(args.model, root, args.precision)
-    print(json.dumps({"ready": True}), flush=True)
+
+    replies = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
+    os.dup2(2, 1)
+    sys.stdout = sys.stderr
+    sys.stdin.reconfigure(encoding="utf-8")
+
+    predict = runtime(args.model, args.root.resolve(strict=True), args.precision)
+    replies.write("ready\n")
     for line in sys.stdin:
+        if not line.strip():
+            continue
         try:
-            request = json.loads(line)
-            with contextlib.redirect_stdout(sys.stderr):
-                answer = predict(request)
-            print(json.dumps({"ok": answer}, ensure_ascii=False, allow_nan=False), flush=True)
+            answer = json.dumps(predict(json.loads(line)), ensure_ascii=False, allow_nan=False)
         except Exception as exc:
-            print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}), flush=True)
+            replies.write("error " + json.dumps(f"{type(exc).__name__}: {exc}") + "\n")
+        else:
+            replies.write("ok " + answer + "\n")
 
 
 if __name__ == "__main__":

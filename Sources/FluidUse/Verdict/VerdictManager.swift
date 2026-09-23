@@ -100,7 +100,7 @@ public actor VerdictManager {
             if FileManager.default.fileExists(atPath: compiled.path) {
                 url = compiled
             } else if FileManager.default.fileExists(atPath: package.path) {
-                url = try await MLModel.compileModel(at: package)
+                url = try await compileAndCache(package, at: compiled)
             } else {
                 throw VerdictError.invalidAsset("Missing \(name)")
             }
@@ -109,6 +109,26 @@ public actor VerdictManager {
             models.append(try await MLModel.load(contentsOf: url, configuration: modelConfiguration))
         }
         return try VerdictManager(models: models, tokenizer: tokenizer, calibratorData: calibrator)
+    }
+
+    /// Compile once and keep the result beside the package; a read-only directory uses the temporary copy.
+    private static func compileAndCache(_ package: URL, at destination: URL) async throws -> URL {
+        let temporary = try await MLModel.compileModel(at: package)
+        let staged = destination.appendingPathExtension("\(UUID().uuidString).partial")
+        do {
+            try FileManager.default.moveItem(at: temporary, to: staged)
+        } catch {
+            return temporary
+        }
+        guard rename(staged.path, destination.path) == 0 else {
+            // Another load installed it first, or the directory is not writable.
+            if FileManager.default.fileExists(atPath: destination.path) {
+                try? FileManager.default.removeItem(at: staged)
+                return destination
+            }
+            return staged
+        }
+        return destination
     }
 
     /// Answer one typed question; overlong inputs are rejected rather than truncated.
@@ -202,9 +222,9 @@ public actor VerdictManager {
             guard (1...maximumSubstantiveOptions).contains(levels.count) else {
                 throw VerdictError.invalidInput("Score needs 1–24 levels")
             }
-            labels = levels.map { "\($0.description) (Value: \(renderValue($0.value)))" }
+            labels = levels.map { "\($0.description) (Value: \($0.value.rendered))" }
             ids = levels.map(\.id)
-            values = levels.map(\.value)
+            values = levels.map(\.value.doubleValue)
             text = "Question: \(prompt)\n\nContext:\n\(context)"
         case .noul(let proposition):
             labels = ["true: \(proposition)", "false: not \(proposition)"]
@@ -218,14 +238,5 @@ public actor VerdictManager {
         let labelsWithAbstention = labels + ["insufficient evidence"]
         let rendered = labelsWithAbstention.map { "<<LABEL>>\($0)" }.joined() + "<<SEP>>" + text
         return Rendered(text: rendered, ids: ids + [abstentionID], values: values)
-    }
-
-    private static func renderValue(_ value: Double) -> String {
-        if value.isFinite, value.rounded() == value,
-            value >= Double(Int64.min), value < Double(Int64.max)
-        {
-            return String(Int64(value))
-        }
-        return String(value)
     }
 }

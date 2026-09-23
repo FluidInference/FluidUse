@@ -15,9 +15,9 @@ public enum VerdictQuestion: Sendable, Equatable {
     public struct Level: Sendable, Equatable {
         public let id: String
         public let description: String
-        public let value: Double
+        public let value: VerdictNumber
 
-        public init(id: String, description: String, value: Double) {
+        public init(id: String, description: String, value: VerdictNumber) {
             self.id = id
             self.description = description
             self.value = value
@@ -27,6 +27,31 @@ public enum VerdictQuestion: Sendable, Equatable {
     case choice(question: String, options: [Option])
     case score(question: String, levels: [Level])
     case noul(proposition: String)
+}
+
+/// A score level value. The checkpoint was trained on Python's rendering, which prints integers
+/// without a fraction (`2`) and floats with one (`2.0`), so the two spellings are kept distinct.
+public enum VerdictNumber: Sendable, Equatable, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral {
+    case integer(Int)
+    case real(Double)
+
+    public init(integerLiteral value: Int) { self = .integer(value) }
+    public init(floatLiteral value: Double) { self = .real(value) }
+
+    public var doubleValue: Double {
+        switch self {
+        case .integer(let value): Double(value)
+        case .real(let value): value
+        }
+    }
+
+    /// Python `f"{value}"`; Swift's shortest round-trip `Double.description` matches `repr(float)`.
+    var rendered: String {
+        switch self {
+        case .integer(let value): String(value)
+        case .real(let value): value.description
+        }
+    }
 }
 
 /// Verdict's calibrated decision. Abstention remains a distinct selected ID.

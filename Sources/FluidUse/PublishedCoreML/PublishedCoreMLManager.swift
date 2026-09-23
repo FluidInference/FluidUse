@@ -1,162 +1,238 @@
+import Darwin
 import Foundation
-
-/// Published sub-1B Core ML runtimes whose preprocessing is provided by their conversion toolkits.
-public enum PublishedCoreMLModel: String, CaseIterable, Sendable {
-    case kev05 = "kev-0-5b"
-    case kev06 = "kev-0.6b"
-    case kai = "decision-1.0-kai"
-    case lex = "decision-1.0-lex"
-    case lfm350 = "lfm2-5-350m-rlcd"
-    case jeff
-    case nanojev
-
-    public var repository: String { "FluidInference/\(rawValue)-coreml" }
-
-    fileprivate func requiredPackages(precision: String) throws -> [String] {
-        switch self {
-        case .kev05:
-            guard ["fp16", "e8"].contains(precision) else { throw PublishedCoreMLError.invalidPrecision(precision) }
-            return ["kev_0_5b_\(precision)_L128_options32.mlpackage"]
-        case .kev06:
-            guard ["fp16", "w8"].contains(precision) else { throw PublishedCoreMLError.invalidPrecision(precision) }
-            return ["kev_0_6b_\(precision)_L128_options32.mlpackage"]
-        case .kai, .lex:
-            guard ["fp16", "w8"].contains(precision) else { throw PublishedCoreMLError.invalidPrecision(precision) }
-            let compressed = precision == "w8"
-            return ["choice", "noul", "score"].map { kind in
-                let useW8 = compressed && (self == .kai || kind != "choice")
-                return "coreml/\(kind)\(useW8 ? "-embedding-w8" : "").mlpackage"
-            }
-        case .lfm350:
-            guard precision == "fp16" else { throw PublishedCoreMLError.invalidPrecision(precision) }
-            return ["lfm350_rlcd_fp16_L256_B8_V16.mlpackage"]
-        case .jeff:
-            guard ["fp16", "w8"].contains(precision) else { throw PublishedCoreMLError.invalidPrecision(precision) }
-            return [precision == "w8" ? "JeffDecision-L128-W8.mlpackage" : "JeffDecision-L128-FP16.mlpackage"]
-        case .nanojev:
-            guard precision == "fp16" else { throw PublishedCoreMLError.invalidPrecision(precision) }
-            return ["build/nanojev_encoder_fp16_L128_K4.mlpackage", "build/nanojev_heads_fp16_K4.mlpackage"]
-        }
-    }
-}
-
-public enum PublishedCoreMLError: Error, LocalizedError, Sendable {
-    case invalidPrecision(String)
-    case missingAsset(String)
-    case invalidRequest(String)
-    case runtime(String)
-
-    public var errorDescription: String? {
-        switch self {
-        case .invalidPrecision(let value): "Unsupported published Core ML precision: \(value)"
-        case .missingAsset(let value): "Missing published Core ML asset: \(value)"
-        case .invalidRequest(let value): "Invalid published Core ML request: \(value)"
-        case .runtime(let value): "Published Core ML runtime failed: \(value)"
-        }
-    }
-}
 
 /// Mac-only bridge to the published model-specific Core ML serving code.
 ///
 /// The model packages remain local and run through Core ML. Python performs the released tokenizer,
-/// prompt rendering, and decoding contract. Start this once and reuse it; actor isolation serializes
-/// requests to the process. Install the selected Hub repository's Python dependencies in the supplied
-/// interpreter environment before loading it. The API accepts and returns JSON because Kev, Kai/Lex,
-/// LFM, and Jeff expose different native decision schemas.
+/// prompt rendering, and decoding contract. Start one session per model and reuse it: the worker loads
+/// its packages once and requests are served one at a time in call order. A request that times out or is
+/// cancelled terminates the worker, because its reply can no longer be matched to a caller; start a new
+/// session afterwards. Model errors (for example an over-long input) are reported per request and leave
+/// the session usable.
 public actor PublishedCoreMLManager {
+    public struct Configuration: Sendable {
+        /// Package precision; `nil` selects the model's first entry in `PublishedCoreMLModel.precisions`.
+        public var precision: String?
+        /// Limit for loading packages before the worker reports ready.
+        public var startupTimeout: Duration
+        /// Limit for one request. Kai and Lex load a different package when the question type changes.
+        public var requestTimeout: Duration
+        /// Copy the worker's standard error to this process's standard error in addition to keeping its tail.
+        public var forwardsStandardError: Bool
+        /// Extra environment variables for the worker.
+        public var environment: [String: String]
+
+        public init(
+            precision: String? = nil, startupTimeout: Duration = .seconds(600),
+            requestTimeout: Duration = .seconds(300), forwardsStandardError: Bool = false,
+            environment: [String: String] = [:]
+        ) {
+            self.precision = precision
+            self.startupTimeout = startupTimeout
+            self.requestTimeout = requestTimeout
+            self.forwardsStandardError = forwardsStandardError
+            self.environment = environment
+        }
+    }
+
     public nonisolated let model: PublishedCoreMLModel
+    public nonisolated let precision: String
+    private let configuration: Configuration
     private let process: Process
     private let input: FileHandle
-    private let output: FileHandle
-    private var buffer = Data()
+    private let replies: LineChannel
+    private let standardError: OutputTail
+    private var closedReason: String?
+    private var busy = false
+    private var queue: [CheckedContinuation<Void, Never>] = []
 
-    /// Start a serving session from a materialized Hub snapshot. NanoJev may fetch its pinned
-    /// upstream tokenizer/source files; it never fetches or redistributes trained weights.
+    /// Download the pinned snapshot, build its locked Python environment with `uv`, and start a session.
+    /// - Parameter cacheDirectory: The parent Models directory, not the repository subdirectory.
+    public static func load(
+        model: PublishedCoreMLModel, cacheDirectory: URL? = nil, uv: URL? = nil,
+        configuration: Configuration = Configuration(), progress: PublishedCoreMLModelStore.Progress? = nil
+    ) async throws -> PublishedCoreMLManager {
+        let directory = try await PublishedCoreMLModelStore.ensure(
+            model: model, precision: configuration.precision, cacheDirectory: cacheDirectory, progress: progress)
+        let python = try await PublishedCoreMLModelStore.prepareEnvironment(for: model, in: directory, uv: uv)
+        return try await start(model: model, from: directory, python: python, configuration: configuration)
+    }
+
+    /// Start a serving session from a materialized repository and a Python environment holding its
+    /// dependencies. NanoJev may fetch its pinned upstream tokenizer/source files; it never fetches or
+    /// redistributes trained weights.
     /// - Parameters:
     ///   - directory: Local repository root containing the selected `.mlpackage` and tokenizer files.
-    ///   - python: Python 3.12 executable with the published toolkit's dependencies installed.
-    public init(
+    ///   - python: Python 3.12 interpreter with the published toolkit's dependencies installed.
+    public static func start(
         model: PublishedCoreMLModel, from directory: URL, python: URL,
-        precision: String = "fp16"
+        configuration: Configuration = Configuration()
+    ) async throws -> PublishedCoreMLManager {
+        let manager = try PublishedCoreMLManager(
+            model: model, directory: directory, python: python, configuration: configuration)
+        try await manager.waitUntilReady()
+        return manager
+    }
+
+    private init(
+        model: PublishedCoreMLModel, directory: URL, python: URL, configuration: Configuration
     ) throws {
         guard directory.isFileURL, python.isFileURL else {
             throw PublishedCoreMLError.invalidRequest("Local file URLs are required")
         }
-        let metadata = model == .nanojev ? "assets.lock.json" : "config.json"
-        guard FileManager.default.fileExists(atPath: directory.appendingPathComponent(metadata).path) else {
-            throw PublishedCoreMLError.missingAsset(metadata)
+        let precision = configuration.precision ?? model.precisions[0]
+        let manager = FileManager.default
+        guard manager.fileExists(atPath: directory.appendingPathComponent(model.rootMarker).path) else {
+            throw PublishedCoreMLError.missingAsset(model.rootMarker)
         }
         for path in try model.requiredPackages(precision: precision) {
-            guard FileManager.default.fileExists(atPath: directory.appendingPathComponent(path).path) else {
+            guard manager.fileExists(atPath: directory.appendingPathComponent(path).path) else {
                 throw PublishedCoreMLError.missingAsset(path)
             }
+        }
+        guard manager.isExecutableFile(atPath: python.path) else {
+            throw PublishedCoreMLError.missingAsset(python.path)
         }
         guard
             let worker = Bundle.module.url(
                 forResource: "published-coreml-worker", withExtension: "py", subdirectory: "Resources")
         else { throw PublishedCoreMLError.missingAsset("published-coreml-worker.py") }
-        self.model = model
+
         let inputPipe = Pipe()
         let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        let replies = LineChannel()
+        let standardError = OutputTail()
+        let forwards = configuration.forwardsStandardError
         let task = Process()
         task.executableURL = python
         task.arguments = [worker.path, "--model", model.rawValue, "--root", directory.path, "--precision", precision]
+        task.environment = ProcessInfo.processInfo.environment
+            .merging(["PYTHONUNBUFFERED": "1", "TOKENIZERS_PARALLELISM": "false"]) { _, new in new }
+            .merging(configuration.environment) { _, new in new }
         task.standardInput = inputPipe
         task.standardOutput = outputPipe
-        task.standardError = FileHandle.standardError
+        task.standardError = errorPipe
+        outputPipe.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty { handle.readabilityHandler = nil }
+            replies.receive(chunk)
+        }
+        errorPipe.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            guard !chunk.isEmpty else {
+                handle.readabilityHandler = nil
+                return
+            }
+            standardError.append(chunk)
+            if forwards { FileHandle.standardError.write(chunk) }
+        }
+        // A write after the worker exits must fail with EPIPE instead of raising SIGPIPE in the host.
+        _ = fcntl(inputPipe.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
+
+        self.model = model
+        self.precision = precision
+        self.configuration = configuration
         self.process = task
         self.input = inputPipe.fileHandleForWriting
-        self.output = outputPipe.fileHandleForReading
+        self.replies = replies
+        self.standardError = standardError
         do { try task.run() } catch {
+            outputPipe.fileHandleForReading.readabilityHandler = nil
+            errorPipe.fileHandleForReading.readabilityHandler = nil
             throw PublishedCoreMLError.runtime("Could not start Python: \(error.localizedDescription)")
         }
-        var startupBuffer = Data()
-        guard let ready = try Self.readMessage(from: outputPipe.fileHandleForReading, buffer: &startupBuffer),
-            ready["ready"] as? Bool == true
-        else {
-            task.terminate()
-            throw PublishedCoreMLError.runtime("Worker did not become ready; see standard error")
-        }
-        self.buffer = startupBuffer
     }
 
     deinit {
         if process.isRunning { process.terminate() }
     }
 
-    /// Evaluate one request in the model's published JSON schema and return its JSON answer.
-    public func evaluate(_ request: Data) throws -> Data {
-        try Task.checkCancellation()
-        guard process.isRunning else { throw PublishedCoreMLError.runtime("Worker exited") }
-        let object = try JSONSerialization.jsonObject(with: request)
-        guard object is [String: Any] else {
-            throw PublishedCoreMLError.invalidRequest("Top-level JSON must be an object")
+    private func waitUntilReady() async throws {
+        do {
+            let line = try await replies.next(timeout: configuration.startupTimeout, waitingFor: "model loading")
+            guard let line else { throw exitError("Worker exited while loading") }
+            guard line == Data("ready".utf8) else {
+                throw PublishedCoreMLError.invalidResponse(
+                    "Expected ready, got \(String(decoding: line, as: UTF8.self))")
+            }
+        } catch {
+            close(reason: "startup failed")
+            throw error
         }
-        var line = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
-        line.append(0x0A)
-        try input.write(contentsOf: line)
-        guard let response = try Self.readMessage(from: output, buffer: &buffer) else {
-            throw PublishedCoreMLError.runtime("Worker closed its output")
-        }
-        if let error = response["error"] as? String { throw PublishedCoreMLError.runtime(error) }
-        guard let answer = response["ok"] else { throw PublishedCoreMLError.runtime("Worker returned no answer") }
-        return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys, .fragmentsAllowed])
     }
 
-    private static func readMessage(from output: FileHandle, buffer: inout Data) throws -> [String: Any]? {
-        while true {
-            if let index = buffer.firstIndex(of: 0x0A) {
-                let line = Data(buffer[..<index])
-                buffer.removeSubrange(...index)
-                guard let object = try JSONSerialization.jsonObject(with: line) as? [String: Any] else {
-                    throw PublishedCoreMLError.runtime("Worker returned non-object JSON")
-                }
-                return object
-            }
-            guard buffer.count < 4_194_304 else { throw PublishedCoreMLError.runtime("Worker response exceeded 4 MiB") }
-            let chunk = output.availableData
-            guard !chunk.isEmpty else { return nil }
-            buffer.append(chunk)
+    /// Evaluate one request in the model's published JSON schema and return its JSON answer.
+    ///
+    /// The request bytes reach the runtime unchanged apart from line breaks, so object member order
+    /// (for example Choice criteria order) is preserved. The answer is returned as the runtime wrote it.
+    public func evaluate(_ request: Data) async throws -> Data {
+        guard (try? JSONSerialization.jsonObject(with: request)) is [String: Any] else {
+            throw PublishedCoreMLError.invalidRequest("Top-level JSON must be an object")
         }
+        await acquire()
+        defer { release() }
+        try Task.checkCancellation()
+        if let closedReason { throw PublishedCoreMLError.closed(closedReason) }
+
+        // Raw line breaks can only be insignificant whitespace in valid JSON.
+        var line = Data(request.map { $0 == 0x0A || $0 == 0x0D ? 0x20 : $0 })
+        line.append(0x0A)
+        do {
+            try input.write(contentsOf: line)
+        } catch {
+            close(reason: "worker stopped accepting requests")
+            throw exitError("Worker stopped accepting requests")
+        }
+        let reply: Data?
+        do {
+            reply = try await replies.next(timeout: configuration.requestTimeout, waitingFor: "a model answer")
+        } catch {
+            close(reason: error is CancellationError ? "a request was cancelled" : "a request timed out")
+            throw error
+        }
+        guard let reply else {
+            close(reason: "worker exited")
+            throw exitError("Worker exited during a request")
+        }
+        if reply.starts(with: Data("ok ".utf8)) { return Data(reply.dropFirst(3)) }
+        if reply.starts(with: Data("error ".utf8)) {
+            let message = (try? JSONSerialization.jsonObject(with: reply.dropFirst(6), options: .fragmentsAllowed))
+            throw PublishedCoreMLError.runtime(message as? String ?? String(decoding: reply, as: UTF8.self))
+        }
+        close(reason: "protocol error")
+        throw PublishedCoreMLError.invalidResponse(String(decoding: reply.prefix(200), as: UTF8.self))
+    }
+
+    /// Stop the worker. Later requests throw `PublishedCoreMLError.closed`.
+    public func shutdown() {
+        close(reason: "shut down")
+    }
+
+    /// Recent worker standard error, useful when a model reports a failure.
+    public nonisolated var standardErrorTail: String { standardError.text }
+
+    private func close(reason: String) {
+        guard closedReason == nil else { return }
+        closedReason = reason
+        try? input.close()
+        if process.isRunning { process.terminate() }
+    }
+
+    private func exitError(_ message: String) -> PublishedCoreMLError {
+        let tail = standardError.text
+        return .runtime(tail.isEmpty ? message : "\(message): \(tail)")
+    }
+
+    private func acquire() async {
+        guard busy else {
+            busy = true
+            return
+        }
+        await withCheckedContinuation { queue.append($0) }
+    }
+
+    private func release() {
+        if queue.isEmpty { busy = false } else { queue.removeFirst().resume() }
     }
 }
