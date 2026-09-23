@@ -5,10 +5,10 @@ swift run -c release LaneRunnerDemo
 swift run -c release LaneRunnerCheck gliner2Base --seeds=1,2,3,4
 ```
 
-To start a demo with no clicks, set the model and seed, for example the 122-row GLiNER multilingual run:
+To start a demo with no clicks, set the model and seed, for example GLiNER 2.5 base's 43-row run:
 
 ```bash
-LANE_RUNNER_MODEL=gliner2Multilingual LANE_RUNNER_SEED=2 swift run -c release LaneRunnerDemo
+LANE_RUNNER_MODEL=gliner2Base LANE_RUNNER_SEED=2 swift run -c release LaneRunnerDemo
 ```
 
 `LANE_RUNNER_ROW_MS` sets the row interval. The first load checks and compiles the model, which takes about 20 s.
