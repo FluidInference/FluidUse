@@ -7,7 +7,12 @@ import SwiftUI
 final class RunnerScene {
     let scene = SCNScene()
     private let world = SCNNode()
+    /// Lane position; `hop` carries jump height, `stride` the running bob, `body` slide squash and falls.
     private let player = SCNNode()
+    private let hop = SCNNode()
+    private let stride = SCNNode()
+    private let body = SCNNode()
+    private static let bodyScale: CGFloat = 1.15
     private let templates: [String: SCNNode]
     private static let laneWidth: CGFloat = 1.7
     private static let rowLength: CGFloat = 3.2
@@ -40,12 +45,16 @@ final class RunnerScene {
         buildStage()
     }
 
-    /// Rebuild the track for `game`. After a step, the rows slide one row toward the camera over `duration`.
+    /// Rebuild the track for `game`. After a step, the row being passed slides from half a row ahead of the
+    /// runner to half a row behind over `duration`, so it crosses the runner mid-row, when a jump peaks.
     func show(_ game: LaneRunner, passed: [LaneRunner.Obstacle]?, action: LaneRunner.Action?, duration: Double) {
         world.removeAllActions()
         world.childNodes.forEach { $0.removeFromParentNode() }
-        var rows = Array(game.rows.prefix(Self.drawnRows).enumerated().map { (index: $0.offset + 1, row: $0.element) })
-        if let passed { rows.insert((0, passed), at: 0) }
+        // On a crash the step did not advance: rows[0] is the row the runner hit.
+        let crossing = game.isOver ? game.rows.first : passed
+        var rows = game.rows.prefix(Self.drawnRows).enumerated().map { (index: $0.offset + 1, row: $0.element) }
+        if game.isOver { rows.removeFirst() }
+        if let crossing { rows.insert((0, crossing), at: 0) }
         for (index, row) in rows {
             let z = -CGFloat(index) * Self.rowLength
             addScenery(z: z, seed: game.distance + index)
@@ -53,47 +62,84 @@ final class RunnerScene {
                 addObstacle(obstacle, x: Self.x(lane), z: z, variant: (game.distance + index + lane) % 2)
             }
         }
-        let moveX = SCNAction.move(
-            to: SCNVector3(Self.x(game.lane), 0, 0), duration: min(duration * 0.5, 0.2))
-        moveX.timingMode = .easeOut
-        player.removeAllActions()
-        player.scale = SCNVector3(1.15, 1.15, 1.15)
-        player.eulerAngles = SCNVector3(0, CGFloat.pi, 0)
+        let half = Self.rowLength / 2
+        world.position.z = -half
+        guard let crossing, duration > 0 else {
+            resetRunner(lane: game.lane)
+            return
+        }
+        let direction = Self.x(game.lane) - player.position.x
+        let laneMove = SCNAction.move(to: SCNVector3(Self.x(game.lane), 0, 0), duration: duration * 0.35)
+        laneMove.timingMode = .easeInEaseOut
+        player.runAction(laneMove, forKey: "lane")
+        if direction != 0 {
+            let lean = SCNAction.customAction(duration: duration * 0.35) { node, elapsed in
+                node.eulerAngles.z = -0.25 * (direction > 0 ? 1 : -1) * sin(.pi * elapsed / (duration * 0.35))
+            }
+            player.runAction(lean, forKey: "lean")
+        }
         if game.isOver {
-            // The crash row is still rows[0]: stop the runner against it.
-            world.position.z = 0
-            let fall = SCNAction.rotateTo(x: -.pi / 2, y: .pi, z: 0, duration: 0.25)
-            player.runAction(.group([moveX, fall]))
+            // Stop at the obstacle: a train's nose is already at the runner, bars are half a row ahead.
+            let contact: CGFloat = crossing[game.lane] == .train ? -half : -0.45
+            let bump = SCNAction.move(to: SCNVector3(0, 0, contact), duration: duration * 0.3)
+            bump.timingMode = .easeOut
+            world.runAction(bump)
+            stride.removeAllActions()
+            stride.position.y = 0
+            body.runAction(
+                .sequence([
+                    .wait(duration: duration * 0.3),
+                    .rotateTo(x: -.pi / 2, y: 0, z: 0, duration: 0.3, usesShortestUnitArc: true),
+                ]))
             return
         }
-        player.runAction(.group([moveX, Self.pose(action, duration: duration)]))
-        guard passed != nil else {
-            world.position.z = 0
-            return
+        world.runAction(.move(to: SCNVector3(0, 0, half), duration: duration))
+        hop.removeAllActions()
+        body.removeAction(forKey: "pose")
+        hop.position.y = 0
+        body.scale = SCNVector3(Self.bodyScale, Self.bodyScale, Self.bodyScale)
+        body.eulerAngles.x = 0
+        switch action {
+        case .jump:
+            hop.runAction(
+                .customAction(duration: duration) { node, elapsed in
+                    node.position.y = 1.15 * sin(.pi * elapsed / duration)
+                })
+        case .slide:
+            let scale = Self.bodyScale
+            body.runAction(
+                .customAction(duration: duration) { node, elapsed in
+                    let squash = Self.plateau(elapsed / duration)
+                    node.scale = SCNVector3(scale, scale * (1 - 0.5 * squash), scale)
+                    node.eulerAngles.x = -0.35 * squash
+                }, forKey: "pose")
+        default:
+            break
         }
-        world.position.z = -Self.rowLength
-        world.runAction(.move(to: SCNVector3(0, 0, 0), duration: duration))
+    }
+
+    private func resetRunner(lane: Int) {
+        player.removeAllActions()
+        hop.removeAllActions()
+        body.removeAllActions()
+        player.position = SCNVector3(Self.x(lane), 0, 0)
+        player.eulerAngles.z = 0
+        hop.position.y = 0
+        body.scale = SCNVector3(Self.bodyScale, Self.bodyScale, Self.bodyScale)
+        body.eulerAngles = SCNVector3(0, 0, 0)
+        guard stride.action(forKey: "run") == nil else { return }
+        let up = SCNAction.moveBy(x: 0, y: 0.07, z: 0, duration: 0.16)
+        up.timingMode = .easeInEaseOut
+        stride.runAction(.repeatForever(.sequence([up, up.reversed()])), forKey: "run")
     }
 
     private static func x(_ lane: Int) -> CGFloat { CGFloat(lane - 1) * laneWidth }
 
-    private static func pose(_ action: LaneRunner.Action?, duration: Double) -> SCNAction {
-        switch action {
-        case .jump:
-            let up = SCNAction.moveBy(x: 0, y: 1.2, z: 0, duration: duration * 0.45)
-            up.timingMode = .easeOut
-            let down = SCNAction.moveBy(x: 0, y: -1.2, z: 0, duration: duration * 0.45)
-            down.timingMode = .easeIn
-            return .sequence([up, down])
-        case .slide:
-            return .sequence([
-                .scale(to: 0.55, duration: duration * 0.15), .wait(duration: duration * 0.6),
-                .scale(to: 1.15, duration: duration * 0.2),
-            ])
-        default:
-            let bob = SCNAction.moveBy(x: 0, y: 0.08, z: 0, duration: duration * 0.25)
-            return .sequence([bob, bob.reversed()])
-        }
+    /// 0 → 1 over the first 20 %, held, then back to 0 over the last 20 %, with smoothstep easing.
+    nonisolated private static func plateau(_ t: CGFloat) -> CGFloat {
+        let edge = min(t, 1 - t) / 0.2
+        let clamped = max(0, min(1, edge))
+        return clamped * clamped * (3 - 2 * clamped)
     }
 
     private func clone(_ name: String) -> SCNNode {
@@ -181,8 +227,14 @@ final class RunnerScene {
         scene.rootNode.addChildNode(ballast)
 
         scene.rootNode.addChildNode(world)
-        player.addChildNode(clone("character-oobi"))
+        let model = clone("character-oobi")
+        model.eulerAngles.y = .pi
+        body.addChildNode(model)
+        stride.addChildNode(body)
+        hop.addChildNode(stride)
+        player.addChildNode(hop)
         scene.rootNode.addChildNode(player)
+        resetRunner(lane: 1)
 
         let camera = SCNNode()
         camera.camera = SCNCamera()
