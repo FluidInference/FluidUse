@@ -19,7 +19,7 @@ final class RunnerScene {
             ("train", ["train-electric-subway-a", "train-electric-subway-b", "track"]),
             (
                 "platformer",
-                ["character-oobi", "coin-gold", "fence-low-straight", "poles", "platform", "tree-pine", "tree"]
+                ["character-oobi", "coin-gold", "fence-low-straight", "tree-pine", "tree"]
             ),
         ] {
             for name in names {
@@ -127,15 +127,31 @@ final class RunnerScene {
             fence.position = SCNVector3(x, 0.1, z)
             world.addChildNode(fence)
         case .high:
-            let poles = clone("poles")
-            poles.scale = SCNVector3(1.4, 1.9, 0.6)
-            poles.position = SCNVector3(x, 0.1, z)
-            world.addChildNode(poles)
-            let beam = clone("platform")
-            beam.scale = SCNVector3(1.55, 0.7, 0.25)
-            beam.position = SCNVector3(x, 1.55, z)
-            world.addChildNode(beam)
+            world.addChildNode(Self.overheadBar(x: x, z: z))
         }
+    }
+
+    /// Two posts and a striped beam with open space below: something to slide under, not a wall.
+    private static func overheadBar(x: CGFloat, z: CGFloat) -> SCNNode {
+        let bar = SCNNode()
+        let wood = NSColor(red: 0.62, green: 0.38, blue: 0.24, alpha: 1)
+        for side: CGFloat in [-1, 1] {
+            let post = SCNNode(geometry: SCNCylinder(radius: 0.07, height: 1.15))
+            post.geometry?.firstMaterial?.diffuse.contents = wood
+            post.position = SCNVector3(side * laneWidth * 0.44, 0.575, 0)
+            bar.addChildNode(post)
+        }
+        let stripes = 6
+        let stripeWidth = laneWidth * 0.95 / CGFloat(stripes)
+        for index in 0..<stripes {
+            let stripe = SCNNode(geometry: SCNBox(width: stripeWidth, height: 0.22, length: 0.14, chamferRadius: 0.02))
+            stripe.geometry?.firstMaterial?.diffuse.contents = index.isMultiple(of: 2) ? NSColor.systemRed : .white
+            stripe.position = SCNVector3(
+                -laneWidth * 0.475 + stripeWidth * (CGFloat(index) + 0.5), 0.95, 0)
+            bar.addChildNode(stripe)
+        }
+        bar.position = SCNVector3(x, 0.1, z)
+        return bar
     }
 
     private func addScenery(z: CGFloat, seed: Int) {
