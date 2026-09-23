@@ -48,7 +48,7 @@ public enum GLiNER2ModelStore {
             return [
                 Asset(
                     path: "config.json",
-                    sha256: "8b59a0f426a65859c89cd1ea850c3529c09aa3be6a6fafd8eddfdd17b1bf0146"),
+                    sha256: "8b59a0f426a65859c89cd1ea850c3529c09aa3be3a6fafd8eddfdd17b1bf0146"),
                 Asset(
                     path: "encoder_config/config.json",
                     sha256: "fa4f9ef2903b5369ab172333aae4574e6a476511d7465845cf59f8360ee18716"),
@@ -93,8 +93,10 @@ public enum GLiNER2ModelStore {
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                 throw GLiNER2Error.invalidAsset("Download failed for \(asset.path)")
             }
-            guard try checksum(of: temporary) == asset.sha256 else {
-                throw GLiNER2Error.invalidAsset("Checksum mismatch for \(asset.path)")
+            let actualChecksum = try checksum(of: temporary)
+            guard actualChecksum == asset.sha256 else {
+                throw GLiNER2Error.invalidAsset(
+                    "Checksum mismatch for \(asset.path): expected \(asset.sha256), got \(actualChecksum)")
             }
             let size = (try manager.attributesOfItem(atPath: temporary.path)[.size] as? NSNumber)?.int64Value ?? 0
             try LayaModelStore.installDownloadedFile(temporary, at: destination)
