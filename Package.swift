@@ -25,8 +25,17 @@ let package = Package(
         ),
         .target(name: "LayaTetris", dependencies: ["FluidUse"]),
         .target(name: "Game2048"),
+        .target(name: "DecisionPolicy", dependencies: ["FluidUse"]),
         .target(name: "FlappyBird"),
-        .target(name: "FlappyBirdPolicy", dependencies: ["FlappyBird", "FluidUse"]),
+        .target(name: "FlappyBirdPolicy", dependencies: ["FlappyBird", "DecisionPolicy"]),
+        .target(name: "LaneRunner"),
+        .target(name: "LaneRunnerPolicy", dependencies: ["LaneRunner", "DecisionPolicy"]),
+        .executableTarget(name: "LaneRunnerCheck", dependencies: ["LaneRunner", "LaneRunnerPolicy", "DecisionPolicy"]),
+        .executableTarget(
+            name: "LaneRunnerDemo", dependencies: ["LaneRunner", "LaneRunnerPolicy", "DecisionPolicy"],
+            exclude: ["README.md"]
+        ),
+        .testTarget(name: "LaneRunnerTests", dependencies: ["LaneRunner"]),
         .executableTarget(
             name: "GLiClassFlappyDemo", dependencies: ["FlappyBird", "FlappyBirdPolicy"], exclude: ["README.md"]
         ),
