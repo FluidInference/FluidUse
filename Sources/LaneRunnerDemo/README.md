@@ -5,6 +5,14 @@ swift run -c release LaneRunnerDemo
 swift run -c release LaneRunnerCheck gliner2Base --seeds=1,2,3,4
 ```
 
+To start a demo with no clicks, set the model and seed, for example the 122-row GLiNER multilingual run:
+
+```bash
+LANE_RUNNER_MODEL=gliner2Multilingual LANE_RUNNER_SEED=2 swift run -c release LaneRunnerDemo
+```
+
+`LANE_RUNNER_ROW_MS` sets the row interval. The first load checks and compiles the model, which takes about 20 s.
+
 This is a Subway Surfers-style endless runner with three lanes. Each step enters the next row, and the runner picks one of five moves: **left**, **right**, **jump** (clears a low bar), **slide** (passes under a high bar), or **stay**. Trains block a lane, and coins are a bonus. Obstacle rows alternate with open rows, and each obstacle row leaves one lane open, so every track can be survived.
 
 The runner chooses once per row, not once per frame, and each option states its consequence. The first Flappy Bird trial showed that frame-by-frame control does not suit these models, so this setup follows the Tetris harness pattern. The model reads a short state (`Lane 2 of 3. Next row: train, open, low bar. Then: …`) plus one label per legal move, such as `jump: crash, hit a train`, `left: safe, coin`, or `stay: safe, then trapped`. The labels and the heuristic both look only at the three visible rows. Option order rotates every row, so a fixed position preference does not look like skill.

@@ -48,6 +48,7 @@ final class LaneRunnerModel: ObservableObject {
     private var reply: (row: Int, decision: LaneRunnerPolicy.Decision)?
     private var queuedAction: LaneRunner.Action = .stay
     private var decisionNumber = 0
+    private var autostart = false
 
     var usesModel: Bool { control.model != nil }
     var canPlay: Bool { control.model.map { loadedModels.contains($0) } ?? true }
@@ -59,11 +60,34 @@ final class LaneRunnerModel: ObservableObject {
         Task {
             defer { isLoading = false }
             do {
-                policies[selected] = try await LaneRunnerPolicy.load(selected)
+                // Checksums and Core ML compilation must not run on the main actor.
+                let started = Date()
+                policies[selected] = try await Task.detached { try await LaneRunnerPolicy.load(selected) }.value
                 loadedModels.insert(selected)
+                FileHandle.standardError.write(
+                    Data(String(format: "Loaded %@ in %.1f s\n", selected.title, -started.timeIntervalSinceNow).utf8))
+                if autostart { toggle() }
             } catch {
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    /// `LANE_RUNNER_MODEL`, `LANE_RUNNER_SEED`, and `LANE_RUNNER_ROW_MS` preselect a run; the model then
+    /// loads and runs without any clicks.
+    func applyLaunchEnvironment() {
+        let environment = ProcessInfo.processInfo.environment
+        if let seed = environment["LANE_RUNNER_SEED"].flatMap(UInt64.init) { self.seed = seed }
+        if let rowMs = environment["LANE_RUNNER_ROW_MS"].flatMap(Double.init) { self.rowMs = rowMs }
+        game = LaneRunner(seed: seed)
+        guard let name = environment["LANE_RUNNER_MODEL"] else { return }
+        if name == "heuristic" {
+            control = .heuristic
+            toggle()
+        } else if let model = DecisionModel(rawValue: name) {
+            control = .model(model)
+            autostart = true
+            loadModel()
         }
     }
 
