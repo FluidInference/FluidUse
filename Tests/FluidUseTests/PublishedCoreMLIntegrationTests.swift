@@ -165,6 +165,53 @@ final class PublishedCoreMLIntegrationTests: XCTestCase {
         XCTAssertTrue(exited, "the stopped worker must be killed")
     }
 
+    func testDeadlineCoversWriteAndReply() async throws {
+        let (manager, identifier) = try await stalledSession(timeout: .seconds(4))
+        // Valid and slow to answer (40 candidates, 5 model calls; the prompt fits L256), padded with JSON whitespace so the write overflows the pipe.
+        let values = (0..<40).map { "o\($0)" }
+        let body = String(
+            decoding: try PublishedJSON.object([
+                .init("context", "Pick an option."),
+                .init("schema", try ConstrainedField.schema([.oneOf("choice", values)])),
+            ]).encoded(), as: UTF8.self)
+        let request = Data(("{" + String(repeating: " ", count: 300_000) + body.dropFirst()).utf8)
+        let started = ContinuousClock.now
+        let task = Task { try await manager.evaluate(request) }
+        // Slow write: the worker resumes at 2 s, drains the request, and stalls again mid-answer.
+        try await Task.sleep(for: .seconds(2))
+        XCTAssertEqual(kill(identifier, SIGCONT), 0)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(kill(identifier, SIGSTOP), 0)
+        do {
+            _ = try await task.value
+            XCTFail("Expected a timeout")
+        } catch {
+            XCTAssertEqual(error as? PublishedCoreMLError, .timedOut("a model answer"))
+        }
+        // One 4 s deadline, not 2 s of writing plus a fresh 4 s for the reply.
+        XCTAssertLessThan(ContinuousClock.now - started, .milliseconds(4_800))
+        let exited = await waitForExit(identifier, within: 5)
+        XCTAssertTrue(exited, "the stopped worker must be killed")
+    }
+
+    func testShutdownDuringBlockedWriteReleasesInput() async throws {
+        let (manager, identifier) = try await stalledSession(timeout: .seconds(120))
+        let request = try oversizedRequest()
+        let task = Task { try await manager.evaluate(request) }
+        try await Task.sleep(for: .milliseconds(300))
+        await manager.shutdown()
+        do {
+            _ = try await task.value
+            XCTFail("Expected the closed session to surface")
+        } catch {
+            XCTAssertEqual(error as? PublishedCoreMLError, .closed("shut down"))
+        }
+        let released = await manager.inputClosed
+        XCTAssertTrue(released, "stdin must be closed once the write unwinds")
+        let exited = await waitForExit(identifier, within: 5)
+        XCTAssertTrue(exited, "the stopped worker must be killed")
+    }
+
     func testNanoJevLocalConversion() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let directory = environment["FLUIDUSE_NANOJEV_DIR"], let python = environment["FLUIDUSE_NANOJEV_PYTHON"]
