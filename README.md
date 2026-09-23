@@ -144,9 +144,9 @@ left to the person. Submit is never clicked unless enabled.
 open-weight candidates worth converting next, including
 sub-1B-parameter candidates from the Jev Decision Index.
 [Documentation/GameDemos.md](Documentation/GameDemos.md) lists game demos, the matched-seed Flappy Bird
-comparison, and its trial results (no model played usefully). [PlayJev](https://github.com/OmniJev/PlayJev)
-is the proposed starting harness for ten existing browser games; an open-source
-three-lane runner is listed for the Subway Surfers-style demo.
+comparison, and its trial results (no model played usefully). Real-time control
+games are ruled out; the list keeps turn-based games, led by Connect Four, chess
+positions, and Codenames.
 
 ## License
 

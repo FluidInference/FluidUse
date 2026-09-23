@@ -4,60 +4,48 @@ Ideas for comparing small decision models in observable, repeatable environments
 These are proposed demos, not games currently shipped in FluidUse. Tetris, 2048,
 and Snake are the starting examples from the discussion. Flappy Bird has been
 tried ([results](#flappy-bird-trial-results)): no text-state model played it
-usefully. The [model inventory](Models.md) identifies possible sub-1B models
+usefully, so real-time control games are [ruled out](#ruled-out-real-time-games).
+The [model inventory](Models.md) identifies possible sub-1B models
 and distinguishes text-state models from vision models.
 
 ## Recommended build order
 
 This is a judgment about **solo and side-by-side demo value for FluidUse**, not
-a measured model ranking. It favors visible differences between models, a clear
-score, distinct decision types, and reusable game code. Tetris, 2048, and Snake rank last only
-because they are already the starting examples. [PlayJev](https://github.com/OmniJev/PlayJev)
-reduces the work for ten browser games; the three-lane
-[Neon Cyberpunk Runner](https://github.com/markstent/runner) is the reuse path
-for a Subway Surfers-style demo.
+a measured model ranking. It favors turn-based games where each legal move can be
+listed with its consequence in words, which is the setup that took the Tetris
+harness from 76 to 568 pieces. It also favors a clear score and visible
+differences between models. Tetris, 2048, and Snake rank last only because they
+are already the starting examples.
 
 | Rank | Game | Main reason to demo it |
 | ---: | --- | --- |
-| 1 | Flappy Bird | **Tried:** no model passed more than one pipe; see [results](#flappy-bird-trial-results). |
-| 2 | Sokoban / Boxoban | Clear planning failures; reusable PlayJev game. |
-| 3 | Subway Surfers-style runner | High visual appeal and distinct lane, jump, and slide choices; reusable runner exists. |
-| 4 | Mario-style platformer | Familiar, varied actions and long action sequences; PlayJev has a game harness. |
-| 5 | Chess | Recognizable tactics and a static-position mode that is easy to compare. |
-| 6 | Wordle-style word game | Adds information-gathering decisions with a compact state. |
-| 7 | Minesweeper | Shows risk-sensitive choices and uncertainty. |
-| 8 | Frogger-style crossing | Shows timing around moving hazards with simple actions. |
-| 9 | Connect Four | Small, legal move set and easy human-versus-model play. |
-| 10 | Pac-Man | Visually engaging risk/reward decisions; PlayJev has a game harness. |
-| 11 | Space Invaders | Fast aiming and dodging; PlayJev has a game harness. |
-| 12 | MiniWoB-style web tasks | Closest to FluidUse's computer-use purpose, with objective task success. |
-| 13 | Breakout / Pong | Simple control and visible prediction errors; PlayJev includes Breakout. |
-| 14 | MiniGrid DoorKey | Multi-step planning with an existing environment. |
-| 15 | Codenames | Semantic association, distinct from movement games. |
-| 16 | Racer | Fast steering decisions; PlayJev has a game harness. |
-| 17 | Battleship | Hidden-information search, but slower to watch. |
-| 18 | Hanabi | Cooperative partial information, but harder to explain at a glance. |
-| 19 | Tower defense | Resource allocation, but a large action and state space. |
-| 20 | FrozenLake | Useful stochastic baseline, but visually less compelling. |
-| 21 | Tetris | Already a starting example. |
-| 22 | 2048 | Already a starting example. |
-| 23 | Snake | Already a starting example. |
+| 1 | Connect Four | At most seven legal columns, each describable ("wins now", "blocks their win"); easy model-vs-model duels. |
+| 2 | Chess (position challenge) | Recognizable tactics; tagged candidate moves scored against an engine ranking. |
+| 3 | Codenames (guesser) | Semantic association, the closest match to how these models are trained. |
+| 4 | Minesweeper | Risk-sensitive choices; safe cells and constraints can be spelled out. |
+| 5 | Wordle-style word game | Information gathering with a compact state and a fixed candidate list. |
+| 6 | MiniWoB-style web tasks | Closest to FluidUse's computer-use purpose, with objective task success. |
+| 7 | Battleship | Hidden-information search, but slower to watch. |
+| 8 | Sokoban / Boxoban | Clear planning failures; reusable PlayJev game, but needs multi-step lookahead. |
+| 9 | MiniGrid DoorKey | Multi-step planning with an existing environment. |
+| 10 | Multiplayer Snake arena | Direct competition; run in lockstep with no clock. |
+| 11 | Hanabi | Cooperative partial information, but harder to explain at a glance. |
+| 12 | Tower defense | Resource allocation, but a large action and state space. |
+| 13 | FrozenLake | Useful stochastic baseline, but visually less compelling. |
+| 14 | Tetris | Already a starting example. |
+| 15 | 2048 | Already a starting example. |
+| 16 | Snake | Already a starting example. |
 
 ## Demo list
 
 | Status | Game | Model's decision | What it reveals | Suggested state |
 | --- | --- | --- | --- | --- |
-| Tried | **Flappy Bird** | `FLAP` or `COAST` each decision tick. | Reaction timing, latency, and costly one-step mistakes. | Bird height and velocity; next pipe distance and gap, or a rendered frame for a vision model. |
 | Candidate | **Sokoban / Boxoban** | Pick a legal move or push. | Planning and irreversible traps. | Grid, player, crates, goals, and legal moves. |
-| Candidate | **Mario-style platformer** | Choose left, right, jump, or a legal combination at each tick. | Jump timing, momentum, obstacle anticipation, and longer action sequences. | Player position and velocity, nearby platforms, enemies, and camera offset; or a rendered frame. |
 | Candidate | **Chess** | Choose or rank legal moves. | Tactical judgment, position evaluation, and planning across turns. | FEN, side to move, legal moves, and remaining time; a board image only for vision models. |
 | Candidate | **Minesweeper** | Open or flag a cell. | Decision-making under uncertainty. | Revealed grid and legal cells; show mine probabilities only if actually computed. |
 | Candidate | **Wordle-style word game** | Choose the next valid guess. | Information gathering versus an immediate attempt to solve. | Previous guesses, color feedback, and a fixed candidate-word list. |
-| Candidate | **Frogger-style crossing** | Move up, down, left, right, or wait. | Timing around moving hazards and choosing safe windows. | Player, lane hazards, speeds, and goal positions; or a rendered frame. |
-| Candidate | **Subway Surfers-style runner** | Switch lane, jump, slide, or hold. | Fast obstacle recognition, action timing, and choosing between survival and coins. | Current lane, speed, nearby obstacles and distances; or a rendered frame. |
 | Candidate | **Connect Four** | Choose a non-full column. | Short tactical lookahead with only a few legal actions. | Board, player to move, and legal columns. |
 | Candidate | **Multiplayer Snake arena** | Choose direction while several snakes move simultaneously. | Direct competition, collisions, and survival under pressure. | Board, all visible snakes, food, and legal directions. |
-| Candidate | **Pac-Man** | Direction at each junction. | Reward versus moving hazards. | Map, player, ghosts, pellets, and power timer. |
 | Candidate | **Codenames** | Choose a clue or a guess from a fixed set. | Semantic association under constraints. | Visible words, team, prior clues, and legal choices. |
 | Candidate | **Hanabi** | Play, discard, or give a legal hint. | Cooperation with incomplete information. | Only what the acting player may observe. |
 | Candidate | **MiniGrid DoorKey** | Turn, move, pick up, or open. | Multi-step planning when a key must be found before reaching the goal. | Partial grid observation, carried item, and door state. |
@@ -65,28 +53,14 @@ for a Subway Surfers-style demo.
 | Candidate | **Battleship** | Choose an untried target square. | Search under hidden information and using feedback from earlier turns. | Hits, misses, sunk ships, and remaining legal squares. |
 | Candidate | **Tower defense** | Place, upgrade, sell, or wait. | Resource allocation with delayed effects. | Map, waves, towers, budget, and legal placements. |
 | Candidate | **MiniWoB-style web tasks** | Choose an element and operation. | Practical computer use with a clear success condition. | Accessibility element table and task goal; screenshots for vision models. |
-| Candidate | **Breakout / Pong** | Move paddle left, right, or stay. | Ball prediction and control latency. | Ball/paddle positions and velocities. |
-| Candidate | **Space Invaders** | Move, fire, or combine actions. | Avoidance and aiming under continuous pressure. | Player, projectiles, enemies, and cooldowns. |
-| Candidate | **Racer** | Steer left, right, or straight. | Lookahead and fast corrections. | Track geometry, position, speed, and obstacles. |
 | Existing example | **Tetris** | Choose a placement or movement. | Long-term board management. | Board, current piece, next piece if allowed, and legal placements. |
 | Existing example | **2048** | Choose a legal slide. | Repeated choices with random future tiles. | Board and each legal resulting board before the random spawn. |
 | Existing example | **Snake** | Choose direction. | Path planning while avoiding self-traps. | Grid, body, food, and current direction. |
 
-Flappy Bird looked like the clearest first comparison: two actions, immediate
-outcomes, and a visible cost when a decision arrives late. The trial showed that
-per-tick control is a poor fit for these text-state choosers. Sokoban adds planning, and
-Minesweeper adds uncertainty. Together, those three test different strengths
-than the existing Tetris, 2048, and Snake examples.
-
-Mario is a strong follow-up to Flappy Bird: both expose late decisions, while a
-platformer also requires direction and jump choices across several frames.
-Track distance reached, obstacles cleared, deaths, completed levels, and decision
-latency on the same seeded levels. Define how many frames each action lasts so a
-slower model is not silently given more game time. PlayJev already includes an
-[Infinite Mario](https://github.com/OmniJev/PlayJev) environment, which is useful
-as a reference. For a new public demo, use original or clearly licensed art;
-the PlayJev repository notes that the Mario sprites in its vendored game belong
-to Nintendo, despite the game's code being under the Unlicense.
+Connect Four, chess positions, and Codenames each test a different strength
+from the existing Tetris, 2048, and Snake examples: tactical lookahead,
+position judgment, and semantic association. Minesweeper adds uncertainty, and
+Sokoban adds planning.
 
 Chess has two useful modes. A **position challenge** gives every model the same
 FEN and legal move list, then compares its ranked moves with published reference
@@ -139,8 +113,8 @@ team score, not win rate against another model. Record opponent version, seeds,
 starting positions, rules, action deadline, and every move so a result can be
 replayed.
 
-Wordle and Battleship add information-gathering decisions; Frogger adds moving
-hazards; Connect Four is a compact turn-based duel. For reusable planning
+Wordle and Battleship add information-gathering decisions; Connect Four is a
+compact turn-based duel. For reusable planning
 environments, [MiniGrid DoorKey](https://minigrid.farama.org/environments/minigrid/DoorKeyEnv/)
 and [Gymnasium FrozenLake](https://gymnasium.farama.org/main/environments/toy_text/frozen_lake/)
 provide configurable tasks with small discrete action spaces. Start each model
@@ -157,16 +131,14 @@ where possible; record the upstream revision and changes to the adapter.
 
 | Source | Good for | Reuse notes |
 | --- | --- | --- |
-| [PlayJev game harness](https://github.com/OmniJev/PlayJev) | Tetris, Snake, Pac-Man, Racer, Space Invaders, Sokoban, Infinite Mario, Floppy Bird, Breakout, 2048. | Already exposes seeded `start`, `step`, `frame`, `score`, `done`, and actions. Each vendored game has its own license; check art and levels separately before publishing. |
-| [Neon Cyberpunk Runner](https://github.com/markstent/runner) | First Subway Surfers-style demo. | MIT-licensed Three.js browser game with three lanes, jump, slide, seedable track generation, and game logic separated from rendering. Add a thin adapter for observations and model actions. |
+| [PlayJev game harness](https://github.com/OmniJev/PlayJev) | Sokoban, Tetris, Snake, and 2048; its other six games are real-time and ruled out. | Already exposes seeded `start`, `step`, `frame`, `score`, `done`, and actions. Each vendored game has its own license; check art and levels separately before publishing. |
 | [Node Multiplayer Snake](https://github.com/simondiep/node-multiplayer-snake) | Multi-model survival arena. | MIT-licensed browser game with spectator mode, bots, and adjustable speed. Adapt its player controllers to model actions and add seeded resets. |
-| [Cave Runner](https://github.com/tope-olajide/cave-runner) | Alternate 3D runner. | MIT-licensed, but its online score path uses Netlify and PlanetScale; assess whether a local-only demo can bypass that path. |
 | [MiniGrid](https://minigrid.farama.org/environments/minigrid/) and [Gymnasium](https://gymnasium.farama.org/main/environments/) | DoorKey, FrozenLake, and other compact decision tasks. | Existing reset/step environments; add a viewer and a model input adapter. |
 
 ### Start with PlayJev
 
-Use [OmniJev/PlayJev](https://github.com/OmniJev/PlayJev) as the first game
-harness to evaluate, rather than implementing its ten games again. Its browser
+Use [OmniJev/PlayJev](https://github.com/OmniJev/PlayJev) as the harness for
+Sokoban and the existing examples, rather than implementing them again. Its browser
 hook provides `window.pj.start(seed)`, `step(action)`, `frame()`, `score()`,
 `done()`, and an action list. The repository also includes random and teacher
 policies, recorded runs, and a [0.8B vision model](https://huggingface.co/OmniJev/PlayJev-0.8B)
@@ -178,16 +150,7 @@ published scores are background context, not directly comparable results.
 
 Before vendoring or publishing a game, review its own license and bundled art.
 PlayJev documents the licenses of its ten vendored games and notes that some
-sprites are owned by third parties. The runner above fills a gap in its current
-game list; it is not one of PlayJev's ten games.
-
-For the runner, use the same generated track seeds, action interval, and speed
-curve for every model. Report distance, obstacles cleared, coins, collisions,
-and missed decision deadlines. An unlicensed [Subway Surfers clone](https://github.com/eeshadutta/Subway-Surfers)
-exists, but its repository does not declare a reuse license, so it is not the
-recommended source for a published demo. Call the result an endless runner and
-use the upstream game's own art and name unless rights to the Subway Surfers
-branding and assets are available.
+sprites are owned by third parties.
 
 ## Flappy Bird comparison specification
 
@@ -241,3 +204,24 @@ result measures the guard. LFM (~150 ms) and NanoJev (~78 ms) also miss the
 100 ms decision period. Per-tick timing control does not suit
 label-choosing models. A fairer follow-up would ask a yes/no safety question or
 query only at hard decision points.
+
+## Ruled out: real-time games
+
+The Flappy Bird result applies to every game that needs control on each frame
+or tick. These games have more actions than Flappy Bird, need inputs held
+for exact frame counts, or have many fatal mistakes per run:
+
+| Game | Why it is ruled out |
+| --- | --- |
+| Mario-style platformer | Left/right/jump/run combinations; jump height depends on hold duration; many fatal mistakes per level. |
+| Subway Surfers-style runner | Lane, jump, and slide timing against obstacles at speed. |
+| Frogger-style crossing | Timing windows around moving hazards. |
+| Pac-Man | Per-tick direction under chasing ghosts. |
+| Space Invaders | Continuous aiming and dodging. |
+| Breakout / Pong | Paddle control against ball speed. |
+| Racer | Per-frame steering corrections. |
+
+A "decision point" variant could reuse some of them. It pauses at each obstacle and
+offers consequence-labeled options while scripted movement handles the rest. In
+that setup the game logic does most of the work, so it would say little about
+the models.
