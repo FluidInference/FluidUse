@@ -82,7 +82,7 @@ All seven challenge slices match the reference accuracy exactly (missing option 
 
 Finding: the per-K `calibrator.json` shipped in the author's HF repo (and used by `VerdictManager.answer`) is fitted for open-domain use; on this test set it gives the same accuracy but NLL 0.367 and ECE 21.6% (under-confident). The author's card numbers use a single fitted temperature.
 
-## Kev and Jeff results (runs completed 2026-09-22 22:47–23:08; locked test excluded)
+## Kev and Jeff results (development runs completed 2026-09-22 22:47–23:08)
 
 Scoring units. Kev accuracy is per **clean question** (the official `report["clean"]["acc"]`); decision-v7 dev has 1,204 records / 1,468 questions / 1,264 clean questions (1,032 one-question, 80 two-, 92 three-question records; 180 variant records feed flip-rate/abstention metrics, not accuracy); transfer-v4 dev has 764 records / 656 clean questions. Records are accepted or rejected whole (official `evaluate_records`); no record is partially answered. Kev's scorer states rejected records count as wrong in any headline number, so the **official-protocol headline = correct / all clean questions**; answered-only accuracy is a diagnostic. Jeff's scorer has no rejection rule: its metrics are reported on answered items with coverage beside them, without a penalty.
 
@@ -111,6 +111,21 @@ Native also reproduces the published ECE/Brier (decision-v7: 0.086 / 0.297). Rej
 | 0.5B e8 · transfer-v4 | 600 | 99.67% | 0.5720 vs 0.5681 | 0.012 |
 
 Question grouping has no effect: native one-question-per-call and native packed predictions are identical on the same rows (max Δ 4e-6). Attribution: the gap between the published score and the Core ML headline is coverage (questions over 128 tokens); on the questions Core ML takes, conversion changes accuracy by ≤0.4 pt.
+
+### Kev — locked test partitions (run once, 2026-09-22 23:21–23:44)
+
+Run once after the adapters and scoring rules were frozen (no changes after the development runs), with `--allow-test`, kev @ `90990a5fac2995b9faa3190f7d437e84f2067768`, the same checkpoints and FluidUse packages as above. Nothing was tuned against these results. The Verdict app-path evaluation ran concurrently with part of the Kev 0.6B decision-v7 runs, so their latencies are not reported.
+
+| Model · suite (test) | Native (this Mac) | Published | Core ML answered | Headline (rejected = wrong) | Answered-only | Parity vs native, same rows |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 0.6B fp16 · decision-v7 | 0.8083 | 0.808 | 796 / 1,200 | **0.535** | 0.807 | 100% of 959 q; acc 0.8065 = 0.8065 |
+| 0.6B w8 · decision-v7 | — | — | 796 / 1,200 | **0.536** | 0.808 | 99.58%; 0.8078 vs 0.8065 |
+| 0.6B fp16 · transfer-v4 | 0.6418 | 0.642 | 503 / 656 | **0.500** | 0.652 | 100% of 596 q; 0.6521 = 0.6521 |
+| 0.6B w8 · transfer-v4 | — | — | 503 / 656 | **0.494** | 0.644 | 97.32%; 0.6441 vs 0.6521 |
+| 0.5B fp16 · transfer-v4 | 0.5747 | none published | 503 / 656 | **0.427** | 0.557 | 99.83%; 0.5567 = 0.5567 |
+| 0.5B e8 · transfer-v4 | — | — | 503 / 656 | **0.427** | 0.557 | 99.66%; 0.5567 = 0.5567 |
+
+Native also reproduces the published locked Brier (transfer-v4 0.483). Rejections (strict): 405 decision-v7 and 168 transfer-v4 records over 128 tokens. Grouping again has no effect (one question per call vs packed: identical). Adapted shortened-state protocol on the locked partitions: 0.6B fp16 0.750 / 0.633, w8 0.749 / 0.628; 0.5B 0.576 (fp16 and e8).
 
 ### Kev — ADAPTED protocol: published runtime shortens the state to fit L128
 
