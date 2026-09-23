@@ -10,6 +10,7 @@ public struct GLiNER2Tokenizer: Sendable {
 
     private let vocabulary: [String: Piece]
     private let specialTokens: [String: Int]
+    private let specialTokenNames: [String]
     private let maximumPieceLength: Int
     private let unknownScore: Double
     private let unknownId: Int
@@ -53,6 +54,9 @@ public struct GLiNER2Tokenizer: Sendable {
 
         self.vocabulary = lookup
         self.specialTokens = specials
+        self.specialTokenNames = specials.keys.sorted { left, right in
+            left.count == right.count ? left < right : left.count > right.count
+        }
         self.maximumPieceLength = longest
         self.unknownScore = lowest - 10
         self.unknownId = unknownId
@@ -64,12 +68,36 @@ public struct GLiNER2Tokenizer: Sendable {
     /// Tokenize a single schema item or text word without adding CLS/SEP.
     public func encode(_ item: String) -> [Int] {
         if let id = specialTokens[item] { return [id] }
+        var remaining = item[...]
+        var ids: [Int] = []
+        while !remaining.isEmpty {
+            let first = specialTokenNames.compactMap { name -> (Range<String.Index>, Int)? in
+                guard let range = remaining.range(of: name, options: .literal), let id = specialTokens[name] else {
+                    return nil
+                }
+                return (range, id)
+            }.min { left, right in
+                left.0.lowerBound < right.0.lowerBound
+            }
+            guard let (range, id) = first else {
+                ids += encodeOrdinary(String(remaining))
+                break
+            }
+            ids += encodeOrdinary(String(remaining[..<range.lowerBound]))
+            ids.append(id)
+            remaining = remaining[range.upperBound...]
+        }
+        return ids
+    }
+
+    private func encodeOrdinary(_ item: String) -> [Int] {
         let normalized = item.replacingOccurrences(
             of: #"\s{2,}|[\n\r\t]"#, with: " ", options: .regularExpression
         ).precomposedStringWithCanonicalMapping
         let trimmed = normalized.replacingOccurrences(of: #"\s+$"#, with: "", options: .regularExpression)
         guard !trimmed.isEmpty else { return [] }
-        let scalars = Array(("▁" + trimmed.replacingOccurrences(of: " ", with: "▁")).unicodeScalars)
+        let metaspace = trimmed.replacingOccurrences(of: " ", with: "▁")
+        let scalars = Array(((trimmed.hasPrefix(" ") ? "" : "▁") + metaspace).unicodeScalars)
         let count = scalars.count
         var scores = [Double](repeating: -.infinity, count: count + 1)
         var previous = [Int](repeating: -1, count: count + 1)
@@ -102,7 +130,22 @@ public struct GLiNER2Tokenizer: Sendable {
             reversed.append(pieceIds[position])
             position = previous[position]
         }
-        return reversed.reversed()
+        var ids: [Int] = []
+        for id in reversed.reversed() where id != unknownId || ids.last != unknownId {
+            ids.append(id)
+        }
+        return ids
+    }
+
+    /// Python's word class includes Unicode letters, numbers, and underscore, but excludes combining marks.
+    static func splitText(_ text: String) throws -> [String] {
+        let pattern = try NSRegularExpression(
+            pattern:
+                #"(?:https?://[^\s]+|www\.[^\s]+)|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|@[a-z0-9_]+|[\p{L}\p{N}_]+(?:[-_][\p{L}\p{N}_]+)*|\S"#,
+            options: .caseInsensitive)
+        let string = text as NSString
+        return pattern.matches(in: text, range: NSRange(location: 0, length: string.length))
+            .map { string.substring(with: $0.range).lowercased() }
     }
 
     /// Native GLiNER classification schema and word splitting. The caller must check bucket capacity.
@@ -119,13 +162,7 @@ public struct GLiNER2Tokenizer: Sendable {
             items.append(label)
         }
         items += [")", ")", "[SEP_TEXT]"]
-        let pattern = try NSRegularExpression(
-            pattern:
-                #"(?:https?://[^\s]+|www\.[^\s]+)|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|@[a-z0-9_]+|\w+(?:[-_]\w+)*|\S"#,
-            options: .caseInsensitive)
-        let string = source as NSString
-        items += pattern.matches(in: source, range: NSRange(location: 0, length: string.length))
-            .map { string.substring(with: $0.range).lowercased() }
+        items += try Self.splitText(source)
 
         var ids: [Int] = []
         var markers: [Int] = []
