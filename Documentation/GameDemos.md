@@ -6,7 +6,7 @@ and Snake are the starting examples from the discussion. Flappy Bird has been
 tried ([results](#flappy-bird-trial-results)): no text-state model played it
 usefully, so real-time control games are [ruled out](#ruled-out-real-time-games).
 Connect Four ([results](#connect-four-trial-results)) and Snake
-([local check](#snake-local-check-and-assessment)) have also been tried: both
+([results](#snake-trial-results)) have also been tried: both
 confirm that these models fail where one wrong move loses or where play needs
 lookahead. Minesweeper is kept as a [benchmark mode](#minesweeper-benchmark-mode)
 rather than a live demo.
@@ -15,13 +15,13 @@ and distinguishes text-state models from vision models.
 
 ## Recommended build order
 
-This is a judgment about **demo value for FluidUse**, now informed by five
-trials (Tetris, 2048, Flappy Bird, lane runner, Connect Four) and a local Snake
-check. The pattern across them: these models do well when each move is a
-short-horizon choice among a few described options and a mediocre move costs
-points rather than the game (Tetris with a heuristic shortlist, 2048). They fail
-when one wrong move is fatal or when a good move needs lookahead (Flappy Bird,
-lane runner, Connect Four, Snake). The ranking therefore favors forgiving,
+This is a judgment about **demo value for FluidUse**, now informed by six
+trials (Tetris, 2048, Flappy Bird, lane runner, Connect Four, Snake). The
+pattern across them: these models do well when each move is a short-horizon
+choice among a few described options and a mediocre move costs points rather
+than the game (Tetris with a heuristic shortlist, 2048). They fail when one wrong
+move is fatal or when a good move needs lookahead (Flappy Bird, lane runner,
+Connect Four, Snake). The ranking therefore favors forgiving,
 turn-based puzzles with a visible score.
 
 | Rank | Game | Main reason to demo it |
@@ -58,7 +58,7 @@ turn-based puzzles with a visible score.
 | Candidate | **Suika (watermelon)** | Choose a drop slot. | Merging under physics; visual. | Fruit positions summarized per slot, next fruit. |
 | Candidate | **Block Blast / 1010!** | Choose a placement from a shortlist. | Board management; same pattern as Tetris. | Grid, pieces in hand, and shortlisted placements with line clears. |
 | Candidate (benchmark) | **Blackjack** | Hit, stand, or double. | Throughput and win rate against basic strategy. | Hand, dealer upcard, and legal actions. |
-| Ruled out | **Multiplayer Snake arena** | Choose direction while several snakes move simultaneously. | Would compound the single-player Snake failure ([assessment](#snake-local-check-and-assessment)). | Board, all visible snakes, food, and legal directions. |
+| Ruled out | **Multiplayer Snake arena** | Choose direction while several snakes move simultaneously. | Would compound the single-player Snake failure ([assessment](#snake-trial-results)). | Board, all visible snakes, food, and legal directions. |
 | Candidate | **Codenames** | Choose a clue or a guess from a fixed set. | Semantic association under constraints. | Visible words, team, prior clues, and legal choices. |
 | Candidate | **Hanabi** | Play, discard, or give a legal hint. | Cooperation with incomplete information. | Only what the acting player may observe. |
 | Candidate | **MiniGrid DoorKey** | Turn, move, pick up, or open. | Multi-step planning when a key must be found before reaching the goal. | Partial grid observation, carried item, and door state. |
@@ -68,7 +68,7 @@ turn-based puzzles with a visible score.
 | Candidate | **MiniWoB-style web tasks** | Choose an element and operation. | Practical computer use with a clear success condition. | Accessibility element table and task goal; screenshots for vision models. |
 | Existing example | **Tetris** | Choose a placement or movement. | Long-term board management. | Board, current piece, next piece if allowed, and legal placements. |
 | Existing example | **2048** | Choose a legal slide. | Repeated choices with random future tiles. | Board and each legal resulting board before the random spawn. |
-| Tried (local check) | **Snake** | Choose direction. | Path planning while avoiding self-traps; Laya ate 2 food in 256 moves versus 27 for the heuristic ([assessment](#snake-local-check-and-assessment)). | Grid, body, food, and current direction. |
+| Tried | **Snake** | Choose direction. | Path planning while avoiding self-traps; best model (Lex) ate 112 food over 10 games versus 305 for the heuristic ([results](#snake-trial-results)). | Grid, body, food, and current direction. |
 
 The merge puzzles and Codenames play to what these models showed in Tetris and
 2048: choosing well among a few described options without lookahead. Chess
@@ -279,22 +279,51 @@ Without labels, position bias dominated: Kev 0.5B chose the first option on all
 its tokenizer put 55–79 moves over the 128-token budget. The speed ordering is
 clear, but no model plays Connect Four usefully, so it is not a demo.
 
-## Snake: local check and assessment
+## Snake trial results
 
-A local check (uncommitted `Tools/local-snake`, Laya multilingual E8 L512,
-Apple M5 Pro) played the [djev-run](https://github.com/taeold/djev-run) Snake
-page for one 256-move trajectory. The state included a heuristic
-`recommended_safe_move`, and the page filtered unsafe replies. Laya survived all
-256 moves but ate **2 food**; a heuristic-only control on the same board ate
-**27**. Model calls took 28.8 ms median. One trajectory is not a benchmark, but
-it matches the other trials.
+A headless `SnakeCheck` (branch `feat/snake-model-comparison`, stacked on the
+Connect Four branch; not yet a PR) steered the snake on a 10×10 board over 10
+seeds. Each game ended on a crash, after 300 steps, or after 100 steps without
+food. Every step offered the three non-reversing directions, rotated. In
+**describe** mode each was labeled with its facts ("crash", "eats food", "closer
+to food" / "away from food", "safe" / "dead end" from a flood fill); in **raw**
+mode only the direction was shown. The state was one line: length, heading,
+food offset, and wall distances. The heuristic survives, avoids dead ends, then
+chases food. Apple M5 Pro:
+
+| Model | Food (10 games, describe / raw) | Mean steps (describe) | Crashes (avoidable), describe | ms per move (median) |
+| --- | ---: | ---: | --- | ---: |
+| Heuristic | 305 | 297.6 | 1 (0) | — |
+| Decision 1.0 Lex | **112** / 4 | 126.7 | 10 (3) | 4.1 |
+| GLiClass LUT8 | 100 / 0 | 74.6 | 10 (7) | 1.5 |
+| Jeff FP16 | 91 / 2 | 207.5 | 3 (2) | 8.6 |
+| Decision 1.0 Kai | 72 / 2 | 52.4 | 10 (10) | 4.2 |
+| Verdict FP16 | 53 / 8 | 37.1 | 10 (10) | 7.9 |
+| NanoJev | 21 / 5 | 34.6 | 9 (9) | 58.4 |
+| GLiNER 2.5 multilingual | 14 / 7 | 17.7 | 10 (10) | 6.8 |
+| Kev 0.6B / 0.5B | 10 / 4, 5 / 2 | 118.2 / 6.8 | 0, 10 (10) | 11.5 / 9.3 |
+| GLiNER 2.5 base / small | 2 / 6, 0 / 8 | 100.2 / 92.2 | 0, 1 (1) | 9.2 / 5.7 |
+| Laya E8 | 2 / 2 | 4 | 10 (10) | 3.7 |
+| LFM2.5-350M-RLCD | 2 / 5 | 4 | 10 (10) | 56.1 |
+| Random | 2 | 26.7 | 10 (10) | — |
+
+An avoidable crash is a crash when a non-crashing move was offered. Lex is the
+best model, at 37% of the heuristic's food, and GLiClass is close behind at
+under 2 ms per move; they are the only two that both chase food and sometimes
+heed "crash". Kai and Verdict close in on the food nearly every time (97–98%)
+but took the "crash" option in every game. Jeff survived longest but skipped
+safe food one step away 164 times. Kev 0.6B and GLiNER base and small rarely
+crash but wander until the no-food limit. Laya, LFM, and Kev 0.5B drive
+straight into the wall in about four steps, matching an earlier local check
+where Laya ate 2 food to a heuristic's 27. In raw mode every model ate 8 food
+or fewer and crashed within about 4–11 steps, sooner than random, so the
+describe-mode skill comes from reading the labels, not the board.
 
 Snake is not recommended as a demo. One mistake ends the game over hundreds of
-moves, and deaths come from coiling into dead ends many moves earlier rather
-than from a single bad step, which one-step decision models cannot see. Making
-it survivable requires offering only moves that keep a path to the tail open,
-a flood-fill check that is essentially the winning strategy, so the model adds
-little. It is also turn-based, so model speed does not show.
+moves. Even with the flood-fill check done for the model (the "dead end" and
+"crash" labels, which alone are essentially the winning strategy), the best model
+reached about a third of the heuristic, and most crashes were into moves
+labeled "crash". It is also turn-based, so model speed does not show.
 
 ## Minesweeper: benchmark mode
 
