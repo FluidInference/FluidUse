@@ -2,11 +2,13 @@ import Foundation
 
 /// Published GLiNER 2.5 Core ML classification variants.
 public enum GLiNER2Variant: String, Sendable, CaseIterable {
+    case small
     case base
     case multilingual
 
     public var repository: String {
         switch self {
+        case .small: "FluidInference/gliner2-5-small-coreml"
         case .base: "FluidInference/gliner2-5-base-coreml"
         case .multilingual: "FluidInference/gliner2-5-multi-coreml"
         }
@@ -14,6 +16,7 @@ public enum GLiNER2Variant: String, Sendable, CaseIterable {
 
     public var packageName: String {
         switch self {
+        case .small: "gliner2_small_classification_embedding_w8_L128_K8.mlpackage"
         case .base: "gliner2_base_classification_embedding_w8_L128_K8.mlpackage"
         case .multilingual: "gliner2_multi_classification_embedding_w8_linear_L128_K8.mlpackage"
         }

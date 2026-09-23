@@ -1,0 +1,461 @@
+{
+ "source": "Heman10x-NGU/Verdict-open-jev@30f15564821626ca5c1ad5b2638c4eb7078787dd core/engine_encoder.py",
+ "checkpoint": "heman10x/rlcd-modernbert-151m@8af2496eb63c7fa66d7d234e1f62629380030eb4 (model.onnx, CPU)",
+ "calibrator_sha256": "af2a876993148efa0726b6ccf710fe2303897d20c0ce8c7c9036eb50f64d23de",
+ "calibrator": {
+  "model_id": "openjev-modernbert-151.4m",
+  "temperature": 2.8039,
+  "log_temperature": 1.0309995577626943,
+  "scope": "open_domain_calibrated_v1",
+  "per_k": {
+   "2": 5.0069,
+   "3": 5.0069,
+   "4": 4.0314,
+   "5": 3.056,
+   "6": 2.3898,
+   "7": 2.3898,
+   "9": 1.6668,
+   "11": 3.3919,
+   "17": 1.72,
+   "25": 1.5144
+  },
+  "artifact_hash": "b4742a033bce3fb4707e78d910dc89d53c30656d028b1836a992ba87e0766324",
+  "format_version": "rlcd-calibrator-v1",
+  "provenance": {
+   "fitted_on": [
+    "data/real_banking_cal.jsonl",
+    "data/synthetic_calibration.jsonl",
+    "data/slice_cardinality_k3.jsonl",
+    "data/slice_cardinality_k5.jsonl",
+    "data/slice_cardinality_k9.jsonl",
+    "data/slice_cardinality_k17.jsonl",
+    "data/slice_cardinality_k25.jsonl",
+    "data/slice_distant_oos.jsonl",
+    "data/slice_missing_option.jsonl",
+    "data/gen/T01.jsonl",
+    "data/gen/T02.jsonl",
+    "data/gen/T03.jsonl",
+    "data/gen/T07.jsonl",
+    "data/gen/T12.jsonl"
+   ],
+   "total_calibration_items": 1753,
+   "date": "2026-09-20T14:00:00Z",
+   "notes": "Honest stratified temperature scaling fitted strictly via NLL minimization on held-out calibration data. Zero fitting on JevBench evaluation tasks."
+  }
+ },
+ "cases": [
+  {
+   "name": "choice-k3",
+   "context": "Hi I'm a new customer and tried topping up for the first time today, seems it's not working, the thing shows up as pending since half an hour already! Please fix it!",
+   "query": {
+    "type": "choice",
+    "question": "What is the primary customer inquiry or banking request?",
+    "options": [
+     {
+      "id": "terminate_account",
+      "description": "Inquiry or request regarding terminate account"
+     },
+     {
+      "id": "pending_cash_withdrawal",
+      "description": "Inquire about an ATM cash withdrawal that is stuck in pending status or money was not dispensed"
+     }
+    ]
+   },
+   "prompt": "<<LABEL>>It is Inquiry or request regarding terminate account<<LABEL>>It is Inquire about an ATM cash withdrawal that is stuck in pending status or money was not dispensed<<LABEL>>insufficient evidence<<SEP>>Question: What is the primary customer inquiry or banking request?\n\nContext:\nHi I'm a new customer and tried topping up for the first time today, seems it's not working, the thing shows up as pending since half an hour already! Please fix it!",
+   "candidate_ids": [
+    "terminate_account",
+    "pending_cash_withdrawal",
+    "__insufficient_evidence__"
+   ],
+   "logits": [
+    -5.458349704742432,
+    1.8111202716827393,
+    0.9584771990776062
+   ],
+   "temperature": 5.0069,
+   "probabilities": [
+    0.11269423690832268,
+    0.48133746976638325,
+    0.40596829332529405
+   ]
+  },
+  {
+   "name": "choice-k5",
+   "context": "Can you explain your exchange rate policy to me?",
+   "query": {
+    "type": "choice",
+    "question": "What is the primary customer inquiry or banking request?",
+    "options": [
+     {
+      "id": "terminate_account",
+      "description": "Inquiry or request regarding terminate account"
+     },
+     {
+      "id": "pin_blocked",
+      "description": "Unblock or reset a card PIN after multiple incorrect entry attempts at an ATM or terminal"
+     },
+     {
+      "id": "direct_debit_payment_not_recognised",
+      "description": "Inquiry or request regarding direct debit payment not recognised"
+     },
+     {
+      "id": "exchange_rate",
+      "description": "Check current foreign exchange rates, conversion spreads, or weekend currency trading markup"
+     }
+    ]
+   },
+   "prompt": "<<LABEL>>It is Inquiry or request regarding terminate account<<LABEL>>It is Unblock or reset a card PIN after multiple incorrect entry attempts at an ATM or terminal<<LABEL>>It is Inquiry or request regarding direct debit payment not recognised<<LABEL>>It is Check current foreign exchange rates, conversion spreads, or weekend currency trading markup<<LABEL>>insufficient evidence<<SEP>>Question: What is the primary customer inquiry or banking request?\n\nContext:\nCan you explain your exchange rate policy to me?",
+   "candidate_ids": [
+    "terminate_account",
+    "pin_blocked",
+    "direct_debit_payment_not_recognised",
+    "exchange_rate",
+    "__insufficient_evidence__"
+   ],
+   "logits": [
+    -7.223818778991699,
+    -8.353105545043945,
+    -6.305770397186279,
+    4.9169745445251465,
+    0.0867583230137825
+   ],
+   "temperature": 3.056,
+   "probabilities": [
+    0.014900755414753322,
+    0.010297291172617882,
+    0.020122133570204183,
+    0.7917016296033119,
+    0.16297819023911264
+   ]
+  },
+  {
+   "name": "choice-k8-fallback",
+   "context": "My top-up was cancelled; will I receive a refund?",
+   "query": {
+    "type": "choice",
+    "question": "What is the primary customer inquiry or banking request?",
+    "options": [
+     {
+      "id": "receiving_money",
+      "description": "Inquiry or request regarding receiving money"
+     },
+     {
+      "id": "request_refund",
+      "description": "Inquiry or request regarding request refund"
+     },
+     {
+      "id": "top_up_reverted",
+      "description": "Inquire why a deposited top-up was reversed, charged back, or deducted from the balance"
+     },
+     {
+      "id": "verify_top_up",
+      "description": "Inquiry or request regarding verify top up"
+     },
+     {
+      "id": "card_payment_fee_charged",
+      "description": "Inquire about unexplained extra fees or service surcharges applied to a card payment"
+     },
+     {
+      "id": "transaction_charged_twice",
+      "description": "Inquiry or request regarding transaction charged twice"
+     },
+     {
+      "id": "wrong_exchange_rate_for_cash_withdrawal",
+      "description": "Dispute foreign currency conversion rate applied to an overseas ATM cash withdrawal"
+     }
+    ]
+   },
+   "prompt": "<<LABEL>>It is Inquiry or request regarding receiving money<<LABEL>>It is Inquiry or request regarding request refund<<LABEL>>It is Inquire why a deposited top-up was reversed, charged back, or deducted from the balance<<LABEL>>It is Inquiry or request regarding verify top up<<LABEL>>It is Inquire about unexplained extra fees or service surcharges applied to a card payment<<LABEL>>It is Inquiry or request regarding transaction charged twice<<LABEL>>It is Dispute foreign currency conversion rate applied to an overseas ATM cash withdrawal<<LABEL>>insufficient evidence<<SEP>>Question: What is the primary customer inquiry or banking request?\n\nContext:\nMy top-up was cancelled; will I receive a refund?",
+   "candidate_ids": [
+    "receiving_money",
+    "request_refund",
+    "top_up_reverted",
+    "verify_top_up",
+    "card_payment_fee_charged",
+    "transaction_charged_twice",
+    "wrong_exchange_rate_for_cash_withdrawal",
+    "__insufficient_evidence__"
+   ],
+   "logits": [
+    -3.8761837482452393,
+    7.027594566345215,
+    2.5057764053344727,
+    -3.984914541244507,
+    -6.965173721313477,
+    -6.244526386260986,
+    -6.265838146209717,
+    0.650043249130249
+   ],
+   "temperature": 2.8039002418518066,
+   "probabilities": [
+    0.014977915665863322,
+    0.7316969854572342,
+    0.14586447620819834,
+    0.014408214453856432,
+    0.004977366106365247,
+    0.006436059911895494,
+    0.006387326128397229,
+    0.07525165606818983
+   ]
+  },
+  {
+   "name": "choice-k25",
+   "context": "How do I fix a reverted top up?",
+   "query": {
+    "type": "choice",
+    "question": "What is the primary customer inquiry or banking request?",
+    "options": [
+     {
+      "id": "declined_transfer",
+      "description": "Investigate why an incoming or outgoing money transfer was formally declined by the system"
+     },
+     {
+      "id": "lost_or_stolen_phone",
+      "description": "Inquiry or request regarding lost or stolen phone"
+     },
+     {
+      "id": "exchange_via_app",
+      "description": "Inquiry or request regarding exchange via app"
+     },
+     {
+      "id": "edit_personal_details",
+      "description": "Update name, residential address, email, phone number, or KYC profile details"
+     },
+     {
+      "id": "card_arrival",
+      "description": "Inquire about whether a newly ordered debit or credit card has arrived or when it will arrive in the mail"
+     },
+     {
+      "id": "pin_blocked",
+      "description": "Unblock or reset a card PIN after multiple incorrect entry attempts at an ATM or terminal"
+     },
+     {
+      "id": "country_support",
+      "description": "Inquiry or request regarding country support"
+     },
+     {
+      "id": "reverted_card_payment?",
+      "description": "Inquire why a card payment was reversed, cancelled, or money was returned to the balance"
+     },
+     {
+      "id": "apple_pay_or_google_pay",
+      "description": "Inquiry or request regarding apple pay or google pay"
+     },
+     {
+      "id": "visa_or_mastercard",
+      "description": "Inquiry or request regarding visa or mastercard"
+     },
+     {
+      "id": "virtual_card_not_working",
+      "description": "Troubleshoot virtual card activation, expiration, or declined online merchant transactions"
+     },
+     {
+      "id": "cash_withdrawal_charge",
+      "description": "Ask about fees, surcharges, or limits applied to cash withdrawals at ATM machines"
+     },
+     {
+      "id": "unable_to_verify_identity",
+      "description": "Resolve identity verification issues, failed passport/ID photo upload, or KYC document rejection"
+     },
+     {
+      "id": "balance_not_updated_after_cheque_or_cash_deposit",
+      "description": "Inquire why balance has not updated after depositing physical cash or a paper check"
+     },
+     {
+      "id": "declined_cash_withdrawal",
+      "description": "Investigate why an attempted ATM cash withdrawal was rejected, declined, or failed"
+     },
+     {
+      "id": "card_payment_wrong_exchange_rate",
+      "description": "Dispute foreign currency exchange rate calculation applied to a card purchase abroad"
+     },
+     {
+      "id": "why_verify_identity",
+      "description": "Inquiry or request regarding why verify identity"
+     },
+     {
+      "id": "passcode_forgotten",
+      "description": "Inquiry or request regarding passcode forgotten"
+     },
+     {
+      "id": "topping_up_by_card",
+      "description": "Inquiry or request regarding topping up by card"
+     },
+     {
+      "id": "pending_card_payment",
+      "description": "Ask why a completed store or online card purchase is still displaying as pending authorization"
+     },
+     {
+      "id": "top_up_reverted",
+      "description": "Inquire why a deposited top-up was reversed, charged back, or deducted from the balance"
+     },
+     {
+      "id": "card_delivery_estimate",
+      "description": "Ask for an estimated delivery date or tracking status for a physical card shipment"
+     },
+     {
+      "id": "request_refund",
+      "description": "Inquiry or request regarding request refund"
+     },
+     {
+      "id": "supported_cards_and_currencies",
+      "description": "Inquiry or request regarding supported cards and currencies"
+     }
+    ]
+   },
+   "prompt": "<<LABEL>>It is Investigate why an incoming or outgoing money transfer was formally declined by the system<<LABEL>>It is Inquiry or request regarding lost or stolen phone<<LABEL>>It is Inquiry or request regarding exchange via app<<LABEL>>It is Update name, residential address, email, phone number, or KYC profile details<<LABEL>>It is Inquire about whether a newly ordered debit or credit card has arrived or when it will arrive in the mail<<LABEL>>It is Unblock or reset a card PIN after multiple incorrect entry attempts at an ATM or terminal<<LABEL>>It is Inquiry or request regarding country support<<LABEL>>It is Inquire why a card payment was reversed, cancelled, or money was returned to the balance<<LABEL>>It is Inquiry or request regarding apple pay or google pay<<LABEL>>It is Inquiry or request regarding visa or mastercard<<LABEL>>It is Troubleshoot virtual card activation, expiration, or declined online merchant transactions<<LABEL>>It is Ask about fees, surcharges, or limits applied to cash withdrawals at ATM machines<<LABEL>>It is Resolve identity verification issues, failed passport/ID photo upload, or KYC document rejection<<LABEL>>It is Inquire why balance has not updated after depositing physical cash or a paper check<<LABEL>>It is Investigate why an attempted ATM cash withdrawal was rejected, declined, or failed<<LABEL>>It is Dispute foreign currency exchange rate calculation applied to a card purchase abroad<<LABEL>>It is Inquiry or request regarding why verify identity<<LABEL>>It is Inquiry or request regarding passcode forgotten<<LABEL>>It is Inquiry or request regarding topping up by card<<LABEL>>It is Ask why a completed store or online card purchase is still displaying as pending authorization<<LABEL>>It is Inquire why a deposited top-up was reversed, charged back, or deducted from the balance<<LABEL>>It is Ask for an estimated delivery date or tracking status for a physical card shipment<<LABEL>>It is Inquiry or request regarding request refund<<LABEL>>It is Inquiry or request regarding supported cards and currencies<<LABEL>>insufficient evidence<<SEP>>Question: What is the primary customer inquiry or banking request?\n\nContext:\nHow do I fix a reverted top up?",
+   "candidate_ids": [
+    "declined_transfer",
+    "lost_or_stolen_phone",
+    "exchange_via_app",
+    "edit_personal_details",
+    "card_arrival",
+    "pin_blocked",
+    "country_support",
+    "reverted_card_payment?",
+    "apple_pay_or_google_pay",
+    "visa_or_mastercard",
+    "virtual_card_not_working",
+    "cash_withdrawal_charge",
+    "unable_to_verify_identity",
+    "balance_not_updated_after_cheque_or_cash_deposit",
+    "declined_cash_withdrawal",
+    "card_payment_wrong_exchange_rate",
+    "why_verify_identity",
+    "passcode_forgotten",
+    "topping_up_by_card",
+    "pending_card_payment",
+    "top_up_reverted",
+    "card_delivery_estimate",
+    "request_refund",
+    "supported_cards_and_currencies",
+    "__insufficient_evidence__"
+   ],
+   "logits": [
+    -4.018357276916504,
+    -3.845362424850464,
+    -4.736224174499512,
+    -4.204066753387451,
+    -2.897329568862915,
+    -3.721398115158081,
+    -4.0788960456848145,
+    1.466634750366211,
+    -4.478689670562744,
+    -3.9745028018951416,
+    -4.348108291625977,
+    -4.456247806549072,
+    -4.030202865600586,
+    -1.5305792093276978,
+    -3.3594350814819336,
+    -4.4493303298950195,
+    -4.530067443847656,
+    -4.730991840362549,
+    0.4892881214618683,
+    -3.095696449279785,
+    5.517399787902832,
+    -5.304304122924805,
+    -2.8998379707336426,
+    -4.107653617858887,
+    1.34223210811615
+   ],
+   "temperature": 1.5144,
+   "probabilities": [
+    0.0015137798941556656,
+    0.0016969682826996758,
+    0.0009423133355693907,
+    0.0013390770199058317,
+    0.0031735634867365316,
+    0.0018417201669500198,
+    0.0014544591759603738,
+    0.056627853447176225,
+    0.0011169926357124257,
+    0.0015582573069722995,
+    0.0012175813121547787,
+    0.0011336682021622325,
+    0.0015019851573436368,
+    0.00782526887174661,
+    0.0023389781730939474,
+    0.0011388582309489381,
+    0.0010797325084518593,
+    0.0009455748277969342,
+    0.029699550555433822,
+    0.0027839420582680993,
+    0.8216648944880387,
+    0.0006475647066558131,
+    0.0031683108264957136,
+    0.0014271008720473924,
+    0.05216200445752308
+   ]
+  },
+  {
+   "name": "noul-k3",
+   "context": "show me laptops for sale that are under $2,000",
+   "query": {
+    "type": "noul",
+    "proposition": "The customer is asking about a card payment"
+   },
+   "prompt": "<<LABEL>>true: The customer is asking about a card payment<<LABEL>>false: not The customer is asking about a card payment<<LABEL>>insufficient evidence<<SEP>>Context:\nshow me laptops for sale that are under $2,000\n\nEvaluate proposition: The customer is asking about a card payment",
+   "candidate_ids": [
+    "true",
+    "false",
+    "__insufficient_evidence__"
+   ],
+   "logits": [
+    4.111960411071777,
+    1.1896271705627441,
+    1.690697193145752
+   ],
+   "temperature": 5.0069,
+   "probabilities": [
+    0.45989254117012024,
+    0.2565520703792572,
+    0.28355538845062256
+   ]
+  },
+  {
+   "name": "score-k4",
+   "context": "does centurytel offer any better plans than the one i'm on",
+   "query": {
+    "type": "score",
+    "question": "How urgent is the request?",
+    "levels": [
+     {
+      "id": "low",
+      "description": "Not urgent",
+      "value": 0.0
+     },
+     {
+      "id": "mid",
+      "description": "Somewhat urgent",
+      "value": 1.0
+     },
+     {
+      "id": "high",
+      "description": "Very urgent",
+      "value": 2.5
+     }
+    ]
+   },
+   "prompt": "<<LABEL>>Not urgent (Value: 0.0)<<LABEL>>Somewhat urgent (Value: 1.0)<<LABEL>>Very urgent (Value: 2.5)<<LABEL>>insufficient evidence<<SEP>>Question: How urgent is the request?\n\nContext:\ndoes centurytel offer any better plans than the one i'm on",
+   "candidate_ids": [
+    "low",
+    "mid",
+    "high",
+    "__insufficient_evidence__"
+   ],
+   "logits": [
+    0.6759092807769775,
+    2.5005478858947754,
+    -0.4958106279373169,
+    2.4056622982025146
+   ],
+   "temperature": 4.0314,
+   "probabilities": [
+    0.20593027463659236,
+    0.3238058936028794,
+    0.15399023661031966,
+    0.31627359515020853
+   ]
+  }
+ ]
+}

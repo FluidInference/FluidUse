@@ -37,6 +37,7 @@ let package = Package(
             name: "FluidUseLaya",
             dependencies: ["FluidUse", "Game2048", "LayaTetris", .product(name: "FluidAudio", package: "FluidAudio")]
         ),
+        .executableTarget(name: "FluidUseOfficialBench", dependencies: ["FluidUse"]),
         .executableTarget(
             name: "LayaTetrisDemo",
             dependencies: ["FluidUse", "LayaTetris"],
