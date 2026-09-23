@@ -1,0 +1,192 @@
+{
+  "interpretation": "2048 is the deterministic 4x4 game, not a 2048-token sequence length",
+  "date": "2026-09-22",
+  "machine": "Apple M5 Pro, 24 GB, macOS 27.0",
+  "game_engine": {
+    "source": "FluidUse-gliclass-pr/Sources/Game2048/Game2048.swift",
+    "git_revision": "bc84182f15bb77c22bee5eb62b3bb056e325fabc",
+    "sha256": "3d242f36e4db0639328177e010bc44befb669fec4573cffc2aa15eab0d06f2ae"
+  },
+  "protocol": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "board": "deterministic standard 4x4 2048",
+    "shortlist": "top two legal moves ranked by one-move expectimax; same Game2048 engine for every model",
+    "prompt": "Choose the safest 2048 swipe. Preserve empty cells, ordered high tiles, and merges.",
+    "decision_policies": [
+      "raw argmax",
+      "argmax with 0.50 confidence-margin fallback to expectimax leader"
+    ],
+    "compute_units": {
+      "gliner2_base": "all",
+      "gliner2_multi": "all",
+      "gliclass": "cpu_and_neural_engine"
+    },
+    "classification_bucket": "L128, two labels; no overlength requests in newly run models; existing GLiClass margin report has no token-count telemetry",
+    "latency": "Python tokenization/schema preparation plus Core ML predict, warmup one real request per model, median per game then mean across games"
+  },
+  "raw_argmax": {
+    "base": {
+      "mean_score": 11083.6,
+      "mean_moves": 669.1,
+      "reached_2048": 1,
+      "best_tile": 2048,
+      "score_sample_sd": 6815.147690581946,
+      "mean_run_median_model_ms": 5.132966802921146,
+      "mean_heuristic_agreement": 0.8204736260539112,
+      "package_bytes": 291053994,
+      "calls": 6688,
+      "maximum_untruncated_tokens": 84,
+      "overlength_calls": 0,
+      "seed_scores": [
+        3112,
+        14016,
+        7900,
+        12316,
+        15200,
+        27264,
+        7384,
+        10588,
+        6644,
+        6412
+      ],
+      "source_report": "compare-base-game2048-raw.json"
+    },
+    "multi": {
+      "mean_score": 13306,
+      "mean_moves": 785.3,
+      "reached_2048": 1,
+      "best_tile": 2048,
+      "score_sample_sd": 6380.13841716794,
+      "mean_run_median_model_ms": 4.5052788918837905,
+      "mean_heuristic_agreement": 0.942009471383687,
+      "package_bytes": 385193894,
+      "calls": 7845,
+      "maximum_untruncated_tokens": 121,
+      "overlength_calls": 0,
+      "seed_scores": [
+        16308,
+        14728,
+        27112,
+        12372,
+        12276,
+        8768,
+        14496,
+        3372,
+        7476,
+        16152
+      ],
+      "source_report": "compare-multi-game2048-raw.json"
+    },
+    "gliclass": {
+      "mean_score": 10740,
+      "mean_moves": 651.5,
+      "reached_2048": 1,
+      "best_tile": 2048,
+      "score_sample_sd": 8159.4537943554915,
+      "mean_run_median_model_ms": 1.059837604407221,
+      "mean_heuristic_agreement": 0.792319591521145,
+      "package_bytes": 32959320,
+      "calls": 6512,
+      "maximum_untruncated_tokens": 87,
+      "overlength_calls": 0,
+      "seed_scores": [
+        5160,
+        7280,
+        31664,
+        12132,
+        11996,
+        14748,
+        7024,
+        7032,
+        7344,
+        3020
+      ],
+      "source_report": "compare-gliclass-game2048-raw.json"
+    }
+  },
+  "margin_0_50": {
+    "base": {
+      "mean_score": 25381.6,
+      "mean_moves": 1318.1,
+      "reached_2048": 5,
+      "mean_heuristic_agreement": 1,
+      "source_report": "compare-base-game2048.json"
+    },
+    "multi": {
+      "mean_score": 25381.6,
+      "mean_moves": 1318.1,
+      "reached_2048": 5,
+      "mean_heuristic_agreement": 1,
+      "source_report": "compare-multi-game2048-margin050.json"
+    },
+    "gliclass": {
+      "mean_score": 18970.4,
+      "mean_moves": 1011.9,
+      "reached_2048": 3,
+      "mean_heuristic_agreement": 0.9730410668754683,
+      "source_report": "/Users/hanweng/Documents/FluidUse-gliclass-pr/Benchmarks/gliclass-2048.json"
+    }
+  },
+  "heuristic": {
+    "mean_score": 25381.6,
+    "mean_moves": 1318.1,
+    "reached_2048": 5,
+    "source_report": "heuristic-2048-samples.json",
+    "exactly_reproduced_existing_seed_scores": true
+  },
+  "order_probe": {
+    "base": {
+      "semantic_choice_stable_after_label_reversal": 35,
+      "tested_pairs": 131,
+      "forward_first_choices": 108,
+      "reversed_first_choices": 119,
+      "source_report": "order-probe-gliner-base.json"
+    },
+    "multi": {
+      "semantic_choice_stable_after_label_reversal": 11,
+      "tested_pairs": 131,
+      "forward_first_choices": 120,
+      "reversed_first_choices": 129,
+      "source_report": "order-probe-gliner-multi.json"
+    },
+    "gliclass": {
+      "semantic_choice_stable_after_label_reversal": 44,
+      "tested_pairs": 131,
+      "forward_first_choices": 115,
+      "reversed_first_choices": 91,
+      "source_report": "order-probe-gliclass.json"
+    }
+  },
+  "native_selected_parity": {
+    "base": {
+      "matches": 24,
+      "tested": 24,
+      "maximum_confidence_error": 0.007067620754241943,
+      "source_report": "native-check-gliner-base.json"
+    },
+    "multi": {
+      "matches": 24,
+      "tested": 24,
+      "maximum_confidence_error": 0.027380645275115967,
+      "source_report": "native-check-gliner-multi.json"
+    }
+  },
+  "validity_checks": {
+    "heuristic_seed_scores_match_existing_FluidUse_report": true,
+    "gliclass_raw_seed_scores_match_existing_FluidUse_report": true,
+    "same_engine_and_candidate_shortlist": true,
+    "all_newly_run_model_requests_fit_L128": true
+  },
+  "limits": "Ten deterministic seeds; divergent trajectories after each different move, option-order sensitivity, task-specific GLiClass tuning, and distinct weight-only compression methods. This is a game comparison, not a Decision Index score or a formal quality ranking."
+}
