@@ -5,10 +5,9 @@ import Testing
 struct FlappyModelTests {
     @MainActor
     @Test func everyModelControlSelectsItsOwnBackend() {
-        #expect(FlappyModel.Control.gliclass.model == .gliclass)
-        #expect(FlappyModel.Control.laya.model == .laya)
-        #expect(FlappyModel.Control.gliner2Base.model == .gliner2Base)
-        #expect(FlappyModel.Control.gliner2Multilingual.model == .gliner2Multilingual)
+        for control in FlappyModel.Control.allCases where control != .heuristic && control != .manual {
+            #expect(control.model?.rawValue == String(describing: control))
+        }
         #expect(FlappyModel.Control.heuristic.model == nil)
         #expect(FlappyModel.Control.manual.model == nil)
     }

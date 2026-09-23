@@ -27,7 +27,8 @@ struct FlappyBirdCheck {
         let arguments = Array(CommandLine.arguments.dropFirst())
         let name = arguments.first ?? "gliclass"
         guard let model = FlappyBirdPolicy.Model(rawValue: name) else {
-            fputs("Use one of: gliclass, laya, gliner2Base, gliner2Multilingual\n", stderr)
+            let names = FlappyBirdPolicy.Model.allCases.map(\.rawValue).joined(separator: ", ")
+            fputs("Use one of: \(names)\n", stderr)
             exit(2)
         }
         let rawOnly = arguments.contains("--raw-only")

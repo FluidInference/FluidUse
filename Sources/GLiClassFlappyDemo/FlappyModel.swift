@@ -9,7 +9,16 @@ final class FlappyModel: ObservableObject {
         case gliclass = "GLiClass LUT8"
         case gliner2Multilingual = "GLiNER 2.5 multilingual"
         case gliner2Base = "GLiNER 2.5 base"
+        case gliner2Small = "GLiNER 2.5 small"
         case laya = "Laya E8"
+        case verdict = "Verdict"
+        case kev05 = "Kev 0.5B"
+        case kev06 = "Kev 0.6B"
+        case kai = "Decision 1.0 Kai"
+        case lex = "Decision 1.0 Lex"
+        case lfm350 = "LFM2.5-350M-RLCD"
+        case jeff = "Jeff"
+        case nanojev = "NanoJev (local)"
         case heuristic = "Heuristic"
         case manual = "Manual"
         var id: String { rawValue }
@@ -18,7 +27,16 @@ final class FlappyModel: ObservableObject {
             case .gliclass: .gliclass
             case .gliner2Multilingual: .gliner2Multilingual
             case .gliner2Base: .gliner2Base
+            case .gliner2Small: .gliner2Small
             case .laya: .laya
+            case .verdict: .verdict
+            case .kev05: .kev05
+            case .kev06: .kev06
+            case .kai: .kai
+            case .lex: .lex
+            case .lfm350: .lfm350
+            case .jeff: .jeff
+            case .nanojev: .nanojev
             case .heuristic, .manual: nil
             }
         }
