@@ -107,8 +107,16 @@ public actor PublishedCoreMLManager {
         let task = Process()
         task.executableURL = python
         task.arguments = [worker.path, "--model", model.rawValue, "--root", directory.path, "--precision", precision]
-        task.environment = ProcessInfo.processInfo.environment
-            .merging(["PYTHONUNBUFFERED": "1", "TOKENIZERS_PARALLELISM": "false"]) { _, new in new }
+        // The locked environment must not pick up the host's Python search paths.
+        var inherited = ProcessInfo.processInfo.environment
+        for key in ["PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONUSERBASE", "VIRTUAL_ENV", "CONDA_PREFIX"] {
+            inherited.removeValue(forKey: key)
+        }
+        task.environment =
+            inherited
+            .merging(["PYTHONUNBUFFERED": "1", "PYTHONNOUSERSITE": "1", "TOKENIZERS_PARALLELISM": "false"]) {
+                _, new in new
+            }
             .merging(configuration.environment) { _, new in new }
         task.standardInput = inputPipe
         task.standardOutput = outputPipe
@@ -178,8 +186,15 @@ public actor PublishedCoreMLManager {
         // Raw line breaks can only be insignificant whitespace in valid JSON.
         var line = Data(request.map { $0 == 0x0A || $0 == 0x0D ? 0x20 : $0 })
         line.append(0x0A)
+        // A worker that stops reading stdin would block a large write indefinitely; terminating it at the
+        // request deadline makes the write fail with EPIPE instead.
+        let watchdog = Task { [process, timeout = configuration.requestTimeout] in
+            try? await Task.sleep(for: timeout)
+            if !Task.isCancelled, process.isRunning { process.terminate() }
+        }
+        defer { watchdog.cancel() }
         do {
-            try input.write(contentsOf: line)
+            try await Self.write(line, to: input)
         } catch {
             close(reason: "worker stopped accepting requests")
             throw exitError("Worker stopped accepting requests")
@@ -222,6 +237,19 @@ public actor PublishedCoreMLManager {
     private func exitError(_ message: String) -> PublishedCoreMLError {
         let tail = standardError.text
         return .runtime(tail.isEmpty ? message : "\(message): \(tail)")
+    }
+
+    private static func write(_ data: Data, to handle: FileHandle) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try handle.write(contentsOf: data)
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 
     private func acquire() async {

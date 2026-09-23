@@ -37,6 +37,7 @@ Behavior to know:
 - **One request at a time, in call order.** Concurrent callers queue.
 - **Timeouts and cancellation end the session.** They are set by `startupTimeout` (default 600 s) and `requestTimeout` (default 300 s). A timed-out or cancelled request terminates the worker, and later calls throw `.closed`. Start a new session afterwards.
 - **Model errors keep the session.** A model-side failure, such as a Kev request with two questions, throws `.runtime` for that request only.
+- **The worker environment is isolated.** `PYTHONPATH`, `PYTHONHOME`, `PYTHONSTARTUP`, `PYTHONUSERBASE`, `VIRTUAL_ENV` and `CONDA_PREFIX` are removed from the inherited environment and user site-packages are disabled, so the locked `uv` environment is what runs. `Configuration.environment` still applies on top.
 - **Worker output is separated.** The worker writes replies to a private copy of stdout, and anything else a library prints goes to stderr. `standardErrorTail` and startup failures include the last 16 KB of stderr.
 - **Per-model quirks:**
   - Kev packages take one question per call and round reported values to two decimals, as upstream does.

@@ -140,8 +140,9 @@ public final class GLiClassTokenizer: Sendable {
 
     private func encodeText(_ text: String, into ids: inout [Int]) {
         guard !text.isEmpty else { return }
-        // The published ByteLevel setting differs between GLiClass Edge and Verdict.
-        let input = addPrefixSpace && text.first?.isWhitespace != true ? " " + text : text
+        // HF ByteLevel(add_prefix_space) prepends a space unless the text already starts with one;
+        // the published setting differs between GLiClass Edge and Verdict.
+        let input = addPrefixSpace && !text.hasPrefix(" ") ? " " + text : text
         let ns = input as NSString
         for match in splitRegex.matches(in: input, range: NSRange(location: 0, length: ns.length)) {
             let piece = ns.substring(with: match.range)

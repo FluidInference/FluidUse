@@ -29,7 +29,8 @@ from pathlib import Path
 
 MODELS = {"kev-0-5b": ("kev-0.5b", "jaredpalmer/kev-0.5b", "9ce2fd39db3a397c89733f94af948e3d1fdfffcd"),
           "kev-0.6b": ("kev-0.6b", "jaredpalmer/kev-0.6b", "dece6dba")}
-CAPACITY = ("exceeds", "capacity is", "does not fit", "tokens")
+# Exact rejection messages from the worker's strict check and the published runtime's packer.
+CAPACITY = ("without truncation", "does not fit length", "; capacity is ")
 
 
 def question_requests(record, api_request, model_name):

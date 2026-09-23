@@ -1,12 +1,11 @@
 import Foundation
 import FluidUse
 
-/// `FluidUseOfficialBench run|serve …` — feeds authors' official benchmark requests to FluidUse models.
+/// `FluidUseOfficialBench run …` — feeds authors' official benchmark requests to FluidUse models.
 ///
 /// `run` reads one request per line and writes one result row per line, in order, keeping failures.
 /// Bridge models receive each line's bytes unchanged. Verdict lines are `{"context", "question", "labels"}` for
 /// raw logits or `{"context", "question": {typed}}` for the calibrated serving path.
-/// `serve` exposes `POST /v1/systemone` for scorers that call a System One endpoint.
 let arguments = Array(CommandLine.arguments.dropFirst())
 do {
     switch arguments.first {
@@ -15,7 +14,6 @@ do {
         print(
             """
             usage: FluidUseOfficialBench run --model MODEL --in requests.jsonl --out results.jsonl [options]
-                   FluidUseOfficialBench serve --model MODEL --port 8009 [options]
             MODEL: verdict or a PublishedCoreMLModel raw value (kev-0-5b, kev-0.6b, lfm2-5-350m-rlcd, jeff, …)
             options: --precision P  --cache DIR  --lengths 128,512 (verdict)  --root DIR --python PATH (local bridge)
                      --strict-context (reject instead of shortening Kev state)  --meta meta.json
@@ -158,7 +156,8 @@ enum RunCommand {
         let input = URL(fileURLWithPath: try options.required("in"))
         let output = URL(fileURLWithPath: try options.required("out"))
         let lines = try Data(contentsOf: input).split(separator: 0x0A, omittingEmptySubsequences: true)
-        let (model, meta) = try await LoadedModel.load(options)
+        var (model, meta) = try await LoadedModel.load(options)
+        var restarts = 0
         FileManager.default.createFile(atPath: output.path, contents: nil)
         let handle = try FileHandle(forWritingTo: output)
         defer { try? handle.close() }
@@ -173,6 +172,11 @@ enum RunCommand {
             } catch {
                 row["status"] = "error"
                 row["error"] = error.localizedDescription
+                // The bridge closes its session after a timeout; later lines need a fresh worker.
+                if case .timedOut? = error as? PublishedCoreMLError {
+                    (model, _) = try await LoadedModel.load(options)
+                    restarts += 1
+                }
             }
             row["latency_ms"] = milliseconds(ContinuousClock.now - started)
             counts[row["status"] as! String, default: 0] += 1
@@ -186,6 +190,7 @@ enum RunCommand {
         var summary = meta
         summary["requests"] = lines.count
         summary["counts"] = counts
+        summary["worker_restarts"] = restarts
         if let path = options["meta"] {
             try JSONSerialization.data(withJSONObject: summary, options: [.prettyPrinted, .sortedKeys])
                 .write(to: URL(fileURLWithPath: path))

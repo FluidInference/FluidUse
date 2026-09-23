@@ -153,13 +153,15 @@ enum PublishedProcess {
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 process.terminationHandler = { finished in
+                    // A grandchild holding the pipe open must not block termination; keep what was read.
                     reader.readabilityHandler = nil
-                    tail.append(reader.readDataToEndOfFile())
                     continuation.resume(returning: (finished.terminationStatus, tail.text))
                 }
                 do {
                     try Task.checkCancellation()
                     try process.run()
+                    // onCancel may have run before launch, when there was nothing to terminate.
+                    if Task.isCancelled { process.terminate() }
                 } catch {
                     process.terminationHandler = nil
                     reader.readabilityHandler = nil
