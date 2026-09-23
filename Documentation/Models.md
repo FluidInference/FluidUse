@@ -68,7 +68,9 @@ encoder. Closed-vocabulary tasks that fit the shape, each 1 to 5 MB:
 ### Game decisions
 
 See [Decision game demos](GameDemos.md) for the game list, the Flappy Bird
-comparison specification, and the matched-seed evaluation protocol.
+comparison specification, and the matched-seed evaluation protocol. Flappy Bird
+has been tried with every integrated model, including Kev, LFM, and Lex; none played it
+usefully ([results](GameDemos.md#flappy-bird-trial-results)).
 
 ### Promising Index models below 1B parameters
 

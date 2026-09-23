@@ -2,8 +2,9 @@
 
 Ideas for comparing small decision models in observable, repeatable environments.
 These are proposed demos, not games currently shipped in FluidUse. Tetris, 2048,
-and Snake are the starting examples from the discussion; Flappy Bird is the next
-demo to build. The [model inventory](Models.md) identifies possible sub-1B models
+and Snake are the starting examples from the discussion. Flappy Bird has been
+tried ([results](#flappy-bird-trial-results)): no text-state model played it
+usefully. The [model inventory](Models.md) identifies possible sub-1B models
 and distinguishes text-state models from vision models.
 
 ## Recommended build order
@@ -18,7 +19,7 @@ for a Subway Surfers-style demo.
 
 | Rank | Game | Main reason to demo it |
 | ---: | --- | --- |
-| 1 | Flappy Bird | Two choices make latency and model differences immediately visible. |
+| 1 | Flappy Bird | **Tried:** no model passed more than one pipe; see [results](#flappy-bird-trial-results). |
 | 2 | Sokoban / Boxoban | Clear planning failures; reusable PlayJev game. |
 | 3 | Subway Surfers-style runner | High visual appeal and distinct lane, jump, and slide choices; reusable runner exists. |
 | 4 | Mario-style platformer | Familiar, varied actions and long action sequences; PlayJev has a game harness. |
@@ -46,7 +47,7 @@ for a Subway Surfers-style demo.
 
 | Status | Game | Model's decision | What it reveals | Suggested state |
 | --- | --- | --- | --- | --- |
-| Candidate | **Flappy Bird** | `FLAP` or `COAST` each decision tick. | Reaction timing, latency, and costly one-step mistakes. | Bird height and velocity; next pipe distance and gap, or a rendered frame for a vision model. |
+| Tried | **Flappy Bird** | `FLAP` or `COAST` each decision tick. | Reaction timing, latency, and costly one-step mistakes. | Bird height and velocity; next pipe distance and gap, or a rendered frame for a vision model. |
 | Candidate | **Sokoban / Boxoban** | Pick a legal move or push. | Planning and irreversible traps. | Grid, player, crates, goals, and legal moves. |
 | Candidate | **Mario-style platformer** | Choose left, right, jump, or a legal combination at each tick. | Jump timing, momentum, obstacle anticipation, and longer action sequences. | Player position and velocity, nearby platforms, enemies, and camera offset; or a rendered frame. |
 | Candidate | **Chess** | Choose or rank legal moves. | Tactical judgment, position evaluation, and planning across turns. | FEN, side to move, legal moves, and remaining time; a board image only for vision models. |
@@ -71,8 +72,9 @@ for a Subway Surfers-style demo.
 | Existing example | **2048** | Choose a legal slide. | Repeated choices with random future tiles. | Board and each legal resulting board before the random spawn. |
 | Existing example | **Snake** | Choose direction. | Path planning while avoiding self-traps. | Grid, body, food, and current direction. |
 
-Flappy Bird is the clearest first comparison: two actions, immediate outcomes,
-and a visible cost when a decision arrives late. Sokoban adds planning, and
+Flappy Bird looked like the clearest first comparison: two actions, immediate
+outcomes, and a visible cost when a decision arrives late. The trial showed that
+per-tick control is a poor fit for these text-state choosers. Sokoban adds planning, and
 Minesweeper adds uncertainty. Together, those three test different strengths
 than the existing Tetris, 2048, and Snake examples.
 
@@ -214,3 +216,28 @@ a way to find candidate models. [PlayJev](https://github.com/OmniJev/PlayJev)
 is a separate 0.8B vision model with published results on several of these games,
 including Flappy Bird. Its published numbers use its own harness and should not
 be placed on the same chart as new runs until the harness matches.
+
+## Flappy Bird trial results
+
+Flappy Bird was built and run as
+[FluidUse #10](https://github.com/FluidInference/FluidUse/pull/10) (`GLiClassFlappyDemo` app and
+`FlappyBirdCheck` headless runner). Each model got a text state plus a 300 ms
+physics forecast for each action, and chose `FLAP` or `COAST` every six frames (10 Hz).
+Without the safety guard, on seeds 1–4 (Apple M5 Pro):
+
+| Policy | Pipes passed | Combined survival |
+| --- | ---: | ---: |
+| GLiNER 2.5 multilingual W8 | 1 | 10.98 s |
+| Kev 0.6B, Decision 1.0 Lex | 0 | 9.03 s each |
+| Kev 0.5B, Decision 1.0 Kai, GLiNER 2.5 small | 0 | 8.5–8.7 s |
+| LFM2.5-350M-RLCD, Jeff | 0 | 6.7–7.1 s |
+| Laya, GLiClass, NanoJev, Verdict, GLiNER 2.5 base | 0 | 5.4–5.9 s |
+| Physics heuristic | 40 | 80 s (four 20 s caps) |
+
+None of the 13 models is a usable controller. Most ignored the forecast. GLiClass,
+for example, flapped on almost every call, and LFM always chose the option listed second.
+The safety guard reached the cap but overrode 106–131 of 200 choices, so that
+result measures the guard. LFM (~150 ms) and NanoJev (~78 ms) also miss the
+100 ms decision period. Per-tick timing control does not suit
+label-choosing models. A fairer follow-up would ask a yes/no safety question or
+query only at hard decision points.

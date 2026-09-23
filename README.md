@@ -143,8 +143,8 @@ left to the person. Submit is never clicked unless enabled.
 [Documentation/Models.md](Documentation/Models.md) lists the three converted models and
 open-weight candidates worth converting next, including
 sub-1B-parameter candidates from the Jev Decision Index.
-[Documentation/GameDemos.md](Documentation/GameDemos.md) lists game demos and specifies
-a matched-seed Flappy Bird model comparison. [PlayJev](https://github.com/OmniJev/PlayJev)
+[Documentation/GameDemos.md](Documentation/GameDemos.md) lists game demos, the matched-seed Flappy Bird
+comparison, and its trial results (no model played usefully). [PlayJev](https://github.com/OmniJev/PlayJev)
 is the proposed starting harness for ten existing browser games; an open-source
 three-lane runner is listed for the Subway Surfers-style demo.
 
