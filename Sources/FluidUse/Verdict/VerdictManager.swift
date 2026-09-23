@@ -131,6 +131,29 @@ public actor VerdictManager {
         return destination
     }
 
+    /// Uncalibrated logits for exactly `labels`, in order, rendered like the author's evaluation harness
+    /// (`core.formatting.build_model_input`): no "It is" prefix and no appended abstention, so a dataset that
+    /// lists `insufficient evidence` among its candidates keeps it at that position.
+    public func logits(question: String?, context: String, labels: [String]) throws -> [Float] {
+        try Task.checkCancellation()
+        guard (1...Self.maximumSubstantiveOptions + 1).contains(labels.count) else {
+            throw VerdictError.invalidInput("Provide 1–25 labels")
+        }
+        let body = question.map { $0.isEmpty ? context : "Question: \($0)\n\nContext:\n\(context)" } ?? context
+        let text = labels.map { "<<LABEL>>\($0)" }.joined() + "<<SEP>>" + body
+        let ids = tokenizer.encode(text)
+        guard let bucket = buckets.first(where: { ids.count <= $0.length }) else {
+            throw VerdictError.invalidInput(
+                "Prompt needs \(ids.count) tokens; largest loaded bucket is \(buckets.last?.length ?? 0)")
+        }
+        let markers = ids.indices.filter { ids[$0] == tokenizer.classTokenId }
+        guard markers.count == labels.count else {
+            throw VerdictError.invalidInput("Candidate markers do not match the supplied labels")
+        }
+        let logits = try autoreleasepool { try predict(ids: ids, markers: markers, bucket: bucket) }
+        return Array(logits.prefix(labels.count))
+    }
+
     /// Answer one typed question; overlong inputs are rejected rather than truncated.
     public func answer(context: String, question: VerdictQuestion) throws -> VerdictAnswer {
         try Task.checkCancellation()

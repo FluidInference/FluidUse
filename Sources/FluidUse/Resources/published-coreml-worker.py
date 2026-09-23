@@ -19,13 +19,30 @@ import sys
 from pathlib import Path
 
 
+def strict_context(tokenizer, predict, length=128):
+    """Reject requests the L128 package could only take by shortening the state (FLUIDUSE_STRICT_CONTEXT=1)."""
+    if os.environ.get("FLUIDUSE_STRICT_CONTEXT") != "1":
+        return predict
+    from kev.api import SystemOneRequest, to_record
+    from kev.model import encode
+
+    def checked(request):
+        record, _ = to_record(SystemOneRequest.model_validate(request))
+        full = encode(tokenizer, record, option_isolation=False, max_state=8192, max_branch=16384)
+        if len(full["ids"]) > length:
+            raise ValueError(f"request needs {len(full['ids'])} tokens; exceeds L{length} without truncation")
+        return predict(request)
+
+    return checked
+
+
 def runtime(model: str, root: Path, precision: str):
     if model == "kev-0-5b":
         sys.path.insert(0, str(root))
         module = importlib.import_module("runtime")
         package = root / f"kev_0_5b_{precision}_L128_options32.mlpackage"
         session = module.KevCoreML(root, package=package)
-        return session.predict
+        return strict_context(session.tokenizer, session.predict)
 
     if model == "kev-0.6b":
         sys.path.insert(0, str(root / "source"))
@@ -49,11 +66,13 @@ def runtime(model: str, root: Path, precision: str):
                 raise ValueError("Invalid Kev 0.6B Core ML probabilities")
             selected = probabilities[0, :count].tolist()
             answers = module.to_answers([selected], metadata)
+            # Upstream answers round to two decimals; the unrounded values match the Kev 0.5B runtime's extra fields.
             return {"model": parsed.model, "answers": answers,
                     "usage": {"input_tokens": len(encoded["ids"]),
-                              "output_tokens": module.output_tokens(tokenizer, answers)}}
+                              "output_tokens": module.output_tokens(tokenizer, answers)},
+                    "option_keys": metadata[0]["keys"], "probabilities": selected}
 
-        return kev06
+        return strict_context(tokenizer, kev06)
 
     if model in {"decision-1.0-kai", "decision-1.0-lex"}:
         sys.path.insert(0, str(root / "conversion"))

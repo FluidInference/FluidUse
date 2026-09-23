@@ -193,28 +193,39 @@ public struct ConstrainedField: Sendable, Equatable {
 
     public let name: String
     public let kind: Kind
+    /// Rendered into the prompt with the schema, as the RLCD runtime does.
+    public let description: String?
 
-    public static func oneOf(_ name: String, _ values: [String]) -> ConstrainedField {
-        ConstrainedField(name: name, kind: .oneOf(values))
+    public init(name: String, kind: Kind, description: String? = nil) {
+        self.name = name
+        self.kind = kind
+        self.description = description
     }
 
-    public static func boolean(_ name: String) -> ConstrainedField {
-        ConstrainedField(name: name, kind: .boolean)
+    public static func oneOf(_ name: String, _ values: [String], description: String? = nil) -> ConstrainedField {
+        ConstrainedField(name: name, kind: .oneOf(values), description: description)
     }
 
+    public static func boolean(_ name: String, description: String? = nil) -> ConstrainedField {
+        ConstrainedField(name: name, kind: .boolean, description: description)
+    }
+
+    /// The runtime puts `json.dumps(schema)` in the prompt, so member order follows RLCD's own schemas.
     static func schema(_ fields: [ConstrainedField]) throws -> PublishedJSON {
         guard !fields.isEmpty, Set(fields.map(\.name)).count == fields.count else {
             throw PublishedCoreMLError.invalidRequest("Provide at least one uniquely named field")
         }
         let properties = fields.map { field -> PublishedJSON.Member in
+            var members: [PublishedJSON.Member]
             switch field.kind {
-            case .oneOf(let values):
-                return .init(
-                    field.name,
-                    .object([.init("type", "string"), .init("enum", .array(values.map(PublishedJSON.string)))]))
-            case .boolean:
-                return .init(field.name, .object([.init("type", "boolean")]))
+            case .oneOf: members = [.init("type", "string")]
+            case .boolean: members = [.init("type", "boolean")]
             }
+            if let description = field.description { members.append(.init("description", .string(description))) }
+            if case .oneOf(let values) = field.kind {
+                members.append(.init("enum", .array(values.map(PublishedJSON.string))))
+            }
+            return .init(field.name, .object(members))
         }
         return .object([
             .init("type", "object"), .init("properties", .object(properties)),

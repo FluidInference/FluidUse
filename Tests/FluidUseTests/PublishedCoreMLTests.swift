@@ -101,6 +101,17 @@ final class PublishedCoreMLTests: XCTestCase {
             decision.candidates[1].scores,
             [.init(value: .bool(true), logLikelihood: -0.5), .init(value: .bool(false), logLikelihood: -2.0)])
         XCTAssertThrowsError(try ConstrainedField.schema([.boolean("a"), .boolean("a")]))
+        // RLCD diagnostic SUPPORT schema, byte-for-byte as json.dumps renders it into the prompt (minus spaces).
+        XCTAssertEqual(
+            String(
+                decoding: try ConstrainedField.schema([
+                    .oneOf("topic", ["billing", "technical", "shipping"], description: "Main issue"),
+                    .boolean("urgent", description: "True only if immediate action is explicitly needed"),
+                ]).encoded(), as: UTF8.self),
+            #"{"type":"object","properties":{"topic":{"type":"string","description":"Main issue","#
+                + #""enum":["billing","technical","shipping"]},"urgent":{"type":"boolean","#
+                + #""description":"True only if immediate action is explicitly needed"}},"#
+                + #""required":["topic","urgent"],"additionalProperties":false}"#)
         let outside = Data(
             #"{"text":"{\"route\": \"other\", \"urgent\": 1}","scores":{},"branches":1,"model_calls":1}"#.utf8)
         XCTAssertThrowsError(try ConstrainedDecision(json: outside, fields: fields))
