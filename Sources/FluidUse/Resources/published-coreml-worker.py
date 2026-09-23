@@ -1,0 +1,154 @@
+"""Persistent JSON-lines adapter to the conversion authors' published Core ML runtimes.
+
+This process only loads local Core ML packages; no upstream PyTorch checkpoint is loaded.
+The caller supplies an environment containing the published runtime's dependencies.
+"""
+
+from __future__ import annotations
+
+import argparse
+import contextlib
+import importlib
+import json
+import sys
+from pathlib import Path
+
+
+def runtime(model: str, root: Path, precision: str):
+    if model == "kev-0-5b":
+        sys.path.insert(0, str(root))
+        module = importlib.import_module("runtime")
+        package = root / (
+            "kev_0_5b_e8_L128_options32.mlpackage" if precision == "e8"
+            else "kev_0_5b_fp16_L128_options32.mlpackage"
+        )
+        session = module.KevCoreML(root, package=package)
+        return session.predict
+
+    if model == "kev-0.6b":
+        sys.path.insert(0, str(root / "source"))
+        module = importlib.import_module("runtime")
+        if precision not in module.PACKAGES:
+            raise ValueError("Kev 0.6B precision must be fp16 or w8")
+        package = root / module.PACKAGES[precision]
+        training = json.loads((root / "config" / "training_config.json").read_text())
+        if training["args"]["option_isolation"] not in (0, False):
+            raise ValueError("Kev 0.6B requires option_isolation=False")
+        tokenizer = module.AutoTokenizer.from_pretrained(root / "tokenizer", local_files_only=True)
+        shape = module.Shape()
+        coreml = module.ct.models.MLModel(str(package), compute_units=module.COMPUTE_UNITS["all"])
+
+        def kev06(request):
+            arrays, encoded, metadata, parsed = module.prepare_runtime_inputs(tokenizer, request, shape)
+            probabilities = module.np.asarray(coreml.predict(arrays)["probabilities"], dtype=module.np.float64)
+            count = len(metadata[0]["keys"])
+            if probabilities.shape != (1, shape.max_options) or not module.np.isfinite(probabilities).all():
+                raise ValueError("Invalid Kev 0.6B Core ML probabilities")
+            selected = probabilities[0, :count].tolist()
+            answers = module.to_answers([selected], metadata)
+            return {"model": parsed.model, "answers": answers,
+                    "usage": {"input_tokens": len(encoded["ids"]),
+                              "output_tokens": module.output_tokens(tokenizer, answers)}}
+
+        return kev06
+
+    if model in {"decision-1.0-kai", "decision-1.0-lex"}:
+        sys.path.insert(0, str(root / "conversion"))
+        module = importlib.import_module("run_coreml")
+        compressed = ("noul", "score") if precision == "w8" else ()
+        if precision == "w8" and model == "decision-1.0-kai":
+            compressed = ("choice", "noul", "score")
+        try:
+            session = module.CoreMLSystemOne(root, compressed)
+        except TypeError:
+            if compressed:
+                raise
+            session = module.CoreMLSystemOne(root)
+        return session.evaluate
+
+    if model == "lfm2-5-350m-rlcd":
+        sys.path.insert(0, str(root))
+        module = importlib.import_module("runtime")
+        package = root / "lfm350_rlcd_fp16_L256_B8_V16.mlpackage"
+        session = module.RLCDCoreML(package, root)
+        return lambda request: session.constrained(request["context"], request["schema"])
+
+    if model == "jeff":
+        sys.path.insert(0, str(root))
+        module = importlib.import_module("runtime")
+        package_name = "JeffDecision-L128-W8.mlpackage" if precision == "w8" else "JeffDecision-L128-FP16.mlpackage"
+        session = module.JeffCoreML(root, root / package_name)
+
+        def classify(request):
+            labels = request["labels"]
+            probabilities = session.score(
+                request["text"], labels,
+                request.get("name", ""), request.get("description", ""),
+            )
+            selected = max(range(len(labels)), key=lambda index: probabilities[index])
+            return {"labels": labels, "probabilities": probabilities,
+                    "selected_index": selected, "selected_label": labels[selected]}
+
+        return classify
+
+    if model == "nanojev":
+        import coremltools as ct
+        import numpy as np
+        from transformers import AutoTokenizer
+
+        sys.path.insert(0, str(root))
+        assets = importlib.import_module("assets")
+        preprocessing = importlib.import_module("preprocessing")
+        source = assets.snapshot(with_weights=False)
+        tokenizer = AutoTokenizer.from_pretrained(source / "tokenizer", local_files_only=True)
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        encoder = ct.models.MLModel(str(root / "build/nanojev_encoder_fp16_L128_K4.mlpackage"),
+                                     compute_units=ct.ComputeUnit.CPU_AND_NE)
+        head = ct.models.MLModel(str(root / "build/nanojev_heads_fp16_K4.mlpackage"),
+                                  compute_units=ct.ComputeUnit.CPU_AND_NE)
+
+        def nanojev(request):
+            inputs, candidate_mask, example = preprocessing.prepare_request(
+                source, tokenizer, request, 128, 4)
+            kind = example["type"]
+            embeddings = encoder.predict(inputs)["embeddings"]
+            output = head.predict({
+                "embeddings": np.asarray(embeddings, dtype=np.float32),
+                "candidate_mask": candidate_mask,
+                "use_set_head": np.array([[kind == "choice"]], dtype=np.float32),
+                "is_boolean": np.array([[kind == "boolean"]], dtype=np.float32),
+            })
+            candidates = example["candidate_ids"]
+            probabilities = np.asarray(output["probabilities"])[0, :len(candidates)].tolist()
+            chosen = int(np.argmax(probabilities))
+            return {"type": kind, "candidate_ids": candidates,
+                    "probabilities": probabilities, "selected_id": candidates[chosen]}
+
+        return nanojev
+
+    raise ValueError(f"Unsupported published Core ML model: {model}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--root", required=True, type=Path)
+    parser.add_argument("--precision", default="fp16")
+    args = parser.parse_args()
+    root = args.root.resolve(strict=True)
+    with contextlib.redirect_stdout(sys.stderr):
+        predict = runtime(args.model, root, args.precision)
+    print(json.dumps({"ready": True}), flush=True)
+    for line in sys.stdin:
+        try:
+            request = json.loads(line)
+            with contextlib.redirect_stdout(sys.stderr):
+                answer = predict(request)
+            print(json.dumps({"ok": answer}, ensure_ascii=False, allow_nan=False), flush=True)
+        except Exception as exc:
+            print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}), flush=True)
+
+
+if __name__ == "__main__":
+    main()

@@ -12,6 +12,7 @@ public enum GLiNER2ModelStore {
 
     private static func revision(for variant: GLiNER2Variant) -> String {
         switch variant {
+        case .small: "9dcac8a315ca49e71412cf5dec2ee7b7609b614e"
         case .base: "c1843f2c193b11b05f09ac7f258cb9202d8f5e71"
         case .multilingual: "5dab512eb89b88a3680bd6c86841877c3ea49893"
         }
@@ -20,6 +21,25 @@ public enum GLiNER2ModelStore {
     private static func assets(for variant: GLiNER2Variant) -> [Asset] {
         let package = variant.packageName
         switch variant {
+        case .small:
+            return [
+                Asset(path: "config.json", sha256: "0b7d9e1401ceeb83e992ec66d2f93bff7e5646428f1b4706ec527cf88f53578a"),
+                Asset(
+                    path: "tokenizer/tokenizer.json",
+                    sha256: "cbc8ae6037812709c9c26f2a160f8dc48b0440bcb79c8141804259ae2d6adac3"),
+                Asset(
+                    path: "tokenizer/tokenizer_config.json",
+                    sha256: "0bf3ea0873234bd9bfdd3853c440395009ac6365a925b91654daed5396d655e1"),
+                Asset(
+                    path: "\(package)/Manifest.json",
+                    sha256: "c3036b354640b9ec5cb8e899706a5e1238ab55916ee6733ca8cfcb09aae754d7"),
+                Asset(
+                    path: "\(package)/Data/com.apple.CoreML/model.mlmodel",
+                    sha256: "b56af2cdc4863696b205caba6b1aea4efcee70e5040c31daf09ec8f8eaadc6ab"),
+                Asset(
+                    path: "\(package)/Data/com.apple.CoreML/weights/weight.bin",
+                    sha256: "0bb3f77dff1b85fac4ad8d1ea309eac23d30a626ad08a5f20fbe064ec12d9189"),
+            ]
         case .base:
             return [
                 Asset(

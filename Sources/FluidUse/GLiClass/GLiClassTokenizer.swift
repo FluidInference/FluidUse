@@ -26,6 +26,7 @@ public final class GLiClassTokenizer: Sendable {
     private let addedTokens: [AddedToken]
     private let splitRegex: NSRegularExpression
     private let byteCharacters: [String]
+    private let addPrefixSpace: Bool
     private let cache = TokenCache()
     private let plainTextCache = EncodingCache()
 
@@ -57,6 +58,11 @@ public final class GLiClassTokenizer: Sendable {
             ranks["\(pair[0]) \(pair[1])"] = rank
         }
         self.mergeRank = ranks
+        guard let preTokenizer = root["pre_tokenizer"] as? [String: Any],
+            preTokenizer["type"] as? String == "ByteLevel",
+            let addPrefixSpace = preTokenizer["add_prefix_space"] as? Bool
+        else { throw GLiClassError.invalidAsset("tokenizer.json must declare ByteLevel prefix-space behavior") }
+        self.addPrefixSpace = addPrefixSpace
 
         var added: [AddedToken] = []
         if let entries = root["added_tokens"] as? [[String: Any]] {
@@ -134,8 +140,8 @@ public final class GLiClassTokenizer: Sendable {
 
     private func encodeText(_ text: String, into ids: inout [Int]) {
         guard !text.isEmpty else { return }
-        // ByteLevel(add_prefix_space: true) applies to each non-special split.
-        let input = text.first?.isWhitespace == true ? text : " " + text
+        // The published ByteLevel setting differs between GLiClass Edge and Verdict.
+        let input = addPrefixSpace && text.first?.isWhitespace != true ? " " + text : text
         let ns = input as NSString
         for match in splitRegex.matches(in: input, range: NSRange(location: 0, length: ns.length)) {
             let piece = ns.substring(with: match.range)

@@ -1,5 +1,7 @@
 # FluidUse
 
+See [decision-model runtime support](Documentation/DecisionModelSupport.md) for the current Core ML model matrix and handoff notes.
+
 Local computer use on Apple silicon. FluidUse reads a form in a running Mac
 app or browser through the Accessibility API, asks a small on-device model
 what belongs in each field, and types the answer into the real app. About
