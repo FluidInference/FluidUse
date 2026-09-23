@@ -94,6 +94,7 @@ final class RunnerScene {
             return
         }
         world.runAction(.move(to: SCNVector3(0, 0, half), duration: duration))
+        if crossing[game.lane] == .coin { collectCoin(lane: game.lane, after: duration * 0.4) }
         hop.removeAllActions()
         body.removeAction(forKey: "pose")
         hop.position.y = 0
@@ -116,6 +117,95 @@ final class RunnerScene {
         default:
             break
         }
+    }
+
+    /// The coin reaches the runner mid-row: it pops up and vanishes, sparks burst, "+1" rises, the runner bounces.
+    private func collectCoin(lane: Int, after delay: Double) {
+        if let coin = world.childNode(withName: "crossing-coin-\(Self.x(lane))", recursively: false) {
+            let rise = SCNAction.moveBy(x: 0, y: 1.1, z: 0, duration: 0.3)
+            rise.timingMode = .easeOut
+            coin.runAction(
+                .sequence([
+                    .wait(duration: delay),
+                    .group([
+                        rise, .scale(to: 0.2, duration: 0.3), .fadeOut(duration: 0.3),
+                        .rotateBy(x: 0, y: .pi * 6, z: 0, duration: 0.3),
+                    ]),
+                    .removeFromParentNode(),
+                ]))
+        }
+        let squash = SCNAction.scale(to: 1.18, duration: 0.07)
+        squash.timingMode = .easeOut
+        let settle = SCNAction.scale(to: 1, duration: 0.18)
+        settle.timingMode = .easeInEaseOut
+        stride.runAction(.sequence([.wait(duration: delay), squash, settle]), forKey: "pickup")
+
+        let label = SCNText(string: "+1", extrusionDepth: 0.02)
+        label.font = NSFont.systemFont(ofSize: 0.5, weight: .heavy)
+        label.flatness = 0.05
+        label.firstMaterial?.diffuse.contents = NSColor.systemYellow
+        label.firstMaterial?.emission.contents = NSColor.systemOrange
+        let plus = SCNNode(geometry: label)
+        let (low, high) = plus.boundingBox
+        plus.pivot = SCNMatrix4MakeTranslation((low.x + high.x) / 2, low.y, 0)
+        plus.position = SCNVector3(Self.x(lane), 1.3, -0.2)
+        plus.constraints = [SCNBillboardConstraint()]
+        plus.opacity = 0
+        scene.rootNode.addChildNode(plus)
+        plus.runAction(
+            .sequence([
+                .wait(duration: delay),
+                .group([.fadeIn(duration: 0.08), .moveBy(x: 0, y: 0.9, z: 0, duration: 0.6)]),
+                .fadeOut(duration: 0.25),
+                .removeFromParentNode(),
+            ]))
+
+        let x = Self.x(lane)
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            self?.burstSparkles(x: x)
+        }
+    }
+
+    private func burstSparkles(x: CGFloat) {
+        let burst = SCNNode()
+        burst.position = SCNVector3(x, 0.8, 0)
+        burst.addParticleSystem(Self.sparkles())
+        scene.rootNode.addChildNode(burst)
+        burst.runAction(.sequence([.wait(duration: 1), .removeFromParentNode()]))
+    }
+
+    /// A soft round dot so sparks are not drawn as squares.
+    private static let glint: NSImage = {
+        let size = 32
+        let image = NSImage(size: NSSize(width: size, height: size))
+        image.lockFocus()
+        let gradient = NSGradient(colors: [.white, NSColor.white.withAlphaComponent(0)])
+        gradient?.draw(
+            in: NSBezierPath(ovalIn: NSRect(x: 0, y: 0, width: size, height: size)), relativeCenterPosition: .zero)
+        image.unlockFocus()
+        return image
+    }()
+
+    private static func sparkles() -> SCNParticleSystem {
+        let sparks = SCNParticleSystem()
+        sparks.loops = false
+        sparks.emissionDuration = 0.05
+        sparks.birthRate = 360
+        sparks.particleLifeSpan = 0.35
+        sparks.particleLifeSpanVariation = 0.1
+        sparks.particleVelocity = 1.5
+        sparks.particleVelocityVariation = 0.5
+        sparks.spreadingAngle = 180
+        sparks.particleSize = 0.045
+        sparks.particleSizeVariation = 0.02
+        sparks.particleImage = glint
+        sparks.particleColor = NSColor(red: 1, green: 0.84, blue: 0.25, alpha: 1)
+        sparks.particleColorVariation = SCNVector4(0.05, 0.1, 0.2, 0)
+        sparks.acceleration = SCNVector3(0, -4, 0)
+        sparks.blendMode = .additive
+        sparks.isAffectedByGravity = false
+        return sparks
     }
 
     private func resetRunner(lane: Int) {
@@ -161,6 +251,8 @@ final class RunnerScene {
             coin.scale = SCNVector3(1.4, 1.4, 1.4)
             coin.position = SCNVector3(x, 0.45, z)
             coin.runAction(.repeatForever(.rotateBy(x: 0, y: .pi * 2, z: 0, duration: 1.2)))
+            // The row being crossed sits at z = 0; name its coins so a pickup can find them.
+            if z == 0 { coin.name = "crossing-coin-\(x)" }
             world.addChildNode(coin)
         case .train:
             let train = clone(variant == 0 ? "train-electric-subway-a" : "train-electric-subway-b")
