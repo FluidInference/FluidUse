@@ -109,8 +109,8 @@ limits of comparison with the older laya measurements.
 
 `GLiNER2Manager` runs the published base or multilingual classification head on device. Both
 packages use an L128 bucket, support up to eight labels, and quantize only the embedding table
-to eight bits. The manager downloads pinned, SHA-256 checked Core ML assets and the matching
-Unigram tokenizer from [base](https://huggingface.co/FluidInference/gliner2-5-base-coreml) or
+to eight bits. The manager downloads pinned, SHA-256 checked Core ML assets, source config files,
+and the matching Unigram tokenizer from [base](https://huggingface.co/FluidInference/gliner2-5-base-coreml) or
 [multilingual](https://huggingface.co/FluidInference/gliner2-5-multi-coreml) on first use.
 
 ```swift

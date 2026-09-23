@@ -12,8 +12,8 @@ public enum GLiNER2ModelStore {
 
     private static func revision(for variant: GLiNER2Variant) -> String {
         switch variant {
-        case .base: "604528d2813fd0c68bd941a40c8a18f59075e3ae"
-        case .multilingual: "1c0b7f915f00a3880d37dc357304c1dd9c648999"
+        case .base: "c1843f2c193b11b05f09ac7f258cb9202d8f5e71"
+        case .multilingual: "5dab512eb89b88a3680bd6c86841877c3ea49893"
         }
     }
 
@@ -23,8 +23,17 @@ public enum GLiNER2ModelStore {
         case .base:
             return [
                 Asset(
+                    path: "config.json",
+                    sha256: "0eb92d00584d613aab32b2178f84a85176b62c87ae3689ce9084e83f6eba64d1"),
+                Asset(
+                    path: "encoder_config/config.json",
+                    sha256: "d36a845b9f25dcaf1ec45a1c4bdf65ea4ac20596537e14530ec9f660a63aeca4"),
+                Asset(
                     path: "tokenizer/tokenizer.json",
                     sha256: "cbc8ae6037812709c9c26f2a160f8dc48b0440bcb79c8141804259ae2d6adac3"),
+                Asset(
+                    path: "tokenizer/tokenizer_config.json",
+                    sha256: "0bf3ea0873234bd9bfdd3853c440395009ac6365a925b91654daed5396d655e1"),
                 Asset(
                     path: "\(package)/Manifest.json",
                     sha256: "b0e9c35bf2fe7a2d87f62cc6244cf8f39dd7968d9a3f6b6d289b803eaeaddede"),
@@ -38,8 +47,17 @@ public enum GLiNER2ModelStore {
         case .multilingual:
             return [
                 Asset(
+                    path: "config.json",
+                    sha256: "8b59a0f426a65859c89cd1ea850c3529c09aa3be6a6fafd8eddfdd17b1bf0146"),
+                Asset(
+                    path: "encoder_config/config.json",
+                    sha256: "fa4f9ef2903b5369ab172333aae4574e6a476511d7465845cf59f8360ee18716"),
+                Asset(
                     path: "tokenizer/tokenizer.json",
                     sha256: "c62446df87ae18ec98b133f8f84fc449a07cc89bbf8ef192a4cb5f9c53777a7a"),
+                Asset(
+                    path: "tokenizer/tokenizer_config.json",
+                    sha256: "0bf3ea0873234bd9bfdd3853c440395009ac6365a925b91654daed5396d655e1"),
                 Asset(
                     path: "\(package)/Manifest.json",
                     sha256: "51c7a741b26b804175983bde9bc85b5572864ef40ad5986a75fafba45342c195"),
