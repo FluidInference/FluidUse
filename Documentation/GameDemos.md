@@ -5,36 +5,44 @@ These are proposed demos, not games currently shipped in FluidUse. Tetris, 2048,
 and Snake are the starting examples from the discussion. Flappy Bird has been
 tried ([results](#flappy-bird-trial-results)): no text-state model played it
 usefully, so real-time control games are [ruled out](#ruled-out-real-time-games).
+Connect Four ([results](#connect-four-trial-results)) and Snake
+([local check](#snake-local-check-and-assessment)) have also been tried: both
+confirm that these models fail where one wrong move loses or where play needs
+lookahead. Minesweeper is kept as a [benchmark mode](#minesweeper-benchmark-mode)
+rather than a live demo.
 The [model inventory](Models.md) identifies possible sub-1B models
 and distinguishes text-state models from vision models.
 
 ## Recommended build order
 
-This is a judgment about **solo and side-by-side demo value for FluidUse**, not
-a measured model ranking. It favors turn-based games where each legal move can be
-listed with its consequence in words, which is the setup that took the Tetris
-harness from 76 to 568 pieces. It also favors a clear score and visible
-differences between models. Tetris, 2048, and Snake rank last only because they
-are already the starting examples.
+This is a judgment about **demo value for FluidUse**, now informed by five
+trials (Tetris, 2048, Flappy Bird, lane runner, Connect Four) and a local Snake
+check. The pattern across them: these models do well when each move is a
+short-horizon choice among a few described options and a mediocre move costs
+points rather than the game (Tetris with a heuristic shortlist, 2048). They fail
+when one wrong move is fatal or when a good move needs lookahead (Flappy Bird,
+lane runner, Connect Four, Snake). The ranking therefore favors forgiving,
+turn-based puzzles with a visible score.
 
 | Rank | Game | Main reason to demo it |
 | ---: | --- | --- |
-| 1 | Connect Four | At most seven legal columns, each describable ("wins now", "blocks their win"); easy model-vs-model duels. |
-| 2 | Chess (position challenge) | Recognizable tactics; tagged candidate moves scored against an engine ranking. |
-| 3 | Codenames (guesser) | Semantic association, the closest match to how these models are trained. |
-| 4 | Minesweeper | Risk-sensitive choices; safe cells and constraints can be spelled out. |
-| 5 | Wordle-style word game | Information gathering with a compact state and a fixed candidate list. |
-| 6 | MiniWoB-style web tasks | Closest to FluidUse's computer-use purpose, with objective task success. |
-| 7 | Battleship | Hidden-information search, but slower to watch. |
-| 8 | Sokoban / Boxoban | Clear planning failures; reusable PlayJev game, but needs multi-step lookahead. |
-| 9 | MiniGrid DoorKey | Multi-step planning with an existing environment. |
-| 10 | Multiplayer Snake arena | Direct competition; run in lockstep with no clock. |
-| 11 | Hanabi | Cooperative partial information, but harder to explain at a glance. |
-| 12 | Tower defense | Resource allocation, but a large action and state space. |
-| 13 | FrozenLake | Useful stochastic baseline, but visually less compelling. |
-| 14 | Tetris | Already a starting example. |
-| 15 | 2048 | Already a starting example. |
-| 16 | Snake | Already a starting example. |
+| 1 | Drop-merge ("2048 blocks") | One of five columns per drop, short horizon, forgiving; closest to what already works. |
+| 2 | Threes! | 2048's predecessor; reuses most of the `Game2048` engine. |
+| 3 | Codenames (guesser) | Semantic association, the closest match to how these models are trained; no lookahead. |
+| 4 | Wordle-style word game | Compact text state and a fixed candidate list; a bad guess costs a turn, not the game. |
+| 5 | Block Blast / 1010! | Placement puzzle; the Tetris shortlist pattern applies directly. |
+| 6 | Suika (watermelon) | Drop-slot choice with physics; very watchable, but scores are noisy. |
+| 7 | Minesweeper (benchmark mode) | Exact mine probabilities give a calibration benchmark; not a live demo (one wrong click ends it). |
+| 8 | MiniWoB-style web tasks | Closest to FluidUse's computer-use purpose, with objective task success. |
+| 9 | Chess (position challenge) | Static ranked-move scoring works; full games would repeat the Connect Four result. |
+| 10 | Battleship | Hidden-information search, but slower to watch. |
+| 11 | Sokoban / Boxoban | Needs multi-step lookahead; expect the Connect Four and Snake pattern. |
+| 12 | MiniGrid DoorKey | Multi-step planning. |
+| 13 | Hanabi | Cooperative partial information, hard to explain at a glance. |
+| 14 | Tower defense | Large action and state space. |
+| 15 | FrozenLake | Useful stochastic baseline, visually less compelling. |
+| — | Tetris, 2048 | Already built. |
+| — | Connect Four, Snake, multiplayer Snake arena | Tried or ruled out; see the trial sections. |
 
 ## Demo list
 
@@ -42,10 +50,15 @@ are already the starting examples.
 | --- | --- | --- | --- | --- |
 | Candidate | **Sokoban / Boxoban** | Pick a legal move or push. | Planning and irreversible traps. | Grid, player, crates, goals, and legal moves. |
 | Candidate | **Chess** | Choose or rank legal moves. | Tactical judgment, position evaluation, and planning across turns. | FEN, side to move, legal moves, and remaining time; a board image only for vision models. |
-| Candidate | **Minesweeper** | Open or flag a cell. | Decision-making under uncertainty. | Revealed grid and legal cells; show mine probabilities only if actually computed. |
+| Candidate (benchmark) | **Minesweeper** | Say whether a frontier cell is safe. | Calibration against exact mine probabilities. | 3×3 or 5×5 neighborhood per cell; see [benchmark mode](#minesweeper-benchmark-mode). |
 | Candidate | **Wordle-style word game** | Choose the next valid guess. | Information gathering versus an immediate attempt to solve. | Previous guesses, color feedback, and a fixed candidate-word list. |
-| Candidate | **Connect Four** | Choose a non-full column. | Short tactical lookahead with only a few legal actions. | Board, player to move, and legal columns. |
-| Candidate | **Multiplayer Snake arena** | Choose direction while several snakes move simultaneously. | Direct competition, collisions, and survival under pressure. | Board, all visible snakes, food, and legal directions. |
+| Tried | **Connect Four** | Choose a non-full column. | Short tactical lookahead. Every model lost 0–20 to a rule-based heuristic ([results](#connect-four-trial-results)). | Compact board, player to move, and legal columns, optionally labeled with tactics. |
+| Candidate | **Drop-merge** | Choose the column for the next tile. | Short-horizon merging with a clear score. | Small numeric grid, next tile, and each column's resulting merges. |
+| Candidate | **Threes!** | Choose a legal slide. | Like 2048, with harder merge rules. | Board, next tile, and each legal resulting board. |
+| Candidate | **Suika (watermelon)** | Choose a drop slot. | Merging under physics; visual. | Fruit positions summarized per slot, next fruit. |
+| Candidate | **Block Blast / 1010!** | Choose a placement from a shortlist. | Board management; same pattern as Tetris. | Grid, pieces in hand, and shortlisted placements with line clears. |
+| Candidate (benchmark) | **Blackjack** | Hit, stand, or double. | Throughput and win rate against basic strategy. | Hand, dealer upcard, and legal actions. |
+| Ruled out | **Multiplayer Snake arena** | Choose direction while several snakes move simultaneously. | Would compound the single-player Snake failure ([assessment](#snake-local-check-and-assessment)). | Board, all visible snakes, food, and legal directions. |
 | Candidate | **Codenames** | Choose a clue or a guess from a fixed set. | Semantic association under constraints. | Visible words, team, prior clues, and legal choices. |
 | Candidate | **Hanabi** | Play, discard, or give a legal hint. | Cooperation with incomplete information. | Only what the acting player may observe. |
 | Candidate | **MiniGrid DoorKey** | Turn, move, pick up, or open. | Multi-step planning when a key must be found before reaching the goal. | Partial grid observation, carried item, and door state. |
@@ -55,12 +68,12 @@ are already the starting examples.
 | Candidate | **MiniWoB-style web tasks** | Choose an element and operation. | Practical computer use with a clear success condition. | Accessibility element table and task goal; screenshots for vision models. |
 | Existing example | **Tetris** | Choose a placement or movement. | Long-term board management. | Board, current piece, next piece if allowed, and legal placements. |
 | Existing example | **2048** | Choose a legal slide. | Repeated choices with random future tiles. | Board and each legal resulting board before the random spawn. |
-| Existing example | **Snake** | Choose direction. | Path planning while avoiding self-traps. | Grid, body, food, and current direction. |
+| Tried (local check) | **Snake** | Choose direction. | Path planning while avoiding self-traps; Laya ate 2 food in 256 moves versus 27 for the heuristic ([assessment](#snake-local-check-and-assessment)). | Grid, body, food, and current direction. |
 
-Connect Four, chess positions, and Codenames each test a different strength
-from the existing Tetris, 2048, and Snake examples: tactical lookahead,
-position judgment, and semantic association. Minesweeper adds uncertainty, and
-Sokoban adds planning.
+The merge puzzles and Codenames play to what these models showed in Tetris and
+2048: choosing well among a few described options without lookahead. Chess
+positions and Minesweeper stay useful as static benchmarks. Connect Four, Snake,
+and Sokoban test lookahead, where the trials so far show these models fail.
 
 Chess has two useful modes. A **position challenge** gives every model the same
 FEN and legal move list, then compares its ranked moves with published reference
@@ -84,8 +97,11 @@ decision interface, with fixed-opponent runs retained as a diagnostic:
 | Human vs model | Interactive side mode. | The person picks a side and a legal move; show the model's top choices, probabilities when available, and response time. Do not count these self-selected games in model rankings. |
 | Model vs fixed opponent | Diagnostic. | Each candidate faces the same version and settings of a reference policy. Run paired games from the same starting positions with colors or first turn swapped. |
 
-For competitive demos, start with **Connect Four** for two-player self-play and
-cross-model matches, then **multiplayer Snake** for a true arena, then **chess**.
+For competitive demos, note the [Connect Four result](#connect-four-trial-results):
+every model lost to a simple heuristic, so model-vs-model matches would pit weak
+players against each other. If a duel is still wanted, Connect Four is the
+cheapest to run (the headless check already exists); multiplayer Snake is ruled
+out, and chess is better used as a static position challenge.
 An existing [MIT-licensed multiplayer Snake game](https://github.com/simondiep/node-multiplayer-snake)
 has spectator mode, bots, and adjustable speed; evaluate it as a reusable base
 instead of expanding PlayJev's single-player Snake from scratch. Connect Four
@@ -225,3 +241,70 @@ A "decision point" variant could reuse some of them. It pauses at each obstacle 
 offers consequence-labeled options while scripted movement handles the rest. In
 that setup the game logic does most of the work, so it would say little about
 the models.
+
+## Connect Four trial results
+
+A headless `ConnectFourCheck` (branch `feat/connect4-model-comparison`, stacked
+on [FluidUse #11](https://github.com/FluidInference/FluidUse/pull/11); not yet a
+PR) played each model against a rule-based heuristic: win, then block, then
+never hand over a win, then a window score, then the center. Each of 10 seeds
+gave two games, with the model moving first and then second, after two seeded
+random opening moves. Legal columns were rotated each move. In **describe** mode
+each column was labeled with its tactics ("wins now", "blocks their win", "gives
+them a win", "makes three"); in **raw** mode only "column N" was shown. The
+board used a compact 6-line text grid to fit 128-token models. Kai and Lex
+(3 slots) and NanoJev (4) saw the heuristic's top columns. Apple M5 Pro:
+
+| Model | Wins (of 20, describe / raw) | ms per move (median) | Missed blocks (describe / raw) |
+| --- | ---: | ---: | --- |
+| GLiClass LUT8 | 0 / 0 | 2.0 | 17 / 18 |
+| Laya E8 | 0 / 0 | 5.0 | 15 / 20 |
+| Decision 1.0 Kai (top-3 shortlist) | 0 / 2 | 5.3 | 17 / 14 |
+| Decision 1.0 Lex (top-3 shortlist) | 0 / 0 | 5.4 | 15 / 17 |
+| GLiNER 2.5 small / base | 0 / 0 | 6.5 / 8.8 | 18–20 |
+| Verdict FP16 | 0 / 0 | 10.8 | 20 / 17 |
+| Jeff FP16 | 0 / 0 | 12–17 | 19 / 19 |
+| Kev 0.5B / 0.6B | 0 / 0 | 16–19 | 1–14 / 11–14 |
+| NanoJev (top-4 shortlist) | 0 / 0 | 75 | 19 / 20 |
+| LFM2.5-350M-RLCD | 0 / 0 | 108–116 | 14 / 16 |
+| Heuristic vs itself | 9 wins, 2 draws | — | 0 |
+| Random | 0 | — | 20 |
+
+A missed block is a move where the opponent could win next turn, a blocking
+column was offered, and the model chose another. Labeling the blocking column
+barely helped: most models ignored "blocks their win". Kev 0.5B read the labels
+(one missed block) but kept choosing "gives them a win" columns (10 blunders).
+Without labels, position bias dominated: Kev 0.5B chose the first option on all
+89 moves and Kai the third on 97 of 122. GLiNER 2.5 multilingual is excluded:
+its tokenizer put 55–79 moves over the 128-token budget. The speed ordering is
+clear, but no model plays Connect Four usefully, so it is not a demo.
+
+## Snake: local check and assessment
+
+A local check (uncommitted `Tools/local-snake`, Laya multilingual E8 L512,
+Apple M5 Pro) played the [djev-run](https://github.com/taeold/djev-run) Snake
+page for one 256-move trajectory. The state included a heuristic
+`recommended_safe_move`, and the page filtered unsafe replies. Laya survived all
+256 moves but ate **2 food**; a heuristic-only control on the same board ate
+**27**. Model calls took 28.8 ms median. One trajectory is not a benchmark, but
+it matches the other trials.
+
+Snake is not recommended as a demo. One mistake ends the game over hundreds of
+moves, and deaths come from coiling into dead ends many moves earlier rather
+than from a single bad step, which one-step decision models cannot see. Making
+it survivable requires offering only moves that keep a path to the tail open,
+a flood-fill check that is essentially the winning strategy, so the model adds
+little. It is also turn-based, so model speed does not show.
+
+## Minesweeper: benchmark mode
+
+As a live game, Minesweeper has the same flaw as Snake: one wrong click ends
+it, and most correct moves come from exact counting logic that a solver does
+better. As a benchmark it is distinctive. For every frontier cell, ask the model
+whether the cell is safe from its 3×3 or 5×5 neighborhood, which fits a
+128-token budget and is a yes/no question every model supports. A solver gives
+the exact mine probability of each cell, so the result measures calibration
+(does "80% safe" mean 80%?) as well as accuracy and cells per second. That suits
+Verdict and Kev, which claim calibrated probabilities. Show a board view that
+highlights each model's picks, but report the sweep over thousands of positions,
+not single games.

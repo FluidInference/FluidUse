@@ -144,9 +144,10 @@ left to the person. Submit is never clicked unless enabled.
 open-weight candidates worth converting next, including
 sub-1B-parameter candidates from the Jev Decision Index.
 [Documentation/GameDemos.md](Documentation/GameDemos.md) lists game demos, the matched-seed Flappy Bird
-comparison, and its trial results (no model played usefully). Real-time control
-games are ruled out; the list keeps turn-based games, led by Connect Four, chess
-positions, and Codenames.
+comparison, and trial results for Flappy Bird, Connect Four, and Snake (no model
+played any of them usefully). Real-time control games are ruled out; the list is
+now led by forgiving merge puzzles (drop-merge, Threes) and Codenames, with
+Minesweeper kept as a calibration benchmark.
 
 ## License
 

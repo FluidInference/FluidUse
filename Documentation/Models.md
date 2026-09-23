@@ -70,7 +70,12 @@ encoder. Closed-vocabulary tasks that fit the shape, each 1 to 5 MB:
 See [Decision game demos](GameDemos.md) for the game list, the Flappy Bird
 comparison specification, and the matched-seed evaluation protocol. Flappy Bird
 has been tried with every integrated model, including Kev, LFM, and Lex; none played it
-usefully ([results](GameDemos.md#flappy-bird-trial-results)).
+usefully ([results](GameDemos.md#flappy-bird-trial-results)). Connect Four and a
+local Snake check gave the same answer: every model lost 0–20 to a simple
+heuristic at Connect Four, and Laya ate 2 food to the heuristic's 27 at Snake. The
+recommended next demos are forgiving merge puzzles such as drop-merge and Threes;
+Minesweeper is kept as a calibration benchmark
+([details](GameDemos.md#recommended-build-order)).
 
 ### Promising Index models below 1B parameters
 
