@@ -14,9 +14,9 @@ struct LaneRunnerDemoApp: App {
     var body: some Scene {
         WindowGroup("Lane Runner · Local model lab") {
             LaneRunnerView().environmentObject(model)
-                .frame(minWidth: 800, minHeight: 700)
+                .frame(minWidth: 900, minHeight: 720)
                 .onAppear { model.applyLaunchEnvironment() }
         }
-        .defaultSize(width: 820, height: 720)
+        .defaultSize(width: 920, height: 760)
     }
 }

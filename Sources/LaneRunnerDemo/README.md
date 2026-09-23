@@ -17,7 +17,7 @@ This is a Subway Surfers-style endless runner with three lanes. Each step enters
 
 The runner chooses once per row, not once per frame, and each option states its consequence. The first Flappy Bird trial showed that frame-by-frame control does not suit these models, so this setup follows the Tetris harness pattern. The model reads a short state (`Lane 2 of 3. Next row: train, open, low bar. Then: …`) plus one label per legal move, such as `jump: crash, hit a train`, `left: safe, coin`, or `stay: safe, then trapped`. The labels and the heuristic both look only at the three visible rows. Option order rotates every row, so a fixed position preference does not look like skill.
 
-The app draws the track and shows the exact text the model reads, with unsafe options in red. Rows advance on a timer (150–800 ms). If a reply misses its row, the runner stays in its lane and the row counts as late. `LaneRunnerCheck` runs the same tracks headless with no clock, runs each seed up to 200 rows, and prints per-seed JSON. Pass a model name, `heuristic`, or `random`.
+The app renders a 3D third-person track in SceneKit with CC0 models from Kenney's [Train Kit](https://kenney.nl/assets/train-kit) and [Platformer Kit](https://kenney.nl/assets/platformer-kit). The models and their license files are in `Resources/Kenney/`. It also shows the exact text the model reads, with unsafe options in red. Rows advance on a timer (150–800 ms). If a reply misses its row, the runner stays in its lane and the row counts as late. `LaneRunnerCheck` runs the same tracks headless with no clock, runs each seed up to 200 rows, and prints per-seed JSON. Pass a model name, `heuristic`, or `random`.
 
 ## Results
 

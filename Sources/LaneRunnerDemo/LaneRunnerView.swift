@@ -10,7 +10,7 @@ struct LaneRunnerView: View {
                 Text("RUNNER / LOCAL").font(.caption.monospaced()).foregroundStyle(.orange)
                 Text("Three lanes. Five moves.").font(.largeTitle.bold())
                 board
-                Text("Jump low bars, slide under high bars, change lanes around trains.")
+                Text("Jump fences, slide under beams, change lanes around trains. 3D models: Kenney (CC0).")
                     .font(.caption).foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 16) {
@@ -92,74 +92,24 @@ struct LaneRunnerView: View {
     }
 
     private var board: some View {
-        Canvas { context, size in
-            let laneWidth = size.width / CGFloat(LaneRunner.lanes)
-            let rowHeight = size.height / 7
-            context.fill(
-                Path(CGRect(origin: .zero, size: size)), with: .color(Color(red: 0.10, green: 0.09, blue: 0.14)))
-            for lane in 1..<LaneRunner.lanes {
-                let x = CGFloat(lane) * laneWidth
-                context.stroke(
-                    Path {
-                        $0.move(to: CGPoint(x: x, y: 0))
-                        $0.addLine(to: CGPoint(x: x, y: size.height))
-                    },
-                    with: .color(.white.opacity(0.15)), style: StrokeStyle(lineWidth: 2, dash: [10, 10]))
-            }
-            for (index, row) in model.game.rows.prefix(6).enumerated() {
-                let y = size.height - rowHeight * CGFloat(index + 2)
-                let visible = index < LaneRunner.visibleRows
-                for (lane, obstacle) in row.enumerated() {
-                    let cell = CGRect(x: CGFloat(lane) * laneWidth, y: y, width: laneWidth, height: rowHeight)
-                    draw(obstacle, in: cell.insetBy(dx: 14, dy: 10), context: context, dim: !visible)
+        RunnerSceneView(runner: model.runner)
+            .frame(width: 460, height: 600)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .overlay(alignment: .center) {
+                if !model.isRunning {
+                    VStack(spacing: 8) {
+                        Text(model.game.isOver ? "Run over" : (model.game.distance == 0 ? "Ready" : "Paused"))
+                            .font(.title2.bold())
+                        Text(
+                            model.game.isOver
+                                ? "\(model.game.distance) rows · \(model.game.coins) coins"
+                                : "Choose a runner, then press Run"
+                        )
+                        .font(.caption)
+                    }
+                    .padding(20).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
                 }
             }
-            let player = CGRect(
-                x: CGFloat(model.game.lane) * laneWidth + laneWidth / 2 - 18, y: size.height - rowHeight + 14,
-                width: 36, height: rowHeight - 28)
-            context.fill(
-                Path(roundedRect: player, cornerRadius: 10), with: .color(model.game.isOver ? .red : .mint))
-        }
-        .frame(width: 390, height: 600)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .overlay(alignment: .center) {
-            if !model.isRunning {
-                VStack(spacing: 8) {
-                    Text(model.game.isOver ? "Run over" : (model.game.distance == 0 ? "Ready" : "Paused"))
-                        .font(.title2.bold())
-                    Text(
-                        model.game.isOver
-                            ? "\(model.game.distance) rows · \(model.game.coins) coins"
-                            : "Choose a runner, then press Run"
-                    )
-                    .font(.caption)
-                }
-                .padding(20).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-            }
-        }
-        .accessibilityLabel("Lane runner, \(model.game.distance) rows")
-    }
-
-    private func draw(_ obstacle: LaneRunner.Obstacle, in rect: CGRect, context: GraphicsContext, dim: Bool) {
-        let opacity = dim ? 0.35 : 1
-        switch obstacle {
-        case .open:
-            break
-        case .coin:
-            let side = min(rect.width, rect.height) * 0.5
-            context.fill(
-                Path(ellipseIn: CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side)),
-                with: .color(.yellow.opacity(opacity)))
-        case .train:
-            context.fill(Path(roundedRect: rect, cornerRadius: 8), with: .color(.red.opacity(opacity)))
-        case .low:
-            context.fill(
-                Path(CGRect(x: rect.minX, y: rect.maxY - 14, width: rect.width, height: 14)),
-                with: .color(.orange.opacity(opacity)))
-        case .high:
-            context.fill(
-                Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: 14)),
-                with: .color(.purple.opacity(opacity)))
-        }
+            .accessibilityLabel("Lane runner, \(model.game.distance) rows")
     }
 }

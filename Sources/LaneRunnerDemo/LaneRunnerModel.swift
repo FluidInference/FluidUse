@@ -41,6 +41,7 @@ final class LaneRunnerModel: ObservableObject {
     @Published var seed: UInt64 = 1
     @Published var rowMs = 400.0
 
+    let runner = RunnerScene()
     private var policies: [DecisionModel: LaneRunnerPolicy] = [:]
     private var loopTask: Task<Void, Never>?
     private var generation = 0
@@ -80,10 +81,15 @@ final class LaneRunnerModel: ObservableObject {
         if let seed = environment["LANE_RUNNER_SEED"].flatMap(UInt64.init) { self.seed = seed }
         if let rowMs = environment["LANE_RUNNER_ROW_MS"].flatMap(Double.init) { self.rowMs = rowMs }
         game = LaneRunner(seed: seed)
+        runner.show(game, passed: nil, action: nil, duration: 0)
         guard let name = environment["LANE_RUNNER_MODEL"] else { return }
         if name == "heuristic" {
             control = .heuristic
-            toggle()
+            // Let the picker's reset for the new control run first.
+            Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                toggle()
+            }
         } else if let model = DecisionModel(rawValue: name) {
             control = .model(model)
             autostart = true
@@ -94,6 +100,7 @@ final class LaneRunnerModel: ObservableObject {
     func reset() {
         pause()
         game = LaneRunner(seed: seed)
+        runner.show(game, passed: nil, action: nil, duration: 0)
         calls = 0
         lateRows = 0
         unsafeChoices = 0
@@ -162,7 +169,9 @@ final class LaneRunnerModel: ObservableObject {
             reply = nil
         }
         if !game.isSafe(action) && game.legalActions.contains(where: game.isSafe) { unsafeChoices += 1 }
+        let passed = game.rows[0]
         game.step(action)
+        runner.show(game, passed: game.isOver ? nil : passed, action: action, duration: rowMs / 1000)
         if game.isOver { pause() }
     }
 

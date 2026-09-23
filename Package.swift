@@ -33,7 +33,7 @@ let package = Package(
         .executableTarget(name: "LaneRunnerCheck", dependencies: ["LaneRunner", "LaneRunnerPolicy", "DecisionPolicy"]),
         .executableTarget(
             name: "LaneRunnerDemo", dependencies: ["LaneRunner", "LaneRunnerPolicy", "DecisionPolicy"],
-            exclude: ["README.md"]
+            exclude: ["README.md"], resources: [.copy("Resources")]
         ),
         .testTarget(name: "LaneRunnerTests", dependencies: ["LaneRunner"]),
         .executableTarget(
