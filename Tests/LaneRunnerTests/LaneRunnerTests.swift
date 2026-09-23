@@ -16,7 +16,7 @@ struct LaneRunnerTests {
     @Test func everyTrackIsSurvivable() {
         for seed in UInt64(1)...20 {
             var game = LaneRunner(seed: seed)
-            while !game.isOver && game.distance < 300 { game.step(game.heuristicAction) }
+            while !game.isOver && game.distance < 400 { game.step(game.heuristicAction) }
             #expect(!game.isOver, "seed \(seed) crashed: \(game.crash ?? "")")
         }
     }
@@ -44,5 +44,24 @@ struct LaneRunnerTests {
         #expect(game.legalActions == [.right, .jump, .slide, .stay])
         game.lane = 1
         #expect(game.legalActions.count == 5)
+    }
+
+    @Test func tracksGetDenser() {
+        var game = LaneRunner(seed: 3)
+        var blockedEarly = 0
+        var blockedLate = 0
+        while game.distance < 400 {
+            let blocked = game.rows[0].filter { $0 == .low || $0 == .high || $0 == .train }.count
+            if game.distance < 60 { blockedEarly += blocked }
+            if game.distance >= 340 { blockedLate += blocked }
+            game.step(game.heuristicAction)
+        }
+        #expect(blockedLate * 4 > blockedEarly * 5)
+    }
+
+    @Test func backToBackRowsNeedALegalMove() {
+        #expect(LaneRunner.canFollow([.train, .open, .train], with: [.open, .train, .train]))
+        #expect(!LaneRunner.canFollow([.train, .open, .train], with: [.low, .train, .train]))
+        #expect(LaneRunner.canFollow([.low, .train, .train], with: [.low, .train, .train]))
     }
 }

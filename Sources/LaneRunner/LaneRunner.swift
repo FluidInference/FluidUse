@@ -144,29 +144,63 @@ public struct LaneRunner: Sendable, Equatable {
         return best
     }
 
-    /// Obstacle rows alternate with open rows, and every obstacle row leaves at least one open lane,
-    /// so two lane changes always reach it.
+    /// Easy opening before the ramp, then rows over which the track reaches its hardest mix.
+    public static let easyRows = 30
+    public static let rampRows = 240
+
+    /// 0 through the easy opening, rising to 1 over the next `rampRows` rows.
+    public static func difficulty(atRow row: Int) -> Double {
+        min(1, max(0, Double(row - easyRows) / Double(rampRows)))
+    }
+
+    /// Early on, obstacle rows alternate with open rows and each leaves one lane open, so two lane changes always
+    /// reach it. As difficulty rises, open rows disappear and more lanes are blocked. Back-to-back obstacle rows are
+    /// only emitted when every lane passable in the first has a legal move into the second, so tracks stay survivable.
     private mutating func appendRow() {
         defer { generated += 1 }
-        guard generated >= 2 else {
+        guard generated >= 2, let previous = rows.last else {
             rows.append(Array(repeating: .open, count: Self.lanes))
             return
         }
-        if generated % 2 == 1 {
+        let difficulty = Self.difficulty(atRow: generated)
+        let previousBlocks = previous.contains { $0 == .low || $0 == .high || $0 == .train }
+        if previousBlocks && (difficulty == 0 || Double(nextRandom() % 1_000) / 1_000 >= 0.65 * difficulty) {
             rows.append((0..<Self.lanes).map { _ in nextRandom() % 4 == 0 ? .coin : .open })
             return
         }
+        for _ in 0..<64 {
+            let candidate = obstacleRow(difficulty: difficulty)
+            if !previousBlocks || Self.canFollow(previous, with: candidate) {
+                rows.append(candidate)
+                return
+            }
+        }
+        rows.append((0..<Self.lanes).map { _ in nextRandom() % 4 == 0 ? .coin : .open })
+    }
+
+    private mutating func obstacleRow(difficulty: Double) -> [Obstacle] {
         let free = Int(nextRandom() % UInt64(Self.lanes))
-        rows.append(
-            (0..<Self.lanes).map { index in
-                guard index != free else { return nextRandom() % 3 == 0 ? .coin : .open }
-                switch nextRandom() % 10 {
-                case 0..<4: return .train
-                case 4..<6: return .low
-                case 6..<8: return .high
-                default: return .open
-                }
-            })
+        let train = 40 + Int(15 * difficulty)
+        let open = 20 - Int(15 * difficulty)
+        return (0..<Self.lanes).map { index in
+            guard index != free else { return nextRandom() % 3 == 0 ? .coin : .open }
+            let roll = Int(nextRandom() % 100)
+            if roll < train { return .train }
+            if roll < 100 - open - 20 { return .low }
+            if roll < 100 - open { return .high }
+            return .open
+        }
+    }
+
+    /// Every lane passable in `first` can enter `second` alive: the same lane with the right move, or an adjacent
+    /// open lane (a lane change cannot also jump or slide).
+    static func canFollow(_ first: [Obstacle], with second: [Obstacle]) -> Bool {
+        first.indices.filter { first[$0] != .train }.allSatisfy { lane in
+            second.indices.contains { next in
+                (next == lane && second[next] != .train)
+                    || (abs(next - lane) == 1 && (second[next] == .open || second[next] == .coin))
+            }
+        }
     }
 
     private mutating func nextRandom() -> UInt64 {

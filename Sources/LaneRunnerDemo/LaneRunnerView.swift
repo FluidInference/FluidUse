@@ -47,8 +47,13 @@ struct LaneRunnerView: View {
                         .frame(width: 90).disabled(model.isRunning)
                         .onChange(of: model.seed) { _, _ in model.reset() }
                 }
-                Text(String(format: "Row every %.0f ms", model.rowMs)).font(.subheadline)
-                Slider(value: $model.rowMs, in: 150...800, step: 50)
+                Text(
+                    String(
+                        format: "Start at %.0f ms per row · now %.0f ms (%.1f× speed)", model.rowMs,
+                        model.currentRowMs, model.speedMultiplier)
+                )
+                .font(.subheadline)
+                Slider(value: $model.rowMs, in: 150...800, step: 50).disabled(model.isRunning)
                 Divider()
                 HStack {
                     metric("DISTANCE", "\(model.game.distance)")

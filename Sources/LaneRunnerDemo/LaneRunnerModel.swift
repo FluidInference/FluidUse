@@ -54,6 +54,10 @@ final class LaneRunnerModel: ObservableObject {
     private var decisionNumber = 0
     private var autostart = false
 
+    /// Like Subway Surfers, the run speeds up: each row is 0.5 % faster, down to 40 % of the starting interval.
+    var currentRowMs: Double { max(rowMs * 0.4, rowMs * pow(0.995, Double(game.distance))) }
+    var speedMultiplier: Double { rowMs / currentRowMs }
+
     func elapsed(at date: Date) -> Double {
         runSeconds + (runStartedAt.map { date.timeIntervalSince($0) } ?? 0)
     }
@@ -148,7 +152,7 @@ final class LaneRunnerModel: ObservableObject {
         loopTask = Task { [weak self] in
             while let self, self.isRunning, self.generation == run, !Task.isCancelled {
                 self.requestDecision(run: run)
-                try? await Task.sleep(for: .milliseconds(self.rowMs))
+                try? await Task.sleep(for: .milliseconds(self.currentRowMs))
                 guard self.isRunning, self.generation == run else { return }
                 self.advanceRow()
             }
@@ -185,8 +189,9 @@ final class LaneRunnerModel: ObservableObject {
         }
         if !game.isSafe(action) && game.legalActions.contains(where: game.isSafe) { unsafeChoices += 1 }
         let passed = game.rows[0]
+        let duration = currentRowMs / 1000
         game.step(action)
-        runner.show(game, passed: game.isOver ? nil : passed, action: action, duration: rowMs / 1000)
+        runner.show(game, passed: game.isOver ? nil : passed, action: action, duration: duration)
         if game.isOver { pause() }
     }
 
