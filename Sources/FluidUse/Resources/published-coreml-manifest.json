@@ -1,0 +1,1258 @@
+{
+ "decision-1.0-kai": {
+  "files": [
+   {
+    "path": ".gitattributes",
+    "sha256": "caf3ca02d5e883f643e939cbed54f94237f94c171797f0dfea5e25c7e33315b3",
+    "size": 1580
+   },
+   {
+    "path": "CONFIG_PROVENANCE.md",
+    "sha256": "5d4c6c5cdc78c3504d0e54bd6171237e283539c69b912ec821a15a11e58b8c2d",
+    "size": 677
+   },
+   {
+    "path": "DISTRIBUTION_TERMS.md",
+    "sha256": "54a5895871af33845ee939f2e8f37b7f821cee8e89ff25ec1fd78e9cf83e9c63",
+    "size": 1251
+   },
+   {
+    "path": "LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "size": 11358
+   },
+   {
+    "path": "LICENSES/Transformers-Apache-2.0.txt",
+    "sha256": "77fd4710def9ec3c0f6225800e0235f15a425abd4a8b03559127fcd782612049",
+    "size": 11418
+   },
+   {
+    "path": "LICENSES/Upstream-MIT.txt",
+    "sha256": "3ec44d2f046b27986e28e3b4705110a33b139e6392ef3868ff594a0453311038",
+    "size": 1191
+   },
+   {
+    "path": "LICENSES/gemma/GEMMA_PROHIBITED_USE_POLICY.html",
+    "sha256": "7e50ae0c7a6386ab51d36aa868e1d20a4fb28cbcab38778a5dbdac6a445f5a96",
+    "size": 4636
+   },
+   {
+    "path": "LICENSES/gemma/GEMMA_TERMS.html",
+    "sha256": "01ccbe2f6504a6a1364db0e5d6d91ed37309435229c322a29b20ee5daebebc1a",
+    "size": 13510
+   },
+   {
+    "path": "LICENSES/gemma/Notice",
+    "sha256": "a7b8b1b625d4a140b4dd55ee4479db7d64b5cda047f2cbc1be9d21516b470921",
+    "size": 1088
+   },
+   {
+    "path": "LICENSES/gemma/TOKENIZER_TERMS.md",
+    "sha256": "1ca30bf8cc8d1054f78ad3481ada9cf39a137cec9e383f18c3a9f0f56b8d4241",
+    "size": 1345
+   },
+   {
+    "path": "LICENSING_STATUS.md",
+    "sha256": "d712981fd50f08c9374667f99c72ec4789eec474329c6f17521e4345562aa253",
+    "size": 1530
+   },
+   {
+    "path": "NOTICE",
+    "sha256": "62465f94f94dcc229e07f6ce2bd50ffa9555ee694761f2b998dd7c95bb1d1036",
+    "size": 4371
+   },
+   {
+    "path": "README.md",
+    "sha256": "cfbaef36fe1eb50d111d628027ba3ef1778a55fc8d1621a922956a8ef0723226",
+    "size": 3582
+   },
+   {
+    "path": "config.json",
+    "sha256": "7aff915e9f159305e0bef3eb0206416f99b8560260b8969b35f1dcd54aaad1a5",
+    "size": 2769
+   },
+   {
+    "path": "conversion/README.md",
+    "sha256": "da5139c18ead79d01dd7975b842be9d71ef67a7a8a5e8d34d047af80ff07bda0",
+    "size": 818
+   },
+   {
+    "path": "conversion/assets.lock.json",
+    "sha256": "3b35033c5ebb11cd54ad8867233bee24acb0d682e3083c52ca4538693aaeaedb",
+    "size": 2005
+   },
+   {
+    "path": "conversion/packing.py",
+    "sha256": "f1dab7f032f4aaab27118606397ca67d71b1f4a2ba49e65bebcfd83a64b27819",
+    "size": 6748
+   },
+   {
+    "path": "conversion/pyproject.toml",
+    "sha256": "3596c2597762cc6dd9eafb0fece5584b7deaa56ed59de54803c1ecbe3e240732",
+    "size": 379
+   },
+   {
+    "path": "conversion/quantize_weights.py",
+    "sha256": "e0daff83c0e90315fbab6938a4f40907a8d930606bec24ae0da882fa4e915199",
+    "size": 4207
+   },
+   {
+    "path": "conversion/run.py",
+    "sha256": "7e9a3209c8970ec935057f4586f6ef7aac3c669c45f68f2ac91e62015ecc72d2",
+    "size": 4932
+   },
+   {
+    "path": "conversion/run_coreml.py",
+    "sha256": "68f184445c5147b2b804083bbe2f21ca77eeefa5e5bc67e26087a465bb55230d",
+    "size": 5796
+   },
+   {
+    "path": "conversion/typed_coreml.py",
+    "sha256": "bc74a493ee8314bf0af264f458929805d82ab154b7a219123055311e1f36ef75",
+    "size": 15856
+   },
+   {
+    "path": "conversion/upstream-decisions.jsonl",
+    "sha256": "d4b89583ccc9aa35e74dd28c46e01884103ea7a0fa018de8c34d4f88a94287f1",
+    "size": 867
+   },
+   {
+    "path": "conversion/upstream-system-one-rows.jsonl",
+    "sha256": "e56dc6a39f35fc43fcb772036734d69dd3b4febe4a830a59f2a6eeab71e82bb3",
+    "size": 937
+   },
+   {
+    "path": "conversion/upstream-system-one.json",
+    "sha256": "4f76e98c1216972a59ee1e44485f088b7c22283160a527d5259561b41b1acd03",
+    "size": 692
+   },
+   {
+    "path": "conversion/upstream_system_one.py",
+    "sha256": "6efabe0b64cd30f4d6d24bc9d9a9da9a65251357d497134302ff0b9ee3834e02",
+    "size": 10728
+   },
+   {
+    "path": "conversion/uv.lock",
+    "sha256": "2b8e1b35105823c3003fa3140fad2f613b3571f6a7cad5e859dc9b41665c0023",
+    "size": 82997
+   },
+   {
+    "path": "coreml/choice-embedding-w8.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "6902126ae4cde3760448e9c1f5548625443fa90deeb20a216de1e001334bff78",
+    "size": 319414
+   },
+   {
+    "path": "coreml/choice-embedding-w8.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "ab2ce8f30d04942ea1e6df91315ca2d3bb4adb076037c1f96f34eb844651f21d",
+    "size": 447661120
+   },
+   {
+    "path": "coreml/choice-embedding-w8.mlpackage/Manifest.json",
+    "sha256": "796d07eabe4f7782c9cc40f0ba2ec12f7e6dcd059b5b650bce4230ccb6a2305c",
+    "size": 617
+   },
+   {
+    "path": "coreml/choice.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "3b7cadee74a54877213cc444e3a81862e2369f67ab4da40208b7804a8f7d03d4",
+    "size": 335283
+   },
+   {
+    "path": "coreml/choice.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "6d302ab33c35fe3141204a1addf0dd43fea93401b49b520bc5e438a8d6ddbbd4",
+    "size": 643468160
+   },
+   {
+    "path": "coreml/choice.mlpackage/Manifest.json",
+    "sha256": "b1185071f1078647735efc36a2037b6acada38e0fddb5d91153540e5bda93913",
+    "size": 617
+   },
+   {
+    "path": "coreml/noul-embedding-w8.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "ef7b22249767d8e159590a124eea2788b4d61da78275cf81bb09118565bb10bf",
+    "size": 319414
+   },
+   {
+    "path": "coreml/noul-embedding-w8.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "2441d7b6b9a9800290dfc42a0b2d75bb1439988633ee416494b8f584ba023f3b",
+    "size": 447661120
+   },
+   {
+    "path": "coreml/noul-embedding-w8.mlpackage/Manifest.json",
+    "sha256": "6f3aff8b51d83e1be8d4f3acfd828ed1153d831377f724de4ff747c975c0f767",
+    "size": 617
+   },
+   {
+    "path": "coreml/noul.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "a570fb1d6db0d2422c07ca3d3076ea68b8c3e394c169a4aa927af8ef765c925d",
+    "size": 335283
+   },
+   {
+    "path": "coreml/noul.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "b7cc485fd81e7be6590d5d34f0bba26631bfe8dca9128627f7764d55fd796aeb",
+    "size": 643468160
+   },
+   {
+    "path": "coreml/noul.mlpackage/Manifest.json",
+    "sha256": "45724d7a16066d62adbfdda633c3662b31b2f178bc95f583bc2e8446fe4205f8",
+    "size": 617
+   },
+   {
+    "path": "coreml/score-embedding-w8.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "c29025cc1bf0d2488eb02dd11cf1b73b16a2d0df7371411c841c53154643b81b",
+    "size": 319414
+   },
+   {
+    "path": "coreml/score-embedding-w8.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "daab60f7d4597efa0d3b5426b5882334fe06c916a385d58210db1535ca6880ae",
+    "size": 447661120
+   },
+   {
+    "path": "coreml/score-embedding-w8.mlpackage/Manifest.json",
+    "sha256": "dfe40a8b902ffd01ce6c8fd7dd1155b1be37cf81d7ffe2c80873607f223a6d7c",
+    "size": 617
+   },
+   {
+    "path": "coreml/score.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "0c2f3d5b5f7ee94622822ceee7ef3f6b4a40c991254073f9895642e4f64df51f",
+    "size": 335283
+   },
+   {
+    "path": "coreml/score.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "62054bac00ffcffdf06804b22b49420a1a39da7e0f0e035022f07a8bbac29b29",
+    "size": 643468160
+   },
+   {
+    "path": "coreml/score.mlpackage/Manifest.json",
+    "sha256": "71e4a48a8ee74e91328cf283a991786f2040f99e8a1f56b9d77f2b5d2aa58bf2",
+    "size": 617
+   },
+   {
+    "path": "reports/choice-embedding-w8-validation.json",
+    "sha256": "e8ab9505edc720b487003631b6b7536d31b5a388d93c0bc63981285033f0b991",
+    "size": 800
+   },
+   {
+    "path": "reports/choice-embedding-w8.json",
+    "sha256": "106a620fa3c88c43db13bcf5d155a1e32e3cc3395758f4bc8d7990868e2328cc",
+    "size": 874
+   },
+   {
+    "path": "reports/choice-validation.json",
+    "sha256": "9aa7be952275ccf0b55a5d5e22c76719253b20f284de664ee17b269202007678",
+    "size": 804
+   },
+   {
+    "path": "reports/choice.json",
+    "sha256": "75df811ec8ce26fd1eddd91f1272bc49457044a87dd0c812b54cb7a196108901",
+    "size": 695
+   },
+   {
+    "path": "reports/embedding-w8.json",
+    "sha256": "98fa9d46a537e2aa13f3367d8e818f5e0f0fa61fc104bf23bf73a7a21be0a1ae",
+    "size": 3959
+   },
+   {
+    "path": "reports/noul-embedding-w8-validation.json",
+    "sha256": "022b9b6e68270377e78c9f113c1eb47b979ca2fab14f6bb39d40cc3af85bb678",
+    "size": 801
+   },
+   {
+    "path": "reports/noul-embedding-w8.json",
+    "sha256": "2201e4b3f3291b0db440b906f4e5101cd38fe5da30a64a47c2ee8f608d1440af",
+    "size": 868
+   },
+   {
+    "path": "reports/noul-validation.json",
+    "sha256": "8e8b10db9772fee8d7f5b96d4524ac44b7cd1383366daa4b9f9435f18ce8b190",
+    "size": 803
+   },
+   {
+    "path": "reports/noul.json",
+    "sha256": "94f3e7235f9482ed8a19585df61925cf819e524cb9309d9034d344a6c3351949",
+    "size": 693
+   },
+   {
+    "path": "reports/score-embedding-w8-validation.json",
+    "sha256": "482be6886bb9438b3a4a61c84595e5c032c38c4405a08c8f5f6547c4947453e7",
+    "size": 815
+   },
+   {
+    "path": "reports/score-embedding-w8.json",
+    "sha256": "ec0bda7fec50403ae38ba2112087c6e5320dfa51f248d402d458588345fa1cde",
+    "size": 871
+   },
+   {
+    "path": "reports/score-validation.json",
+    "sha256": "b1506d18ffce231cc0f6967aa1f69a8d3c10f801411681b6b43e271b57eeb1a8",
+    "size": 813
+   },
+   {
+    "path": "reports/score.json",
+    "sha256": "bbe49d0b47e2067b1f828a18434498eccfa9751c118e41be756954754463fcb0",
+    "size": 696
+   },
+   {
+    "path": "tokenizer/special_tokens_map.json",
+    "sha256": "6e3204c5a4004719c185007a745d1940471a6fb02521cfa0a00306dbb6bc5903",
+    "size": 1051
+   },
+   {
+    "path": "tokenizer/tokenizer.json",
+    "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+    "size": 34363188
+   },
+   {
+    "path": "tokenizer/tokenizer_config.json",
+    "sha256": "74a259bb1a3811a7e3028adcd07a65765d866d5e66e0e883f0994ccfa67e8455",
+    "size": 46470
+   }
+  ],
+  "repository": "FluidInference/decision-1.0-kai-coreml",
+  "revision": "bdb0bc4e4c0d360ab48e093b4f14bbce18369e61"
+ },
+ "decision-1.0-lex": {
+  "files": [
+   {
+    "path": ".gitattributes",
+    "sha256": "caf3ca02d5e883f643e939cbed54f94237f94c171797f0dfea5e25c7e33315b3",
+    "size": 1580
+   },
+   {
+    "path": "CONFIG_PROVENANCE.md",
+    "sha256": "774a3abf83b1c370fc4304087b98f41523c214708abd2a214f14ae1f005863cc",
+    "size": 677
+   },
+   {
+    "path": "DISTRIBUTION_TERMS.md",
+    "sha256": "54a5895871af33845ee939f2e8f37b7f821cee8e89ff25ec1fd78e9cf83e9c63",
+    "size": 1251
+   },
+   {
+    "path": "LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "size": 11358
+   },
+   {
+    "path": "LICENSES/Transformers-Apache-2.0.txt",
+    "sha256": "77fd4710def9ec3c0f6225800e0235f15a425abd4a8b03559127fcd782612049",
+    "size": 11418
+   },
+   {
+    "path": "LICENSES/Upstream-MIT.txt",
+    "sha256": "3ec44d2f046b27986e28e3b4705110a33b139e6392ef3868ff594a0453311038",
+    "size": 1191
+   },
+   {
+    "path": "LICENSES/gemma/GEMMA_PROHIBITED_USE_POLICY.html",
+    "sha256": "7e50ae0c7a6386ab51d36aa868e1d20a4fb28cbcab38778a5dbdac6a445f5a96",
+    "size": 4636
+   },
+   {
+    "path": "LICENSES/gemma/GEMMA_TERMS.html",
+    "sha256": "01ccbe2f6504a6a1364db0e5d6d91ed37309435229c322a29b20ee5daebebc1a",
+    "size": 13510
+   },
+   {
+    "path": "LICENSES/gemma/Notice",
+    "sha256": "a7b8b1b625d4a140b4dd55ee4479db7d64b5cda047f2cbc1be9d21516b470921",
+    "size": 1088
+   },
+   {
+    "path": "LICENSES/gemma/TOKENIZER_TERMS.md",
+    "sha256": "1ca30bf8cc8d1054f78ad3481ada9cf39a137cec9e383f18c3a9f0f56b8d4241",
+    "size": 1345
+   },
+   {
+    "path": "LICENSING_STATUS.md",
+    "sha256": "f82c305be9e8502c872efae0903b965ac1128109848dd2167e3fc59601cd9da0",
+    "size": 1530
+   },
+   {
+    "path": "NOTICE",
+    "sha256": "e3f71eb2a262084fa572ccbf9b65110a4feb9d8c625dc26e792beba282cdf032",
+    "size": 4371
+   },
+   {
+    "path": "README.md",
+    "sha256": "f9058db41070e82af8b7caff25dc1e9f9a6ce6dbefb66113e10366a5a4f43842",
+    "size": 3659
+   },
+   {
+    "path": "config.json",
+    "sha256": "7aff915e9f159305e0bef3eb0206416f99b8560260b8969b35f1dcd54aaad1a5",
+    "size": 2769
+   },
+   {
+    "path": "conversion/README.md",
+    "sha256": "da5139c18ead79d01dd7975b842be9d71ef67a7a8a5e8d34d047af80ff07bda0",
+    "size": 818
+   },
+   {
+    "path": "conversion/assets.lock.json",
+    "sha256": "a6da749b547bb1f925cd62542890eec69ec01e9c042b820b52398bed93db894f",
+    "size": 2005
+   },
+   {
+    "path": "conversion/packing.py",
+    "sha256": "f1dab7f032f4aaab27118606397ca67d71b1f4a2ba49e65bebcfd83a64b27819",
+    "size": 6748
+   },
+   {
+    "path": "conversion/pyproject.toml",
+    "sha256": "904d5e02a78d0ebfceb671043c31687fe9ad805d936de2c52ad5d2a4a4964d97",
+    "size": 379
+   },
+   {
+    "path": "conversion/quantize_weights.py",
+    "sha256": "e0daff83c0e90315fbab6938a4f40907a8d930606bec24ae0da882fa4e915199",
+    "size": 4207
+   },
+   {
+    "path": "conversion/run.py",
+    "sha256": "7e9a3209c8970ec935057f4586f6ef7aac3c669c45f68f2ac91e62015ecc72d2",
+    "size": 4932
+   },
+   {
+    "path": "conversion/run_coreml.py",
+    "sha256": "68f184445c5147b2b804083bbe2f21ca77eeefa5e5bc67e26087a465bb55230d",
+    "size": 5796
+   },
+   {
+    "path": "conversion/typed_coreml.py",
+    "sha256": "bc74a493ee8314bf0af264f458929805d82ab154b7a219123055311e1f36ef75",
+    "size": 15856
+   },
+   {
+    "path": "conversion/upstream-decisions.jsonl",
+    "sha256": "d4b89583ccc9aa35e74dd28c46e01884103ea7a0fa018de8c34d4f88a94287f1",
+    "size": 867
+   },
+   {
+    "path": "conversion/upstream-system-one-rows.jsonl",
+    "sha256": "e56dc6a39f35fc43fcb772036734d69dd3b4febe4a830a59f2a6eeab71e82bb3",
+    "size": 937
+   },
+   {
+    "path": "conversion/upstream-system-one.json",
+    "sha256": "0b8320ecbeded8c3229dccc52f5045f00e8d1968183bc9d1371d24e949925dcf",
+    "size": 692
+   },
+   {
+    "path": "conversion/upstream_system_one.py",
+    "sha256": "0dc61f7558eed31c9ac186827b2050c0d391c69ea3684c02e8cd9c71400b1690",
+    "size": 10728
+   },
+   {
+    "path": "conversion/uv.lock",
+    "sha256": "6cc90b814759a028593271312e3f4d3dc9085cc558eb097dde30c757aafde97a",
+    "size": 82997
+   },
+   {
+    "path": "coreml/choice.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "bc909d533315ae113a645ed1836656a6f24bf176d2d2b6bcbe492621ce2b7715",
+    "size": 335283
+   },
+   {
+    "path": "coreml/choice.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "a9b0b010a85be368a28b654169c973527e55d4a7b124d8d240b623890d75422f",
+    "size": 643468160
+   },
+   {
+    "path": "coreml/choice.mlpackage/Manifest.json",
+    "sha256": "7d19101a48426747d86b656b6294edf92798e09aed6c59bb3395b893c46cfcf5",
+    "size": 617
+   },
+   {
+    "path": "coreml/noul-embedding-w8.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "4ee646bf3fd2c1da127f225ea401f95063113ddd7289a6c78686f9239435890a",
+    "size": 319414
+   },
+   {
+    "path": "coreml/noul-embedding-w8.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "2d4700b7d66c308faa3f3e806e9d2c2e56b558aa9b8d1e1d41332e132003dcd9",
+    "size": 447661120
+   },
+   {
+    "path": "coreml/noul-embedding-w8.mlpackage/Manifest.json",
+    "sha256": "6183142fc53c9d2916b89959e73a271689467afe7c7f84a588bdbce5fc4cb697",
+    "size": 617
+   },
+   {
+    "path": "coreml/noul.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "5c4578b2d159f68ddb9895104910791a7516e160bdda6adc15f79ccabe86478a",
+    "size": 335283
+   },
+   {
+    "path": "coreml/noul.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "b4ff5ea1520b5de239c059488b5131bda42cd6e51e343eb9028e0f263cebf0de",
+    "size": 643468160
+   },
+   {
+    "path": "coreml/noul.mlpackage/Manifest.json",
+    "sha256": "229892caec0272bb1783af53dc33314efa8ab74c49c1e211f658974343eef9b3",
+    "size": 617
+   },
+   {
+    "path": "coreml/score-embedding-w8.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "e97e9ae8f9704212dcd1aab9acf2d4b15047c32def882223585f806ae8b89eb9",
+    "size": 319414
+   },
+   {
+    "path": "coreml/score-embedding-w8.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "2532b0170dfeb0f4733c007fd3c537b72d7dcfd77ac3709bc4e11617823fa6e8",
+    "size": 447661120
+   },
+   {
+    "path": "coreml/score-embedding-w8.mlpackage/Manifest.json",
+    "sha256": "1fbe1eb0a8695fbbdf2c5c66738f114975d3fd5a13a81e4cc3ed7ef278a9f162",
+    "size": 617
+   },
+   {
+    "path": "coreml/score.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "a33265cc3ef52b13ecf33c713e089f5cac2c77c2cd758326f98b444af562bb89",
+    "size": 335283
+   },
+   {
+    "path": "coreml/score.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "2658d0174bc7a597feccf2e4ab5c02221003831de0df1a44e10e67cf1a2ade62",
+    "size": 643468160
+   },
+   {
+    "path": "coreml/score.mlpackage/Manifest.json",
+    "sha256": "07cf151487466c22c50aad67383a1a1f2a768cda612d2e8a8417ab836e0fe30c",
+    "size": 617
+   },
+   {
+    "path": "reports/choice-validation.json",
+    "sha256": "1444bf0d702af8018ff6815f1e633502c2f302d50fea885936bbc32ee764a5d8",
+    "size": 810
+   },
+   {
+    "path": "reports/choice.json",
+    "sha256": "d36b99c9e24be2ef0e0112ada159b3f33b1e764d917f508007257857b27404bb",
+    "size": 743
+   },
+   {
+    "path": "reports/embedding-w8.json",
+    "sha256": "54a6d5a646d04909cafb82779fc519476ff4f9bc19dc46fdbcd530bba0518e0a",
+    "size": 3542
+   },
+   {
+    "path": "reports/noul-embedding-w8-validation.json",
+    "sha256": "f229f28542c85e19e526392836adeb48a96204b5858832c79af20aa22f3c6520",
+    "size": 804
+   },
+   {
+    "path": "reports/noul-embedding-w8.json",
+    "sha256": "bd616e0a35769a338b0dcd4f77120c4b9c6a554ab19e24c804b0d40f8e12a27f",
+    "size": 868
+   },
+   {
+    "path": "reports/noul-validation.json",
+    "sha256": "79f78777598681485490d218f830354c04824489438acbcf1b7542c053e3b5fd",
+    "size": 807
+   },
+   {
+    "path": "reports/noul.json",
+    "sha256": "1c6fd12d3e3e237b2e1c9a398f735edb036103ec2996fcc5325dbc9b0b4a42ff",
+    "size": 740
+   },
+   {
+    "path": "reports/score-embedding-w8-validation.json",
+    "sha256": "aee7267675c53a1fe34ab50b4f4aa419e266415fc443596ab15e9104a91dbc02",
+    "size": 810
+   },
+   {
+    "path": "reports/score-embedding-w8.json",
+    "sha256": "138fc6f8351134a9c83e417bc87432684020dc35023d6e8abc6574a91b6f3bb5",
+    "size": 871
+   },
+   {
+    "path": "reports/score-validation.json",
+    "sha256": "a34327d6d2a13a2e6fd6b505f43ec08c71cbf90fd38ebe7a359fb0b5bb8635db",
+    "size": 810
+   },
+   {
+    "path": "reports/score.json",
+    "sha256": "bdd137a29f747863cbb6aab770c2e9bb6b5a2ab27846909f2267b77cb5c2316b",
+    "size": 740
+   },
+   {
+    "path": "tokenizer/special_tokens_map.json",
+    "sha256": "6e3204c5a4004719c185007a745d1940471a6fb02521cfa0a00306dbb6bc5903",
+    "size": 1051
+   },
+   {
+    "path": "tokenizer/tokenizer.json",
+    "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+    "size": 34363188
+   },
+   {
+    "path": "tokenizer/tokenizer_config.json",
+    "sha256": "74a259bb1a3811a7e3028adcd07a65765d866d5e66e0e883f0994ccfa67e8455",
+    "size": 46470
+   }
+  ],
+  "repository": "FluidInference/decision-1.0-lex-coreml",
+  "revision": "6ca0547adf1997e51197a5ca0b5e45a5cb7802a2"
+ },
+ "jeff": {
+  "files": [
+   {
+    "path": ".gitattributes",
+    "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361",
+    "size": 1519
+   },
+   {
+    "path": "CONFIG_PROVENANCE.md",
+    "sha256": "08d57363a9ef29516fb8824a075bd5bd9a2a0777b167e42d56a6b7992930aff6",
+    "size": 649
+   },
+   {
+    "path": "JeffDecision-L128-FP16.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "87c0960087a6b39d6aac2e0c2511340f0197f19d471b77b2e894ca265204c1d3",
+    "size": 423429
+   },
+   {
+    "path": "JeffDecision-L128-FP16.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "25988597bb4cc8b488970f7c6a15671dcf5f422c88c01d244a35a99a6aa45ba3",
+    "size": 922387968
+   },
+   {
+    "path": "JeffDecision-L128-FP16.mlpackage/Manifest.json",
+    "sha256": "ec67b53a62bb84e85e204c25edf6d1a140c5ac1d33dc4e612694d79c749d9242",
+    "size": 617
+   },
+   {
+    "path": "JeffDecision-L128-W8.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "7f6c1c290d3723229bf5e6c22f9fa9db187957f33ed72b3063ebbf88c8073e6f",
+    "size": 443616
+   },
+   {
+    "path": "JeffDecision-L128-W8.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "10bd21357d7313872abd964923b2483c817dddc66e0ea667d10c262dcc834aae",
+    "size": 487930560
+   },
+   {
+    "path": "JeffDecision-L128-W8.mlpackage/Manifest.json",
+    "sha256": "1744498652aebc3ab6068de32aefcf32bc46c4ab1faaba1bdd1a479c8ed94049",
+    "size": 617
+   },
+   {
+    "path": "LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "size": 11358
+   },
+   {
+    "path": "README.md",
+    "sha256": "a6dc712aff6697a31bdb6b3972ac6935e2990f710a4ebdad2f82df41261df793",
+    "size": 4926
+   },
+   {
+    "path": "assets.lock.json",
+    "sha256": "d766af6e37cc8a2d8a63dbbaad72807d3a6d8dbaab34688e67ae92b166fa4f2d",
+    "size": 579
+   },
+   {
+    "path": "config.json",
+    "sha256": "80aec1c8824bd58d6733f27d78a8271420f2c7008e4b0c81313d8da09624eea4",
+    "size": 13436
+   },
+   {
+    "path": "coreml-parity-fp16.json",
+    "sha256": "b2f1a4bda79e1d0ae7fa8180574d0933dbf6e0e0a782bbd92cc79805e2bff192",
+    "size": 1621
+   },
+   {
+    "path": "export.py",
+    "sha256": "833fcadf2a772e1b46795fa3a6fa8cc47b0a2b2c1e6ee6e95200875563176d19",
+    "size": 6737
+   },
+   {
+    "path": "gliner_config.json",
+    "sha256": "80aec1c8824bd58d6733f27d78a8271420f2c7008e4b0c81313d8da09624eea4",
+    "size": 13436
+   },
+   {
+    "path": "jeff_decision.py",
+    "sha256": "ef0d2eed10f6cd89d12b001d7a67eae95aeefa26a5f1ed8732d7b8b94fefcd19",
+    "size": 3762
+   },
+   {
+    "path": "native-parity.json",
+    "sha256": "ab1ef58432e7e399990a85e38bb70ed278d174e2350acba273e1e1142c2b43cd",
+    "size": 1497
+   },
+   {
+    "path": "probe-native.py",
+    "sha256": "9943c5475518ec3f087339a564a5c33ccd6fe6154e0f22df74bf9403183c8b62",
+    "size": 2341
+   },
+   {
+    "path": "publish.py",
+    "sha256": "dce9ad35150059076ba43b224cdd1ae307970869b2268346dbda755bbf874dd8",
+    "size": 3961
+   },
+   {
+    "path": "pyproject.toml",
+    "sha256": "00df78c4cc5f6238e10b0793024789c48b980b8afd723d4715185dc58fba5314",
+    "size": 506
+   },
+   {
+    "path": "quantize.py",
+    "sha256": "2fbefbb78994236c074ed5740c87a91204a4091668ac2c20cf29251d0cf4f692",
+    "size": 2488
+   },
+   {
+    "path": "reports/w8-native.json",
+    "sha256": "fbf662a4531847656d5d0b32df1e4561afeeca93b767f4ed35ee8bda3d58121b",
+    "size": 1615
+   },
+   {
+    "path": "reports/w8-validation.json",
+    "sha256": "8582a492e7e36d2aca69d6173ac7455abc5d3ec95a3575d0d9e0a68c67063765",
+    "size": 1079
+   },
+   {
+    "path": "runtime.py",
+    "sha256": "79ea96f9e315a7132d43628038e9886e22ecc4984183e20fd9c9300e72695ef0",
+    "size": 3154
+   },
+   {
+    "path": "tokenizer.json",
+    "sha256": "2286c2dd1929d355fabff24926d90011f8c4072c520a8ed3a46edaf7c6228da0",
+    "size": 8333766
+   },
+   {
+    "path": "tokenizer_config.json",
+    "sha256": "c2043d84b0dee751af5121a7d1f0267ce63a5ea25889fbd524d7789dfff04480",
+    "size": 724
+   },
+   {
+    "path": "trace_compat.py",
+    "sha256": "cc435e7af55f1d7e33dc6571b14624eca77d6a84b6a5f0b507a9bbf2ace11f09",
+    "size": 5189
+   },
+   {
+    "path": "uv.lock",
+    "sha256": "b1736f6ae2991160d0bb7e18a445a94c429070d95a6230504bc1e0bd33f02cb5",
+    "size": 168441
+   },
+   {
+    "path": "verify.py",
+    "sha256": "048df4aa55e653d173946ee0702699b9282c13898ad928f929f088aad7686182",
+    "size": 2865
+   }
+  ],
+  "repository": "FluidInference/jeff-coreml",
+  "revision": "37e70eee651a3de62d93de229c459e850afed539"
+ },
+ "kev-0-5b": {
+  "files": [
+   {
+    "path": ".gitattributes",
+    "sha256": "caf3ca02d5e883f643e939cbed54f94237f94c171797f0dfea5e25c7e33315b3",
+    "size": 1580
+   },
+   {
+    "path": "CONFIG_PROVENANCE.md",
+    "sha256": "15093e218458873f42a8b65920830320b2e6185d42dcf23df0d65123a162fb73",
+    "size": 614
+   },
+   {
+    "path": "LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "size": 11358
+   },
+   {
+    "path": "README.md",
+    "sha256": "f42919c8bc84fce94e7e21c5b9216aa6b1787eb4b7be040d5cf07f4d23fca5d3",
+    "size": 3941
+   },
+   {
+    "path": "RESULTS.md",
+    "sha256": "81e0b46b2794fc73dfa19f63d77d70188e8e759cfff1adcaa1c6500af56d8ee9",
+    "size": 2914
+   },
+   {
+    "path": "assets.lock.json",
+    "sha256": "d5779f8e863f6c02bb1eab34c1d5e71f630bb640e8619a3b56d825b077bb2b73",
+    "size": 370
+   },
+   {
+    "path": "assets.py",
+    "sha256": "52b1547eef1acf00162bed8f837741e5d0cbf2a42d8db8f2269ab90423c62a5f",
+    "size": 869
+   },
+   {
+    "path": "config.json",
+    "sha256": "479dcf0c5286339e41ad3992cd08ae88a467c4187587936248e2b7c96283484b",
+    "size": 681
+   },
+   {
+    "path": "convert-coreml.py",
+    "sha256": "3244215347f34c33634898bcc64cf67d21e2047913ab262c7e95353d83d10717",
+    "size": 5085
+   },
+   {
+    "path": "export_model.py",
+    "sha256": "db58d8144643eab481e699591de47a7dba7d33da856d43471ed9951c102bcec0",
+    "size": 4840
+   },
+   {
+    "path": "fallback-L128.json",
+    "sha256": "68402444a9d6f3b5018b2427302b1294ae789d90d834b39197e68aa1068f2338",
+    "size": 1434
+   },
+   {
+    "path": "kev_0_5b_e8_L128_options32.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "179eb772df2060b32407fe280f21b059b7a6f3576762326fa40431761d9d9bdf",
+    "size": 468685
+   },
+   {
+    "path": "kev_0_5b_e8_L128_options32.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "4e8b8bc861774f0bd3dec4dfe27caea67c01bba5ad532fff5a54c5da5aebc6b7",
+    "size": 853434496
+   },
+   {
+    "path": "kev_0_5b_e8_L128_options32.mlpackage/Manifest.json",
+    "sha256": "a3986c27452e6f1bb29aa4fa981044ca5e306f9d68afeca1ace90929a9244b24",
+    "size": 617
+   },
+   {
+    "path": "kev_0_5b_fp16_L128_options32.conversion.json",
+    "sha256": "dfc06f30a5d90c37d178028a25ad859986eadeb53a0661f08bd3da1d47e525e1",
+    "size": 747
+   },
+   {
+    "path": "kev_0_5b_fp16_L128_options32.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "0632b5b22211f93a759bbc448728a22af90346adb8f142ad1af9edfba3dca15e",
+    "size": 467324
+   },
+   {
+    "path": "kev_0_5b_fp16_L128_options32.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "0e121f9778fd1ddc41a475f3a843aa136ecf2981d4e9976e9f0f848372905411",
+    "size": 989113216
+   },
+   {
+    "path": "kev_0_5b_fp16_L128_options32.mlpackage/Manifest.json",
+    "sha256": "69928dc49781ee2597e2bdb06d931679ef5f471d4d01b9dc76bba5f242ec766a",
+    "size": 617
+   },
+   {
+    "path": "preprocessing.py",
+    "sha256": "aabc410719c0c5da9972a612bee8e0428b11e0677c1c585516034c04298a9773",
+    "size": 3182
+   },
+   {
+    "path": "profile-L128.json",
+    "sha256": "6921ad40222bbdf230a0dd0508f451c7e0b1ea926b7aede3767e128e7495e84e",
+    "size": 2514
+   },
+   {
+    "path": "pyproject.toml",
+    "sha256": "0a6bf5881439314be0dd00698b3456638b720bb68e0a239801251c421b90f387",
+    "size": 565
+   },
+   {
+    "path": "quantize.py",
+    "sha256": "0ab1a978042228e8f462fa966b452baeaecc0520c398dfbfcf867e1da8796bb7",
+    "size": 3583
+   },
+   {
+    "path": "reports/e8-selected20.json",
+    "sha256": "a415c4dfe4bac47a8a2d09072ff1613fb632d02a7ca7c912d1b6c25af4253d00",
+    "size": 4220
+   },
+   {
+    "path": "runtime.py",
+    "sha256": "a36dca37d4ea71289a99babaa5a9c07f2a634650c089d3c91b8fe7bdb6e8791c",
+    "size": 3522
+   },
+   {
+    "path": "tests/test_e8_release.py",
+    "sha256": "f10fb6409aa5892f8f9617298fdbfb97831f19e7f48f50e9baf0dc3f651b1a4a",
+    "size": 1205
+   },
+   {
+    "path": "tokenizer/chat_template.jinja",
+    "sha256": "44d5f08f3f72b837eaad09f13a54c1f9f4eb58d75240334548b7fd52a5437fa5",
+    "size": 2427
+   },
+   {
+    "path": "tokenizer/tokenizer.json",
+    "sha256": "3fd169731d2cbde95e10bf356d66d5997fd885dd8dbb6fb4684da3f23b2585d8",
+    "size": 11421892
+   },
+   {
+    "path": "tokenizer/tokenizer_config.json",
+    "sha256": "5f007d04324afa93876e2a484190e868136c69dfe0e1a29a1063eae583df9d32",
+    "size": 696
+   },
+   {
+    "path": "uv.lock",
+    "sha256": "bba4233e07e436bbb5eef33860ec2cf70880263fe21c4a3bdf942abc056f04c6",
+    "size": 169966
+   },
+   {
+    "path": "validation.json",
+    "sha256": "12ecd1b3f7b08c87d3f67bf4271c466c4d8d0e37da3b93dd7e054a3e9de5ac4e",
+    "size": 293
+   },
+   {
+    "path": "verify.py",
+    "sha256": "dea21dd0cc7eba3f2bd81e08d7919cb64bfd0ea2a0ae845f2a1efb4826affdab",
+    "size": 6141
+   }
+  ],
+  "repository": "FluidInference/kev-0-5b-coreml",
+  "revision": "06b6bad2c1209d96d1f87600ccfcaee01959a788"
+ },
+ "kev-0.6b": {
+  "files": [
+   {
+    "path": ".gitattributes",
+    "sha256": "caf3ca02d5e883f643e939cbed54f94237f94c171797f0dfea5e25c7e33315b3",
+    "size": 1580
+   },
+   {
+    "path": "CONFIG_PROVENANCE.md",
+    "sha256": "913d62f17521fd92c2d5b898d4d32c025669963385694afcd8f17f6e53b83927",
+    "size": 620
+   },
+   {
+    "path": "LICENSE",
+    "sha256": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+    "size": 11343
+   },
+   {
+    "path": "README.md",
+    "sha256": "b0f0586580ab92591494c99981588edff15bb6c17a44cfafe211cf4cb9cdd118",
+    "size": 3490
+   },
+   {
+    "path": "config.json",
+    "sha256": "504a6b58c4271583724e66584b6b7698aea18450209df6b2f7582df0e89cee59",
+    "size": 727
+   },
+   {
+    "path": "config/training_config.json",
+    "sha256": "ab20e55cbb832f409de9daf42f868b69be1eb59e51720302b166bc560fd8d240",
+    "size": 1047
+   },
+   {
+    "path": "kev_0_6b_fp16_L128_options32.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "c03aa4f7b5a4461eb8d4d10f5bf52e2dfcea1d8785031b5648f190c8a9419f8e",
+    "size": 631533
+   },
+   {
+    "path": "kev_0_6b_fp16_L128_options32.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "b34c693854533fa3a1599aee332766679272c5accff2cca96ed9dbc4f847eb7f",
+    "size": 1193346240
+   },
+   {
+    "path": "kev_0_6b_fp16_L128_options32.mlpackage/Manifest.json",
+    "sha256": "8dc984956fa420394adc1c876b6c00c543473ce7c2a0557677f4c6a6fbdd2be8",
+    "size": 617
+   },
+   {
+    "path": "kev_0_6b_w8_L128_options32.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "70c6fe822cc67f08afdab2f4f54166484da91b61f00f07782412d1ba4324c82a",
+    "size": 677340
+   },
+   {
+    "path": "kev_0_6b_w8_L128_options32.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "985a18142d4702bd89458924c63b8bf51b71d3e0a55c172ed82a7e90ad8cbf33",
+    "size": 598001984
+   },
+   {
+    "path": "kev_0_6b_w8_L128_options32.mlpackage/Manifest.json",
+    "sha256": "bf3caf8a03964b75c44c919f5c84a573b16a1f6de2e8f99736ae18032de9342f",
+    "size": 617
+   },
+   {
+    "path": "source/README.md",
+    "sha256": "1d7d5667843414d7a100e5cdcec42f58102c893488eaa849674e0d95b7438454",
+    "size": 2983
+   },
+   {
+    "path": "source/RESULTS.md",
+    "sha256": "9fce938a85f7df126759a5069b8f3abc6bbf2ca432bafd3fdc4157859a5ebfe3",
+    "size": 1556
+   },
+   {
+    "path": "source/STATUS.md",
+    "sha256": "060da6584581658fd80dc5d3a68aef8da73d4a66158df5fef27cdf9bf2b2f860",
+    "size": 748
+   },
+   {
+    "path": "source/assets.lock.json",
+    "sha256": "f0bdc595595665c181c49c81cf35e1979de7b7077b5ae0c4ffbc9a372841173c",
+    "size": 581
+   },
+   {
+    "path": "source/assets.py",
+    "sha256": "dd4aed133339ac980a4baa45c4e9ba3afd3b7fac76b691ab5eef3485d204bad3",
+    "size": 1130
+   },
+   {
+    "path": "source/convert-coreml.py",
+    "sha256": "32d99ef3a1c1e4cc85c6988a7efc89fa949594a652b8a7b0fe447ede4defe869",
+    "size": 5084
+   },
+   {
+    "path": "source/export_model.py",
+    "sha256": "13a2b101caecf2c2649ac0d1403d44aa397ad7ce8ba0b17165b41832be82d6ca",
+    "size": 4899
+   },
+   {
+    "path": "source/preprocessing.py",
+    "sha256": "473d234bf3548aac7749da5c2b15fd54c4d74c04009bbbc8bff70cddbc2a385f",
+    "size": 3236
+   },
+   {
+    "path": "source/publish-hf.py",
+    "sha256": "70e1327ca095ac1bd14eb53e757119136172b2dc871745e108a21d8b2f1975f3",
+    "size": 4240
+   },
+   {
+    "path": "source/pyproject.toml",
+    "sha256": "096d47bdcd87fce1198ea69d35e70115cafdb7b23f841c89509bb184605dc608",
+    "size": 565
+   },
+   {
+    "path": "source/quantize.py",
+    "sha256": "6147d2f234d647b7c78219eba5ec847f6f249a550848f9ec8cc5a1146e28fdfa",
+    "size": 3299
+   },
+   {
+    "path": "source/reports/standalone-runtime.json",
+    "sha256": "cda3a6e2a89ce208299e23be0e78f60547a13c6ee530bf212f2af5e09b869c48",
+    "size": 1601
+   },
+   {
+    "path": "source/runtime.py",
+    "sha256": "ebb5be798e157d797be93e3f2a590d9e5c8e333a03ac79129a0cdcb86994ec27",
+    "size": 2884
+   },
+   {
+    "path": "source/tests/test_real_model_parity.py",
+    "sha256": "315900166b44113b8593e9f60b9f4b9c72cac6ba0ee5dd005413831e0965a69e",
+    "size": 1402
+   },
+   {
+    "path": "source/tests/test_standalone_runtime.py",
+    "sha256": "c131c33089cfe77b0a622dc705417beccbaa6eece955277fc1df11cf866ded59",
+    "size": 2692
+   },
+   {
+    "path": "source/uv.lock",
+    "sha256": "4d710e523596c6a67b3108f9d3537770cd9c6d1801e6258fc0630c58c754fcc3",
+    "size": 169966
+   },
+   {
+    "path": "source/verify.py",
+    "sha256": "f5aeb2c12a8275fca1522b39ef0b6e8d128f8b7d5488db20ba9742c6911bcf4d",
+    "size": 6449
+   },
+   {
+    "path": "tokenizer/added_tokens.json",
+    "sha256": "c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680",
+    "size": 707
+   },
+   {
+    "path": "tokenizer/merges.txt",
+    "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+    "size": 1671853
+   },
+   {
+    "path": "tokenizer/special_tokens_map.json",
+    "sha256": "6676f091c8bc4d1b50146427cfde92073402866b87b6e39223227931b70083e9",
+    "size": 616
+   },
+   {
+    "path": "tokenizer/tokenizer.json",
+    "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+    "size": 11422654
+   },
+   {
+    "path": "tokenizer/tokenizer_config.json",
+    "sha256": "67e5a0a11cd35f9c00ee52e0af4cdc0baa75fea0cb5fce7d1beb251b4621d15c",
+    "size": 5407
+   },
+   {
+    "path": "tokenizer/vocab.json",
+    "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+    "size": 2776833
+   }
+  ],
+  "repository": "FluidInference/kev-0.6b-coreml",
+  "revision": "f2a24a115626e2be75f0a8816448ff0f34520c16"
+ },
+ "lfm2-5-350m-rlcd": {
+  "files": [
+   {
+    "path": ".gitattributes",
+    "sha256": "11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361",
+    "size": 1519
+   },
+   {
+    "path": "CONVERSION.md",
+    "sha256": "9af277a79bab9b444dc1116ea6774a4ed2f00deeb72ef1afe76bd57789ad8bb1",
+    "size": 2020
+   },
+   {
+    "path": "LICENSE-CODE",
+    "sha256": "de146682eff5da167d12c415f2c99489b82e7470f42cd244d96d73b616c10db9",
+    "size": 1205
+   },
+   {
+    "path": "LICENSE-LFM",
+    "sha256": "4d28ca14dedc0b3d0fcc2b3339f0e79931faa33874f3d24f522183a8fc70068c",
+    "size": 10574
+   },
+   {
+    "path": "README.md",
+    "sha256": "2107124f91d8906832742a16cf4072daf43b32b1d10a4d84a8a84fc6013fa1a9",
+    "size": 3711
+   },
+   {
+    "path": "assets.lock.json",
+    "sha256": "ac37b6ca231d20c17dc781aeb3e22c7a7a3af22717c27f76bae16fca70107b8d",
+    "size": 725
+   },
+   {
+    "path": "chat_template.jinja",
+    "sha256": "ba551d58630afa3190b1be3602e28301f3d2e9bbac978dfc49d6d825171648b6",
+    "size": 5487
+   },
+   {
+    "path": "config.json",
+    "sha256": "720b43d6ddc2ed25be23eed355aefcf342434a176dedad23dbe0a5e3ac24bbb8",
+    "size": 1281
+   },
+   {
+    "path": "convert-coreml.py",
+    "sha256": "02522fd4219cf0b9be1063a9721ba652fcf7d66c224f959ed7618cf8ee1a899d",
+    "size": 9090
+   },
+   {
+    "path": "decision.py",
+    "sha256": "8569003bba7c5a93c376010c305fcf69132b4cccb846639dcc51d39f1a0d73a5",
+    "size": 2171
+   },
+   {
+    "path": "fixtures.py",
+    "sha256": "e18eda57f801ef2c4013c7f5ccf983bf7a6da301a7d758f85b304d83540778e0",
+    "size": 405
+   },
+   {
+    "path": "lfm350_rlcd_fp16_L256_B8_V16.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "sha256": "d552a71cad3633fe99ec1ddf796bd22fb8686549c0c9bcd55b59f5cb7da85f9d",
+    "size": 238613
+   },
+   {
+    "path": "lfm350_rlcd_fp16_L256_B8_V16.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "sha256": "b7ecf05949a1c96540c0741ae27cd0efc0e27b72839c2fa3a5a4ed1a3b531f65",
+    "size": 709324096
+   },
+   {
+    "path": "lfm350_rlcd_fp16_L256_B8_V16.mlpackage/Manifest.json",
+    "sha256": "c83f9b5a5827d437bb89068838beb296646ddb869746ba1a9bf74682b8bc6674",
+    "size": 617
+   },
+   {
+    "path": "preprocessing.py",
+    "sha256": "bf6c10d347a4544708b900e3abbfba098f2ed32465fb1d4b912423096a40b310",
+    "size": 5133
+   },
+   {
+    "path": "publish.py",
+    "sha256": "9cc3dc9bac4b16addc68e90f026fe25b66c4cf401e351f4f22373c130169a630",
+    "size": 3151
+   },
+   {
+    "path": "pyproject.toml",
+    "sha256": "aed73d977dba4a8651e581dba4448141f917ab1a2f5ba123a9e2b0afa975d7a8",
+    "size": 462
+   },
+   {
+    "path": "release_integrity.py",
+    "sha256": "4ee5faffc42bd954a632afa6798777d989a52509b9157ac432b87daa0f60c905",
+    "size": 2437
+   },
+   {
+    "path": "reports/fp16-all-upstream9.json",
+    "sha256": "d2b51c54ca9fe9fd2ba1922c309948a63ecdf8ad208d82c1ebd02ac854760adb",
+    "size": 6346
+   },
+   {
+    "path": "reports/fp16-conversion.json",
+    "sha256": "3dc63da5933bfde46d04ec185d78f91fcf997b9bf9ec7251a8097a34960b7150",
+    "size": 707
+   },
+   {
+    "path": "reports/fp16-cpu-ane-failure.json",
+    "sha256": "4ee9d398b580e4600ea196b65bc258646e2c6d2faab47c755f33f9161d7e4605",
+    "size": 439
+   },
+   {
+    "path": "reports/fp16-cpu-failure.json",
+    "sha256": "05852aa7ef30a7a5198e0fb64b708ca95ea79cff6420ab35b1f7bfa8ec0ffc6f",
+    "size": 465
+   },
+   {
+    "path": "reports/fp32-conversion.json",
+    "sha256": "682441cfe80ac5bb88fcb032f44de36d9eb907f121c73ec1f8b5b06d14ac5a56",
+    "size": 291
+   },
+   {
+    "path": "reports/fp32-cpu-ane-fixture.json",
+    "sha256": "c16e037b92e39f456cdf8f55a25fc8fc5d17ec59bb77e63c05047346e677555d",
+    "size": 524
+   },
+   {
+    "path": "reports/native-parity.json",
+    "sha256": "f70ffc64f1254ab4f783e6f719a12e561237eaa76dd958ed71c62b9ca5afa78a",
+    "size": 611
+   },
+   {
+    "path": "runtime-requirements.txt",
+    "sha256": "a11fddc068d2c0dec39e01fd5bf3f00f28e072fabf487d729a4512427b74b53c",
+    "size": 70
+   },
+   {
+    "path": "runtime.py",
+    "sha256": "345f7346858473e2023a476f756a55099b68eef13fffc20f231c757f9b5abebd",
+    "size": 2521
+   },
+   {
+    "path": "tokenizer.json",
+    "sha256": "df1d8d5ec5d091b460562ffd545e4a5e91d17d4a0db7ebe733be34ed374377bd",
+    "size": 4733389
+   },
+   {
+    "path": "tokenizer_config.json",
+    "sha256": "3701f370c70034d06e28947ff51c1063983393319f429e3ce58f06a45fae67cc",
+    "size": 595
+   },
+   {
+    "path": "uv.lock",
+    "sha256": "9c6fb6fa991688ea9c8b52c22e7916ae2a1c316d0f8d1e842519fb27a24bba34",
+    "size": 90966
+   },
+   {
+    "path": "verify-coreml.py",
+    "sha256": "f9cac046342794642e558bf4f3ff231c0f4c45af5ac762098066779b12f21a5f",
+    "size": 4044
+   },
+   {
+    "path": "verify-native.py",
+    "sha256": "ba39652f7e9b24277348eaa841d385eb2b75623a6400cd223288a484b6910fc4",
+    "size": 2816
+   }
+  ],
+  "repository": "FluidInference/lfm2-5-350m-rlcd-coreml",
+  "revision": "78cd6a54f3704c9cd4fc8bce904455da8786f3b0"
+ }
+}

@@ -15,7 +15,12 @@ final class GLiNER2IntegrationTests: XCTestCase {
     }
 
     private func directory(for variant: GLiNER2Variant) throws -> URL {
-        let variable = variant == .base ? "FLUIDUSE_GLINER2_BASE_MODEL_DIR" : "FLUIDUSE_GLINER2_MULTI_MODEL_DIR"
+        let variable: String
+        switch variant {
+        case .small: variable = "FLUIDUSE_GLINER2_SMALL_MODEL_DIR"
+        case .base: variable = "FLUIDUSE_GLINER2_BASE_MODEL_DIR"
+        case .multilingual: variable = "FLUIDUSE_GLINER2_MULTI_MODEL_DIR"
+        }
         guard let path = ProcessInfo.processInfo.environment[variable], !path.isEmpty else {
             throw XCTSkip("Set \(variable) to run real GLiNER 2.5 integration tests")
         }
@@ -23,7 +28,7 @@ final class GLiNER2IntegrationTests: XCTestCase {
     }
 
     private func references(for variant: GLiNER2Variant) throws -> [Reference] {
-        let name = variant == .base ? "gliner2-base-sequences" : "gliner2-multilingual-sequences"
+        let name = variant == .multilingual ? "gliner2-multilingual-sequences" : "gliner2-base-sequences"
         guard let file = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures") else {
             XCTFail("Missing \(name) fixture")
             return []
@@ -33,6 +38,19 @@ final class GLiNER2IntegrationTests: XCTestCase {
 
     func testBaseMatchesReference() async throws {
         try await check(variant: .base)
+    }
+
+    func testSmallUsesPublishedTokenizerAndPackage() async throws {
+        let manager = try await GLiNER2Manager.load(
+            from: directory(for: .small), variant: .small, computeUnits: .cpuOnly)
+        for item in try references(for: .small) {
+            let sequence = try manager.tokenSequence(text: item.text, task: item.task, labels: item.labels)
+            XCTAssertEqual(sequence.ids, item.ids)
+            XCTAssertEqual(sequence.markers, item.markers)
+            let answer = try await manager.classify(text: item.text, task: item.task, labels: item.labels)
+            XCTAssertEqual(answer.probabilities.count, item.labels.count)
+            XCTAssertTrue(answer.probabilities.allSatisfy(\.isFinite))
+        }
     }
 
     func testMultilingualMatchesReference() async throws {
@@ -67,6 +85,8 @@ final class GLiNER2IntegrationTests: XCTestCase {
     }
 
     func testModelNamesPointToPublishedW8Packages() {
+        XCTAssertEqual(
+            GLiNER2Variant.small.packageName, "gliner2_small_classification_embedding_w8_L128_K8.mlpackage")
         XCTAssertEqual(
             GLiNER2Variant.base.packageName, "gliner2_base_classification_embedding_w8_L128_K8.mlpackage")
         XCTAssertEqual(
