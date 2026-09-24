@@ -5,7 +5,8 @@ import ImageIO
 
 /// `fluiduse-cua-s1` -- Cua-S1-4B-0.2 Core ML runtime checks.
 ///
-///   parity --models <dir> --fixtures <swift-text.json|swift-multimodal.json> [--screens <dir>] [--variant w8]
+///   parity --models <dir>|hub [--cache <dir>] --fixtures <swift-text.json|swift-multimodal.json>
+///          [--screens <dir>] [--variant w8|gptq]
 ///
 /// Rebuilds each fixture prompt with `CuaS1FourBPrompt`, checks the chat string and token ids against the
 /// Python reference, runs the Core ML model and compares the letter softmax with the fp32 reference.
@@ -64,7 +65,9 @@ func loadImage(_ url: URL) throws -> CGImage {
 
 func parity(_ args: [String]) async throws {
     guard let models = value("--models", in: args), let fixturesPath = value("--fixtures", in: args) else {
-        print("usage: parity --models <dir> --fixtures <swift-*.json> [--screens <dir>] [--variant w8]")
+        print(
+            "usage: parity --models <dir>|hub [--cache <dir>] --fixtures <swift-*.json> [--screens <dir>] [--variant w8|gptq]"
+        )
         exit(2)
     }
     let fixtures = try snakeCaseDecoder().decode(
@@ -77,7 +80,16 @@ func parity(_ args: [String]) async throws {
         configuration.lengths = lengths.split(separator: ",").compactMap { Int($0) }
     }
     let loadStart = Date()
-    let manager = try await CuaS1FourBManager.load(from: URL(fileURLWithPath: models), configuration: configuration)
+    let manager: CuaS1FourBManager
+    if models == "hub" {
+        // pinned, SHA-256 checked download into --cache (default: the FluidUse model cache)
+        let cache = value("--cache", in: args).map { URL(fileURLWithPath: $0) }
+        manager = try await CuaS1FourBManager.load(configuration: configuration, cacheDirectory: cache) { file, bytes in
+            if bytes > 0 { print("  downloaded \(file) (\(bytes / 1_048_576) MB)") }
+        }
+    } else {
+        manager = try await CuaS1FourBManager.load(from: URL(fileURLWithPath: models), configuration: configuration)
+    }
     print(String(format: "loaded %@ in %.1f s", modality.rawValue, Date().timeIntervalSince(loadStart)))
     let warmStart = Date()
     try await manager.prewarm()
