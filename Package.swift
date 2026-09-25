@@ -45,6 +45,11 @@ let package = Package(
             dependencies: ["FluidUse", "Game2048"],
             exclude: ["README.md"]
         ),
+        .target(name: "SortAnything", dependencies: ["FluidUse"]),
+        .executableTarget(name: "SortAnythingCheck", dependencies: ["SortAnything"]),
+        .executableTarget(name: "SortDecisionsCheck", dependencies: ["SortAnything"]),
+        .executableTarget(name: "SortDecisionsDemo", dependencies: ["SortAnything"], exclude: ["README.md"]),
+        .executableTarget(name: "SortAnythingDemo", dependencies: ["SortAnything"], exclude: ["README.md"]),
         .testTarget(
             name: "FluidUseTests", dependencies: ["FluidUse", "LayaTetris"],
             resources: [.copy("Fixtures")]

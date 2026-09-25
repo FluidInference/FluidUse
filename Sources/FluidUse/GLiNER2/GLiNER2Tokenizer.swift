@@ -152,25 +152,36 @@ public struct GLiNER2Tokenizer: Sendable {
     public func classificationSequence(
         text: String, task: String, labels: [String]
     ) throws -> (ids: [Int], markers: [Int]) {
+        let sequence = try classificationSequence(text: text, heads: [(task, labels)])
+        return (sequence.ids, sequence.markers[0])
+    }
+
+    /// Several classification heads in one schema, joined by `[SEP_STRUCT]` as GLiNER's SchemaTransformer does.
+    /// `markers[h]` holds the token position of each `[L]` marker of head `h`.
+    public func classificationSequence(
+        text: String, heads: [(task: String, labels: [String])]
+    ) throws -> (ids: [Int], markers: [[Int]]) {
         var source = text
         if source.isEmpty || !source.hasSuffix(".") && !source.hasSuffix("!") && !source.hasSuffix("?") {
             source += "."
         }
-        var items = ["(", "[P]", task, "("]
-        for label in labels {
-            items.append("[L]")
-            items.append(label)
-        }
-        items += [")", ")", "[SEP_TEXT]"]
-        items += try Self.splitText(source)
-
         var ids: [Int] = []
-        var markers: [Int] = []
-        for (index, item) in items.enumerated() {
-            if index >= 4 && index < 4 + labels.count * 2 && index.isMultiple(of: 2) {
-                markers.append(ids.count)
+        var markers: [[Int]] = []
+        for (index, head) in heads.enumerated() {
+            if index > 0 { ids += encode("[SEP_STRUCT]") }
+            ids += encode("(") + encode("[P]") + encode(head.task) + encode("(")
+            var positions: [Int] = []
+            for label in head.labels {
+                positions.append(ids.count)
+                ids.append(labelTokenId)
+                ids += encode(label)
             }
-            ids.append(contentsOf: encode(item))
+            ids += encode(")") + encode(")")
+            markers.append(positions)
+        }
+        ids.append(separatorTokenId)
+        for word in try Self.splitText(source) {
+            ids += encode(word)
         }
         return (ids, markers)
     }
