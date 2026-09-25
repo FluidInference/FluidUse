@@ -20,7 +20,7 @@ final class GLiNER2IntegrationTests: XCTestCase {
         case .small: variable = "FLUIDUSE_GLINER2_SMALL_MODEL_DIR"
         case .base: variable = "FLUIDUSE_GLINER2_BASE_MODEL_DIR"
         case .multilingual: variable = "FLUIDUSE_GLINER2_MULTI_MODEL_DIR"
-        case .decide: variable = "FLUIDUSE_GLINER2_DECIDE_MODEL_DIR"
+        case .decide, .decideLong: variable = "FLUIDUSE_GLINER2_DECIDE_MODEL_DIR"
         }
         guard let path = ProcessInfo.processInfo.environment[variable], !path.isEmpty else {
             throw XCTSkip("Set \(variable) to run real GLiNER 2.5 integration tests")
