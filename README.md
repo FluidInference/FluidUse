@@ -1,5 +1,11 @@
 # FluidUse
 
+<div align="center">
+
+<a href="https://trendshift.io/repositories/254497?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-254497" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/254497/daily?language=Swift" alt="FluidInference%2FFluidUse | Trendshift" width="250" height="55"/></a>
+
+</div>
+
 See [decision-model runtime support](Documentation/DecisionModelSupport.md) for the current Core ML model matrix and handoff notes.
 
 Local computer use on Apple silicon. FluidUse reads a form in a running Mac
