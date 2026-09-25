@@ -22,7 +22,7 @@ https://github.com/user-attachments/assets/a0b31285-05be-4bcf-a645-4283eb327c35
 ## Use
 
 ```swift
-.package(url: "https://github.com/FluidInference/FluidUse.git", from: "0.2.1")
+.package(url: "https://github.com/FluidInference/FluidUse.git", from: "0.3.0")
 ```
 
 ```swift
