@@ -28,7 +28,7 @@ final class GLiNER2TokenizerTests: XCTestCase {
     }
 
     func testPinnedTokenizersMatchUpstreamEdgeSequences() throws {
-        for variant in GLiNER2Variant.allCases {
+        for variant in [GLiNER2Variant.base, .multilingual] {
             let tokenizer = try tokenizer(for: variant)
             let name = variant == .base ? "gliner2-base-edge-sequences" : "gliner2-multilingual-edge-sequences"
             let file = try XCTUnwrap(

@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// Downloads the pinned, eight-bit GLiNER 2.5 classification packages from Hugging Face.
+/// Downloads the pinned GLiNER 2.5 classification packages from Hugging Face.
 public enum GLiNER2ModelStore {
     public typealias Progress = @Sendable (_ file: String, _ bytes: Int64) -> Void
 
@@ -15,6 +15,7 @@ public enum GLiNER2ModelStore {
         case .small: "9dcac8a315ca49e71412cf5dec2ee7b7609b614e"
         case .base: "c1843f2c193b11b05f09ac7f258cb9202d8f5e71"
         case .multilingual: "5dab512eb89b88a3680bd6c86841877c3ea49893"
+        case .decide, .decideLong: "cd0d7b1ef32b10e1e3a5a73c9d9ac8411d819c5a"
         }
     }
 
@@ -88,10 +89,52 @@ public enum GLiNER2ModelStore {
                     path: "\(package)/Data/com.apple.CoreML/weights/weight.bin",
                     sha256: "655460ce8e9420b55130f3b6b976d4797aa197cd14c909aee96967cea24d766e"),
             ]
+        case .decide:
+            return [
+                Asset(path: "config.json", sha256: "e748e5b80575471c91b3f0dd00f513ba58242544fcb7e1236e0021e61abd7673"),
+                Asset(
+                    path: "encoder_config/config.json",
+                    sha256: "bd32f1484ba5a199f7a63df44df3814b839fffcf6e64478323c4689868ef6015"),
+                Asset(
+                    path: "tokenizer.json", sha256: "3ad87d9ffe669147063e70850927dd2da90249e2acc5c8527f1eb65df467bcc8"),
+                Asset(
+                    path: "tokenizer_config.json",
+                    sha256: "323199a4e946039410899f3779f2aa3eaef1500213c512727ad0f623d4f21309"),
+                Asset(
+                    path: "\(package)/Manifest.json",
+                    sha256: "6d62c3f4c7331d836cebf29c541815e0c6d7da9e4612ee45ca726847acbf6ed8"),
+                Asset(
+                    path: "\(package)/Data/com.apple.CoreML/model.mlmodel",
+                    sha256: "b9d4d8a497ea986b5d3163259694e8fc2571c9e7e2cdca2bf1b568bab8111c2a"),
+                Asset(
+                    path: "\(package)/Data/com.apple.CoreML/weights/weight.bin",
+                    sha256: "54501158f56baf0ebe295d99ac251eb0204cea2594881062b731bef9154032e2"),
+            ]
+        case .decideLong:
+            return [
+                Asset(path: "config.json", sha256: "e748e5b80575471c91b3f0dd00f513ba58242544fcb7e1236e0021e61abd7673"),
+                Asset(
+                    path: "encoder_config/config.json",
+                    sha256: "bd32f1484ba5a199f7a63df44df3814b839fffcf6e64478323c4689868ef6015"),
+                Asset(
+                    path: "tokenizer.json", sha256: "3ad87d9ffe669147063e70850927dd2da90249e2acc5c8527f1eb65df467bcc8"),
+                Asset(
+                    path: "tokenizer_config.json",
+                    sha256: "323199a4e946039410899f3779f2aa3eaef1500213c512727ad0f623d4f21309"),
+                Asset(
+                    path: "\(package)/Manifest.json",
+                    sha256: "542249fd40bfd27f7da11b303dda14932e8027be4279aab5e65d1c9abcc730c2"),
+                Asset(
+                    path: "\(package)/Data/com.apple.CoreML/model.mlmodel",
+                    sha256: "626d74aac1448e0666e5a80d79302139dfd84d5ca80c44ec213c1c6a5497d823"),
+                Asset(
+                    path: "\(package)/Data/com.apple.CoreML/weights/weight.bin",
+                    sha256: "54501158f56baf0ebe295d99ac251eb0204cea2594881062b731bef9154032e2"),
+            ]
         }
     }
 
-    /// Ensure one variant's tokenizer and W8 Core ML package exist in the FluidUse cache.
+    /// Ensure one variant's tokenizer and Core ML package exist in the FluidUse cache.
     public static func ensure(
         variant: GLiNER2Variant, cacheDirectory: URL? = nil, progress: Progress? = nil
     ) async throws -> URL {

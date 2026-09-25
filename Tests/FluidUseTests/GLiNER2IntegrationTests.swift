@@ -20,6 +20,7 @@ final class GLiNER2IntegrationTests: XCTestCase {
         case .small: variable = "FLUIDUSE_GLINER2_SMALL_MODEL_DIR"
         case .base: variable = "FLUIDUSE_GLINER2_BASE_MODEL_DIR"
         case .multilingual: variable = "FLUIDUSE_GLINER2_MULTI_MODEL_DIR"
+        case .decide: variable = "FLUIDUSE_GLINER2_DECIDE_MODEL_DIR"
         }
         guard let path = ProcessInfo.processInfo.environment[variable], !path.isEmpty else {
             throw XCTSkip("Set \(variable) to run real GLiNER 2.5 integration tests")
@@ -92,5 +93,12 @@ final class GLiNER2IntegrationTests: XCTestCase {
         XCTAssertEqual(
             GLiNER2Variant.multilingual.packageName,
             "gliner2_multi_classification_embedding_w8_linear_L128_K8.mlpackage")
+        XCTAssertEqual(GLiNER2Variant.decide.packageName, "gliner2_decide_classification_fp16_L128_H4_K32.mlpackage")
+        XCTAssertEqual(
+            GLiNER2Variant.decideLong.packageName, "gliner2_decide_classification_fp16_L256_H4_K32.mlpackage")
+        XCTAssertEqual(GLiNER2Variant.decide.maximumOptions, 32)
+        XCTAssertEqual(GLiNER2Variant.decideLong.maximumLength, 256)
+        XCTAssertEqual(GLiNER2Variant.decide.maximumHeads, 4)
+        XCTAssertEqual(GLiNER2Variant.base.maximumOptions, 8)
     }
 }
