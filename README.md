@@ -1,6 +1,6 @@
 # FluidUse
 
-See [decision-model runtime support](Documentation/DecisionModelSupport.md) for the current Core ML model matrix and handoff notes.
+See [decision-model runtime support](Documentation/DecisionModelSupport.md) for the current Core ML model matrix and handoff notes. Game trial results, demo ideas, and conversion candidates are in [DemoIdeas.md](Documentation/DemoIdeas.md).
 
 Local computer use on Apple silicon. FluidUse reads a form in a running Mac
 app or browser through the Accessibility API, asks a small on-device model
