@@ -49,13 +49,15 @@ struct ContentView: View {
     private var compactTop: some View {
         HStack(alignment: .top, spacing: 16) {
             photo.frame(width: 176, height: 176)
-            VStack(alignment: .leading, spacing: 10) {
-                titleBlock
-                stats(size: 17)
-                topFive.frame(maxWidth: 380, alignment: .leading)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top) {
+                    titleBlock
+                    Spacer(minLength: 8)
+                    controls
+                }
+                stats(size: 18)
+                topFive.frame(maxWidth: 420, alignment: .leading)
             }
-            Spacer(minLength: 8)
-            controls
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -91,34 +93,35 @@ struct ContentView: View {
     }
 
     private func stats(size: CGFloat = 20) -> some View {
-        HStack(spacing: size < 20 ? 12 : 16) {
-            stat("Sorted", "\(model.sorted) / \(model.total)", size: size)
-            stat("Elapsed", String(format: "%.1f s", model.elapsed), size: size)
-            stat("Photos / s", model.sorted > 0 ? String(format: "%.0f", model.photosPerSecond) : "–", size: size)
-            stat("ms per photo", millisecondsPerPhoto, size: size)
-            stat("Neural Engine ms", neuralEngineMilliseconds, size: size)
-            stat("Correct breed", model.accuracy.map { String(format: "%.1f%%", $0 * 100) } ?? "–", size: size)
+        HStack(spacing: 0) {
+            stat("Sorted", "\(model.sorted)", size: size)
+            stat("Elapsed time", String(format: "%.1f s", model.elapsed), size: size)
+            stat("Photos/s", String(format: "%.0f", model.sorted > 0 ? model.photosPerSecond : 0), size: size)
+            stat("ms/photo", millisecondsPerPhoto, size: size)
+            stat("Neural Engine", neuralEngineMilliseconds + " ms", size: size)
+            stat("Accuracy", String(format: "%.1f%%", (model.accuracy ?? 0) * 100), size: size)
         }
     }
 
-    /// The launch measurement, revealed once photos start landing (0 before, and again after Reset).
+    /// Live Neural Engine time per image during the run; 0.0 before Start and after Reset.
     private var neuralEngineMilliseconds: String {
-        guard model.sorted > 0, let value = model.encoderMilliseconds else { return "0.0" }
-        return String(format: "%.1f", value)
+        model.liveEncoderMilliseconds.map { String(format: "%.1f", $0) } ?? "0.0"
     }
 
     /// Wall time per photo with several model calls overlapping.
     private var millisecondsPerPhoto: String {
-        model.sorted > 0 ? String(format: "%.1f", 1000 / model.photosPerSecond) : "–"
+        model.sorted > 0 ? String(format: "%.1f", 1000 / model.photosPerSecond) : "0.0"
     }
 
+    /// Equal-width tile, label over value, both centered, so columns stay put as numbers change.
     private func stat(_ title: String, _ value: String, size: CGFloat) -> some View {
-        VStack(alignment: .trailing, spacing: 2) {
+        VStack(spacing: 3) {
             Text(title.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                 .lineLimit(1).fixedSize()
             Text(value).font(.system(size: size, weight: .semibold, design: .rounded)).monospacedDigit()
-                .contentTransition(.numericText()).fixedSize()
+                .contentTransition(.numericText()).lineLimit(1).fixedSize()
         }
+        .frame(width: size < 20 ? 104 : 120)
     }
 
     private var controls: some View {

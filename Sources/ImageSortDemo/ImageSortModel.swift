@@ -29,8 +29,11 @@ final class ImageSortModel: ObservableObject {
     @Published private(set) var sorted = 0
     @Published private(set) var correct = 0
     @Published private(set) var elapsed: Double = 0
-    /// Image encoder alone, measured once at launch.
-    @Published private(set) var encoderMilliseconds: Double?
+    /// Live Neural Engine time per image: each call's end minus the later of its start and the previous call's end
+    /// (calls run one at a time, so this removes queueing), median of the last 200.
+    @Published private(set) var liveEncoderMilliseconds: Double?
+    private var serviceTimes: [Double] = []
+    private var lastPredictionEnd: UInt64 = 0
     @Published private(set) var counts: [String: Int] = [:]
     @Published private(set) var chartImage: CGImage?
     /// The photo just sorted, shown large with its top-5 breeds.
@@ -97,7 +100,6 @@ final class ImageSortModel: ObservableObject {
             phase = .loading("Loading SigLIP 2 and embedding 37 breed names…")
             sorter = try await ImageSorter.load()
             _ = try await sorter?.sort(items[0])
-            encoderMilliseconds = try await sorter?.encoderMilliseconds()
             reset()
             print("ready at \(Date().timeIntervalSince1970)")
             // IMAGE_SORT_WAIT=1 keeps the chart empty until Start (Space).
@@ -155,6 +157,9 @@ final class ImageSortModel: ObservableObject {
         elapsed = 0
         elapsedBeforePause = 0
         modelMilliseconds = []
+        serviceTimes = []
+        lastPredictionEnd = 0
+        liveEncoderMilliseconds = nil
         phase = .ready
     }
 
@@ -289,6 +294,15 @@ final class ImageSortModel: ObservableObject {
             modelMilliseconds.append(placed.result.milliseconds)
         }
         counts = updated
+        for placed in batch.sorted(by: { $0.result.predictionEnd < $1.result.predictionEnd }) {
+            let begin = max(placed.result.predictionStart, lastPredictionEnd)
+            if placed.result.predictionEnd > begin {
+                serviceTimes.append(Double(placed.result.predictionEnd - begin) / 1e6)
+            }
+            lastPredictionEnd = max(lastPredictionEnd, placed.result.predictionEnd)
+        }
+        if serviceTimes.count > 200 { serviceTimes.removeFirst(serviceTimes.count - 200) }
+        if !serviceTimes.isEmpty { liveEncoderMilliseconds = serviceTimes.sorted()[serviceTimes.count / 2] }
         chartImage = chart.snapshot()
         current = last
         currentImage = Self.thumbnail(last.item.file, size: 480)

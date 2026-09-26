@@ -70,17 +70,30 @@ public final class SigLIP2Manager: Sendable {
         return embeddings
     }
 
+    /// Image embedding plus when the Core ML call began and ended (`DispatchTime` uptime nanoseconds).
+    public struct TimedEmbedding: Sendable {
+        public let embedding: [Float]
+        public let predictionStart: UInt64
+        public let predictionEnd: UInt64
+    }
+
     /// L2-normalized image embedding.
-    public func embed(image: CGImage) async throws -> [Float] {
+    public func embed(image: CGImage) async throws -> [Float] { try await embedTimed(image: image).embedding }
+
+    /// L2-normalized image embedding, with the timing of the model call alone (no decoding or resizing).
+    public func embedTimed(image: CGImage) async throws -> TimedEmbedding {
         let pixels = try SigLIP2ImagePreprocessor.pixels(from: image, config: config)
         let size = NSNumber(value: config.imageSize)
         let input = try MLMultiArray(shape: [1, 3, size, size], dataType: .float32)
         pixels.withUnsafeBufferPointer { source in
             input.dataPointer.assumingMemoryBound(to: Float.self).update(from: source.baseAddress!, count: pixels.count)
         }
-        let output = try await imageModel.prediction(
-            from: MLDictionaryFeatureProvider(dictionary: ["pixel_values": MLFeatureValue(multiArray: input)]))
-        return try Self.vector(output, name: "image_embeds")
+        let features = try MLDictionaryFeatureProvider(dictionary: ["pixel_values": MLFeatureValue(multiArray: input)])
+        let start = DispatchTime.now().uptimeNanoseconds
+        let output = try await imageModel.prediction(from: features)
+        let end = DispatchTime.now().uptimeNanoseconds
+        return TimedEmbedding(
+            embedding: try Self.vector(output, name: "image_embeds"), predictionStart: start, predictionEnd: end)
     }
 
     /// Median wall time of the image encoder alone (no decoding or resizing), one call at a time after `warmup`

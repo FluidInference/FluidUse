@@ -14,6 +14,9 @@ public final class ImageSorter: Sendable {
         /// The five most likely breeds with their shares, best first.
         public let top: [(breed: String, share: Float)]
         public let milliseconds: Double
+        /// When the Core ML call itself began and ended (`DispatchTime` uptime nanoseconds).
+        public let predictionStart: UInt64
+        public let predictionEnd: UInt64
     }
 
     public let breeds: [String]
@@ -44,7 +47,8 @@ public final class ImageSorter: Sendable {
     public func sort(_ item: PetItem) async throws -> Result {
         let image = try Self.decode(item.file)
         let start = DispatchTime.now().uptimeNanoseconds
-        let answer = try await manager.classify(image: image, labels: breeds, labelEmbeddings: embeddings)
+        let timed = try await manager.embedTimed(image: image)
+        let answer = manager.score(imageEmbedding: timed.embedding, labels: breeds, labelEmbeddings: embeddings)
         let milliseconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6
         let scale = manager.config.logitScale
         let best = answer.similarities[answer.selectedIndex]
@@ -55,7 +59,8 @@ public final class ImageSorter: Sendable {
         }
         return Result(
             breed: answer.selectedLabel, probability: answer.probabilities[answer.selectedIndex], share: 1 / total,
-            top: ranked, milliseconds: milliseconds)
+            top: ranked, milliseconds: milliseconds, predictionStart: timed.predictionStart,
+            predictionEnd: timed.predictionEnd)
     }
 
     public static func decode(_ file: URL) throws -> CGImage {
