@@ -123,8 +123,6 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                 Button("Reset") { model.reset() }.disabled(model.phase == .running)
             }
-            Text("\(ImageSortModel.turboInFlight) photos processed in parallel").font(.caption).foregroundStyle(
-                .secondary)
         }
     }
 
