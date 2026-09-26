@@ -96,10 +96,15 @@ struct ContentView: View {
             stat("Elapsed", String(format: "%.1f s", model.elapsed), size: size)
             stat("Photos / s", model.sorted > 0 ? String(format: "%.0f", model.photosPerSecond) : "–", size: size)
             stat("ms per photo", millisecondsPerPhoto, size: size)
-            stat(
-                "Neural Engine ms", model.encoderMilliseconds.map { String(format: "%.1f", $0) } ?? "–", size: size)
+            stat("Neural Engine ms", neuralEngineMilliseconds, size: size)
             stat("Correct breed", model.accuracy.map { String(format: "%.1f%%", $0 * 100) } ?? "–", size: size)
         }
+    }
+
+    /// The launch measurement, revealed once photos start landing (0 before, and again after Reset).
+    private var neuralEngineMilliseconds: String {
+        guard model.sorted > 0, let value = model.encoderMilliseconds else { return "0.0" }
+        return String(format: "%.1f", value)
     }
 
     /// Wall time per photo with several model calls overlapping.
