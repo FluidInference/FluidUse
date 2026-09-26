@@ -16,14 +16,6 @@ final class ImageSortModel: ObservableObject {
         case failed(String)
     }
 
-    enum Mode: String, CaseIterable, Identifiable {
-        /// One photo at a time, with its top-5 breeds.
-        case show = "Show"
-        /// Several calls in flight, as fast as the model goes.
-        case turbo = "Turbo"
-        var id: String { rawValue }
-    }
-
     struct Placed: Identifiable, Sendable {
         let item: PetItem
         let result: ImageSorter.Result
@@ -33,9 +25,6 @@ final class ImageSortModel: ObservableObject {
     }
 
     @Published private(set) var phase: Phase = .loading("Starting…")
-    @Published var mode: Mode = .show
-    /// Photos per second in Show mode.
-    @Published var pace: Double = 8
     @Published private(set) var remaining = 0
     @Published private(set) var sorted = 0
     @Published private(set) var correct = 0
@@ -45,8 +34,6 @@ final class ImageSortModel: ObservableObject {
     /// The photo just sorted, shown large with its top-5 breeds.
     @Published private(set) var current: Placed?
     @Published private(set) var currentImage: CGImage?
-    /// Where the latest tile landed, for the highlight in Show mode.
-    @Published private(set) var lastSlot: CGRect?
     /// Photos travelling from the Now Sorting panel to their chart slot.
     @Published private(set) var flights: [Flight] = []
 
@@ -59,7 +46,7 @@ final class ImageSortModel: ObservableObject {
         var arrived = false
     }
 
-    static let travel = 0.55
+    static let travel = 0.4
     static let turboFlightsPerFlush = 2
     private var flightCounter = 0
 
@@ -84,7 +71,6 @@ final class ImageSortModel: ObservableObject {
     private var modelMilliseconds: [Double] = []
     private var runStart: Date?
     private var elapsedBeforePause: Double = 0
-    private var shownInShow = 0
     private var preparing = false
 
     init() {
@@ -111,16 +97,9 @@ final class ImageSortModel: ObservableObject {
             _ = try await sorter?.sort(items[0])
             reset()
             print("ready at \(Date().timeIntervalSince1970)")
-            // IMAGE_SORT_WAIT=1 keeps the chart empty until Start (Space). IMAGE_SORT_AUTOPLAY=N sorts N photos in
-            // Show mode and then switches to Turbo; IMAGE_SORT_AUTOSTART=show|turbo starts in that mode.
-            if environment["IMAGE_SORT_WAIT"] == "1" {
-                return
-            } else if environment["IMAGE_SORT_AUTOPLAY"].flatMap(Int.init) != nil {
+            // IMAGE_SORT_WAIT=1 keeps the chart empty until Start (Space).
+            if environment["IMAGE_SORT_WAIT"] != "1" {
                 try? await Task.sleep(for: .seconds(1.5))
-                mode = .show
-                toggleRun()
-            } else if let start = environment["IMAGE_SORT_AUTOSTART"], let mode = Mode(rawValue: start.capitalized) {
-                self.mode = mode
                 toggleRun()
             }
         } catch {
@@ -167,14 +146,12 @@ final class ImageSortModel: ObservableObject {
         counts = [:]
         current = nil
         currentImage = nil
-        lastSlot = nil
         flights = []
         sorted = 0
         correct = 0
         elapsed = 0
         elapsedBeforePause = 0
         modelMilliseconds = []
-        shownInShow = 0
         phase = .ready
     }
 
@@ -197,11 +174,7 @@ final class ImageSortModel: ObservableObject {
     private func run() async {
         guard let sorter else { return }
         while !Task.isCancelled, !queue.isEmpty {
-            if mode == .turbo {
-                await runTurbo(sorter)
-            } else {
-                await runShow(sorter)
-            }
+            await runTurbo(sorter)
         }
         if !Task.isCancelled, queue.isEmpty {
             tick()
@@ -209,35 +182,8 @@ final class ImageSortModel: ObservableObject {
             print(
                 "finished \(sorted) photos in \(String(format: "%.2f", elapsed)) s "
                     + "(\(String(format: "%.0f", photosPerSecond)) photos/s), "
-                    + "correct \(String(format: "%.1f", (accuracy ?? 0) * 100))% (\(mode.rawValue))")
+                    + "correct \(String(format: "%.1f", (accuracy ?? 0) * 100))%")
         }
-    }
-
-    private func runShow(_ sorter: ImageSorter) async {
-        for await placed in Self.stream(sorter, items: queue, inFlight: 2) {
-            if Task.isCancelled || mode != .show { break }
-            current = placed
-            currentImage = Self.thumbnail(placed.item.file, size: 480)
-            let breed = placed.result.breed
-            let row = breeds.firstIndex(of: breed) ?? 0
-            let inAir = flights.filter { chart?.row(of: $0.slot) == row }.count
-            if let slot = chart?.slot(row: row, index: (counts[breed] ?? 0) + inAir) {
-                fly(image: placed.tile ?? currentImage, to: slot, wrong: !placed.matchesGold) { [weak self] in
-                    self?.land([placed], highlight: true, updateCurrent: false)
-                }
-            } else {
-                land([placed], highlight: true, updateCurrent: false)
-            }
-            shownInShow += 1
-            if let count = environment["IMAGE_SORT_AUTOPLAY"].flatMap(Int.init), shownInShow >= count {
-                mode = .turbo
-            }
-            let started = Date()
-            try? await Task.sleep(for: .seconds(1 / pace))
-            if Date().timeIntervalSince(started) < 1 / pace { break }
-        }
-        // Let photos already in the air land before Turbo takes over the queue.
-        while !Task.isCancelled, !flights.isEmpty { try? await Task.sleep(for: .milliseconds(20)) }
     }
 
     private func runTurbo(_ sorter: ImageSorter) async {
@@ -250,28 +196,27 @@ final class ImageSortModel: ObservableObject {
                 pending.removeAll(keepingCapacity: true)
                 lastFlush = Date()
             }
-            if Task.isCancelled || mode != .turbo { break }
+            if Task.isCancelled { break }
         }
         flush(pending)
     }
 
-    /// Lands a Turbo batch at once; a couple of its photos also fly so the motion stays visible.
+    /// Lands a batch at once; a couple of its photos also fly so the motion stays visible.
     private func flush(_ batch: [Placed]) {
-        let slots = land(batch, highlight: false, updateCurrent: true)
+        let slots = land(batch)
         for (placed, slot) in slots.suffix(Self.turboFlightsPerFlush) where flights.count < 24 {
-            fly(image: placed.tile, to: slot, wrong: !placed.matchesGold, decorative: true) {}
+            fly(image: placed.tile, to: slot, wrong: !placed.matchesGold)
         }
     }
 
-    /// Animates `image` from the Now Sorting panel to `slot`, then runs `arrival`.
+    /// Animates `image` from the Now Sorting panel to `slot`; the tile is already drawn there.
     private func fly(
-        image: CGImage?, to slot: CGRect, wrong: Bool, decorative: Bool = false,
-        arrival: @escaping @MainActor () -> Void
+        image: CGImage?, to slot: CGRect, wrong: Bool
     ) {
         flightCounter += 1
         let id = flightCounter
         flights.append(Flight(id: id, image: image, slot: slot, wrong: wrong))
-        let travel = decorative ? Self.travel * 0.7 : Self.travel
+        let travel = Self.travel
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(20))
             withAnimation(.easeIn(duration: travel)) {
@@ -279,7 +224,6 @@ final class ImageSortModel: ObservableObject {
             }
             try? await Task.sleep(for: .seconds(travel))
             self?.flights.removeAll { $0.id == id }
-            arrival()
         }
     }
 
@@ -327,7 +271,7 @@ final class ImageSortModel: ObservableObject {
 
     /// Draws the batch into the chart and updates the statistics; returns each photo's slot.
     @discardableResult
-    private func land(_ incoming: [Placed], highlight: Bool, updateCurrent: Bool) -> [(Placed, CGRect)] {
+    private func land(_ incoming: [Placed]) -> [(Placed, CGRect)] {
         let batch = incoming.filter { self.landed.insert($0.id).inserted }
         guard let last = batch.last, let chart else { return [] }
         var updated = counts
@@ -343,11 +287,8 @@ final class ImageSortModel: ObservableObject {
         }
         counts = updated
         chartImage = chart.snapshot()
-        lastSlot = highlight ? slots.last?.1 : nil
-        if updateCurrent {
-            current = last
-            currentImage = Self.thumbnail(last.item.file, size: 480)
-        }
+        current = last
+        currentImage = Self.thumbnail(last.item.file, size: 480)
         let ids = Set(batch.map(\.id))
         queue.removeAll { ids.contains($0.id) }
         remaining = queue.count
@@ -360,8 +301,9 @@ final class ImageSortModel: ObservableObject {
     private func log(_ batch: [Placed]) {
         let (cyan, yellow, red, green, dim, reset) =
             ("\u{1B}[1;36m", "\u{1B}[33m", "\u{1B}[31m", "\u{1B}[32m", "\u{1B}[2m", "\u{1B}[0m")
+        // One photo per update keeps the terminal readable (and cheap) at hundreds of photos per second.
         var lines = ""
-        for (offset, placed) in batch.enumerated() {
+        for (offset, placed) in batch.enumerated().suffix(1) {
             let number = sorted - batch.count + offset + 1
             let mark = placed.matchesGold ? "\(green)✓\(reset)" : "\(red)✗ label: \(placed.item.breed)\(reset)"
             lines += "\(cyan)▶ #\(number) photo \(placed.item.id).jpg\(reset)\n"
@@ -369,7 +311,10 @@ final class ImageSortModel: ObservableObject {
                 "  \(yellow)→ \(placed.result.breed)\(reset) · \(Int(placed.result.share * 100))% of 37 · "
                 + "\(red)model call \(String(format: "%.1f", placed.result.milliseconds)) ms\(reset)  \(mark)\n"
         }
-        lines += "\(dim)  sorted \(sorted)/\(total) · \(String(format: "%.1f", elapsed)) s\(reset)\n"
+        let wrong = batch.filter { !$0.matchesGold }.count
+        lines +=
+            "\(dim)  +\(batch.count - 1) more (\(wrong) wrong) · sorted \(sorted)/\(total) · "
+            + "\(String(format: "%.1f", elapsed)) s\(reset)\n"
         print(lines, terminator: "")
     }
 

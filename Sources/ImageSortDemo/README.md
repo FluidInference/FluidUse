@@ -4,11 +4,10 @@ Sorts Oxford-IIIT Pets photos into 37 breeds with SigLIP 2 (base, 256 px) on Cor
 gets is each breed's name, in the prompt `a photo of a {breed}, a type of pet.`; nothing is trained on these photos.
 
 ```bash
-SIGLIP2_MODEL_DIR=/path/to/siglip2-base-patch16-256 IMAGE_SORT_AUTOPLAY=12 swift run -c release ImageSortDemo
+SIGLIP2_MODEL_DIR=/path/to/siglip2-base-patch16-256 swift run -c release ImageSortDemo
 ```
 
-- `IMAGE_SORT_AUTOPLAY=N` flies N photos in Show mode, then switches to Turbo; `IMAGE_SORT_AUTOSTART=show|turbo`
-  starts a run in that mode. Without either, press Start.
+- Four model calls stay in flight; a couple of photos per update fly from the current-photo panel to their tile.
 - `IMAGE_SORT_COUNT` sets the sample size (default 1,000; the test split has 3,669, and a cache that also holds
   the train split allows up to 7,349). `IMAGE_SORT_WAIT=1` waits for Start (Space); `IMAGE_SORT_LOG=1` prints
   each decision.

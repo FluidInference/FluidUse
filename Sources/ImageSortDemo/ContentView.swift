@@ -93,18 +93,16 @@ struct ContentView: View {
     private func stats(size: CGFloat = 20) -> some View {
         HStack(spacing: size < 20 ? 12 : 16) {
             stat("Sorted", "\(model.sorted) / \(model.total)", size: size)
-            stat("Photos / s", model.sorted > 0 ? String(format: "%.0f", model.photosPerSecond) : "–", size: size)
             stat("Elapsed", String(format: "%.1f s", model.elapsed), size: size)
-            stat("ms / photo", millisecondsPerPhoto, size: size)
+            stat("Photos / s", model.sorted > 0 ? String(format: "%.0f", model.photosPerSecond) : "–", size: size)
+            stat("ms per photo", millisecondsPerPhoto, size: size)
             stat("Correct breed", model.accuracy.map { String(format: "%.1f%%", $0 * 100) } ?? "–", size: size)
         }
     }
 
-    /// Show: one model call, pre- and post-processing included. Turbo: wall time per photo with calls overlapping.
+    /// Wall time per photo with several model calls overlapping.
     private var millisecondsPerPhoto: String {
-        guard model.sorted > 0 else { return "–" }
-        if model.mode == .turbo { return String(format: "%.1f", 1000 / model.photosPerSecond) }
-        return model.medianMilliseconds.map { String(format: "%.1f", $0) } ?? "–"
+        model.sorted > 0 ? String(format: "%.1f", 1000 / model.photosPerSecond) : "–"
     }
 
     private func stat(_ title: String, _ value: String, size: CGFloat) -> some View {
@@ -125,19 +123,8 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                 Button("Reset") { model.reset() }.disabled(model.phase == .running)
             }
-            Picker("Mode", selection: $model.mode) {
-                ForEach(ImageSortModel.Mode.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented).labelsHidden().frame(width: 150)
-            if model.mode == .show {
-                HStack(spacing: 6) {
-                    Text("Pace").font(.caption).fixedSize()
-                    Slider(value: $model.pace, in: 2...30).frame(width: 90)
-                    Text(String(format: "%.0f/s", model.pace)).font(.caption).monospacedDigit().fixedSize()
-                }
-            } else {
-                Text("\(ImageSortModel.turboInFlight) calls in flight").font(.caption).foregroundStyle(.secondary)
-            }
+            Text("\(ImageSortModel.turboInFlight) photos processed in parallel").font(.caption).foregroundStyle(
+                .secondary)
         }
     }
 
@@ -264,11 +251,6 @@ struct ContentView: View {
                     if let image = model.chartImage {
                         Image(decorative: image, scale: 1).resizable().interpolation(.medium)
                             .frame(width: width * scale, height: height * scale)
-                    }
-                    if let slot = model.lastSlot {
-                        RoundedRectangle(cornerRadius: 3).stroke(Color.yellow, lineWidth: 2)
-                            .frame(width: slot.width * scale + 6, height: slot.height * scale + 6)
-                            .offset(x: slot.minX * scale - 3, y: slot.minY * scale - 3)
                     }
                 }
                 .frame(width: width * scale, height: height * scale, alignment: .topLeading)
