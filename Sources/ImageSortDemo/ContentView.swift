@@ -1,8 +1,25 @@
 import ImageSort
 import SwiftUI
 
+private struct FramesKey: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+extension View {
+    fileprivate func reportFrame(_ key: String) -> some View {
+        background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: FramesKey.self, value: [key: proxy.frame(in: .named("board"))])
+            })
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var model: ImageSortModel
+    @State private var frames: [String: CGRect] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -108,6 +125,40 @@ struct ContentView: View {
             chart
         }
         .padding(14)
+        .coordinateSpace(name: "board")
+        .onPreferenceChange(FramesKey.self) { frames = $0 }
+        .overlay(alignment: .topLeading) { flying }
+    }
+
+    /// Photos travelling from the Now Sorting panel to their tile; they shrink to tile size on arrival.
+    private var flying: some View {
+        ZStack(alignment: .topLeading) {
+            if let from = frames["photo"], let chart = frames["chart"] {
+                let scale = chart.width / CGFloat(PhotoChart.columns * PhotoChart.tile)
+                ForEach(model.flights) { flight in
+                    let target = CGRect(
+                        x: chart.minX + flight.slot.minX * scale, y: chart.minY + flight.slot.minY * scale,
+                        width: flight.slot.width * scale, height: flight.slot.height * scale)
+                    let side = flight.arrived ? max(target.width, 4) : from.width * 0.55
+                    Color.clear
+                        .frame(width: side, height: side)
+                        .overlay {
+                            if let image = flight.image {
+                                Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: flight.arrived ? 1 : 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: flight.arrived ? 1 : 8)
+                                .stroke(flight.wrong ? Color.red : Color.green, lineWidth: flight.arrived ? 1 : 3)
+                        )
+                        .shadow(color: .black.opacity(0.4), radius: flight.arrived ? 0 : 6)
+                        .position(
+                            x: flight.arrived ? target.midX : from.midX, y: flight.arrived ? target.midY : from.midY)
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     private var nowSorting: some View {
@@ -121,6 +172,7 @@ struct ContentView: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .reportFrame("photo")
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(model.current.map { $0.matchesGold ? Color.green : Color.red } ?? .clear, lineWidth: 3))
@@ -185,6 +237,7 @@ struct ContentView: View {
                     }
                 }
                 .frame(width: width * scale, height: height * scale, alignment: .topLeading)
+                .reportFrame("chart")
             }
         }
     }

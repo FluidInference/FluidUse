@@ -47,6 +47,21 @@ final class ImageSortModel: ObservableObject {
     @Published private(set) var currentImage: CGImage?
     /// Where the latest tile landed, for the highlight in Show mode.
     @Published private(set) var lastSlot: CGRect?
+    /// Photos travelling from the Now Sorting panel to their chart slot.
+    @Published private(set) var flights: [Flight] = []
+
+    struct Flight: Identifiable {
+        let id: Int
+        let image: CGImage?
+        /// Target tile in chart pixels.
+        let slot: CGRect
+        let wrong: Bool
+        var arrived = false
+    }
+
+    static let travel = 0.55
+    static let turboFlightsPerFlush = 2
+    private var flightCounter = 0
 
     let breeds = PetsSample.breeds
     let total: Int
@@ -129,6 +144,7 @@ final class ImageSortModel: ObservableObject {
         current = nil
         currentImage = nil
         lastSlot = nil
+        flights = []
         sorted = 0
         correct = 0
         elapsed = 0
@@ -176,7 +192,21 @@ final class ImageSortModel: ObservableObject {
     private func runShow(_ sorter: ImageSorter) async {
         for await placed in Self.stream(sorter, items: queue, inFlight: 2) {
             if Task.isCancelled || mode != .show { break }
-            land([placed], highlight: true)
+            current = placed
+            currentImage = Self.thumbnail(placed.item.file, size: 480)
+            let breed = placed.result.breed
+            let row = breeds.firstIndex(of: breed) ?? 0
+            let inAir = flights.filter {
+                $0.slot.minY >= CGFloat(row * PhotoChart.rowHeight)
+                    && $0.slot.minY < CGFloat((row + 1) * PhotoChart.rowHeight)
+            }.count
+            if let slot = PhotoChart.slot(row: row, index: (counts[breed] ?? 0) + inAir) {
+                fly(image: placed.tile ?? currentImage, to: slot, wrong: !placed.matchesGold) { [weak self] in
+                    self?.land([placed], highlight: true, updateCurrent: false)
+                }
+            } else {
+                land([placed], highlight: true, updateCurrent: false)
+            }
             shownInShow += 1
             if let count = environment["IMAGE_SORT_AUTOPLAY"].flatMap(Int.init), shownInShow >= count {
                 mode = .turbo
@@ -185,6 +215,8 @@ final class ImageSortModel: ObservableObject {
             try? await Task.sleep(for: .seconds(1 / pace))
             if Date().timeIntervalSince(started) < 1 / pace { break }
         }
+        // Let photos already in the air land before Turbo takes over the queue.
+        while !Task.isCancelled, !flights.isEmpty { try? await Task.sleep(for: .milliseconds(20)) }
     }
 
     private func runTurbo(_ sorter: ImageSorter) async {
@@ -193,13 +225,41 @@ final class ImageSortModel: ObservableObject {
         for await placed in Self.stream(sorter, items: queue, inFlight: Self.turboInFlight) {
             pending.append(placed)
             if Date().timeIntervalSince(lastFlush) >= Self.turboFlush {
-                land(pending, highlight: false)
+                flush(pending)
                 pending.removeAll(keepingCapacity: true)
                 lastFlush = Date()
             }
             if Task.isCancelled || mode != .turbo { break }
         }
-        land(pending, highlight: false)
+        flush(pending)
+    }
+
+    /// Lands a Turbo batch at once; a couple of its photos also fly so the motion stays visible.
+    private func flush(_ batch: [Placed]) {
+        let slots = land(batch, highlight: false, updateCurrent: true)
+        for (placed, slot) in slots.suffix(Self.turboFlightsPerFlush) where flights.count < 24 {
+            fly(image: placed.tile, to: slot, wrong: !placed.matchesGold, decorative: true) {}
+        }
+    }
+
+    /// Animates `image` from the Now Sorting panel to `slot`, then runs `arrival`.
+    private func fly(
+        image: CGImage?, to slot: CGRect, wrong: Bool, decorative: Bool = false,
+        arrival: @escaping @MainActor () -> Void
+    ) {
+        flightCounter += 1
+        let id = flightCounter
+        flights.append(Flight(id: id, image: image, slot: slot, wrong: wrong))
+        let travel = decorative ? Self.travel * 0.7 : Self.travel
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(20))
+            withAnimation(.easeIn(duration: travel)) {
+                if let index = self?.flights.firstIndex(where: { $0.id == id }) { self?.flights[index].arrived = true }
+            }
+            try? await Task.sleep(for: .seconds(travel))
+            self?.flights.removeAll { $0.id == id }
+            arrival()
+        }
     }
 
     /// Sorts `items` with `inFlight` calls always running off the main thread and streams each result.
@@ -218,7 +278,7 @@ final class ImageSortModel: ObservableObject {
                         next += 1
                         group.addTask {
                             guard let result = try? await sorter.sort(item) else { return nil }
-                            return Placed(item: item, result: result, tile: thumbnail(item.file, size: 48))
+                            return Placed(item: item, result: result, tile: thumbnail(item.file, size: 160))
                         }
                     }
                     for _ in 0..<inFlight { launch() }
@@ -244,31 +304,36 @@ final class ImageSortModel: ObservableObject {
             ] as CFDictionary)
     }
 
-    private func land(_ incoming: [Placed], highlight: Bool) {
+    /// Draws the batch into the chart and updates the statistics; returns each photo's slot.
+    @discardableResult
+    private func land(_ incoming: [Placed], highlight: Bool, updateCurrent: Bool) -> [(Placed, CGRect)] {
         let batch = incoming.filter { self.landed.insert($0.id).inserted }
-        guard let last = batch.last, let chart else { return }
+        guard let last = batch.last, let chart else { return [] }
         var updated = counts
-        var slot: CGRect?
+        var slots: [(Placed, CGRect)] = []
         for placed in batch {
             let index = updated[placed.result.breed, default: 0]
             let row = breeds.firstIndex(of: placed.result.breed) ?? 0
             chart.draw(placed.tile, row: row, index: index, wrong: !placed.matchesGold)
-            slot = PhotoChart.slot(row: row, index: index)
+            if let slot = PhotoChart.slot(row: row, index: index) { slots.append((placed, slot)) }
             updated[placed.result.breed] = index + 1
             correct += placed.matchesGold ? 1 : 0
             modelMilliseconds.append(placed.result.milliseconds)
         }
         counts = updated
         chartImage = chart.snapshot()
-        lastSlot = highlight ? slot : nil
-        current = last
-        currentImage = Self.thumbnail(last.item.file, size: 480)
+        lastSlot = highlight ? slots.last?.1 : nil
+        if updateCurrent {
+            current = last
+            currentImage = Self.thumbnail(last.item.file, size: 480)
+        }
         let ids = Set(batch.map(\.id))
         queue.removeAll { ids.contains($0.id) }
         remaining = queue.count
         sorted += batch.count
         tick()
         if logDecisions { log(batch) }
+        return slots
     }
 
     private func log(_ batch: [Placed]) {
