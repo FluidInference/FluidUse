@@ -130,6 +130,29 @@ contain the classification path; the native entity, relation, and record extract
 are not exposed by this Swift manager. A ten-seed 2048 comparison with GLiClass is in
 [Benchmarks.md](Benchmarks.md).
 
+## Kev decisions
+
+`KevFastManager` runs [Kev-0.8B](https://huggingface.co/jaredpalmer/kev-0.8b) (Qwen3.5 backbone, Apache-2.0) on the
+GPU through Core ML. One call reads the text and answers all of a request's questions (multiple choice, yes/no, or a
+score, with calibrated probabilities); questions that do not fit fall back to one call per question. The pinned,
+checksummed snapshot downloads from [FluidInference/kev-0.8b-coreml](https://huggingface.co/FluidInference/kev-0.8b-coreml)
+on first use (~3.5 GB, macOS 15 / iOS 18).
+
+```swift
+let kev = try await KevFastManager.load(from: try await KevModelStore.ensure())
+let answers = try await kev.answer(
+    state: "Shoes arrived two weeks late and in the wrong size.",
+    questions: [
+        .choice("Which team should handle this?", options: [("returns", nil), ("shipping", nil), ("billing", nil)]),
+        .noul("Does this need urgent human attention?"),
+    ])
+print(answers.map(\.best))
+```
+
+On an M5 Pro a short ticket with two questions takes 18 ms and a Wikipedia bio with twelve yes/no questions about 38 ms.
+`swift run -c release KevGuessWhoDemo` plays Guess Who over 80 Wikipedia people with it
+([Sources/KevGuessWhoDemo](Sources/KevGuessWhoDemo/README.md)).
+
 ## Demo
 
 ```bash
