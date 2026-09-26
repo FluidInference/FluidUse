@@ -54,11 +54,12 @@ public final class KevFastManager: Sendable {
     public static func load(
         from directory: URL, computeUnits: MLComputeUnits = .cpuAndGPU
     ) async throws -> KevFastManager {
-        let rows = try await KevManager.load(from: directory, computeUnits: computeUnits)
+        // row models load only if a question falls back to them
+        let rows = try await KevManager.load(from: directory, computeUnits: computeUnits, eager: false)
         let fused = directory.appendingPathComponent("fused")
         var compiled = fused.appendingPathComponent("KevFused.mlmodelc")
         if !FileManager.default.fileExists(atPath: compiled.path) {
-            compiled = try await MLModel.compileModel(at: fused.appendingPathComponent("KevFused.mlpackage"))
+            compiled = try await KevManager.compiled(fused.appendingPathComponent("KevFused.mlpackage"))
         }
         guard
             let config = try JSONSerialization.jsonObject(

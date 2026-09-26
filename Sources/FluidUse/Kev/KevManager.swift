@@ -71,7 +71,27 @@ public final class KevManager: Sendable {
     struct Bucket: Sendable {
         let length: Int
         let maxOptions: Int
-        let model: MLModel
+        /// `.mlmodelc` or `.mlpackage` (compiled on first load).
+        let url: URL
+    }
+
+    /// Row models, loaded on first use of their bucket (or all at `load` when eager).
+    actor RowModels {
+        private let computeUnits: MLComputeUnits
+        private var models: [Int: MLModel] = [:]
+
+        init(computeUnits: MLComputeUnits) { self.computeUnits = computeUnits }
+
+        func model(for bucket: Bucket) async throws -> MLModel {
+            if let model = models[bucket.length] { return model }
+            let url =
+                bucket.url.pathExtension == "mlpackage" ? try await KevManager.compiled(bucket.url) : bucket.url
+            let configuration = MLModelConfiguration()
+            configuration.computeUnits = computeUnits
+            let model = try await MLModel.load(contentsOf: url, configuration: configuration)
+            models[bucket.length] = model
+            return model
+        }
     }
 
     struct Special: Sendable {
@@ -84,6 +104,7 @@ public final class KevManager: Sendable {
 
     let tokenizer: QwenBPETokenizer
     private let buckets: [Bucket]
+    private let rowModels: RowModels
     private let embeddings: Data
     private let hiddenSize: Int
     private let rotaryDim: Int
@@ -93,7 +114,25 @@ public final class KevManager: Sendable {
 
     /// `directory` holds `tokenizer.json` and one `L<length>_K<options>/` folder per bucket with `config.json`,
     /// `embeddings.f16` and a `KevRow_*.mlpackage` (or compiled `.mlmodelc`).
-    public static func load(from directory: URL, computeUnits: MLComputeUnits = .all) async throws -> KevManager {
+    /// Compiles `package` once and keeps `<name>.mlmodelc` beside it, so later launches skip compiling; when the folder
+    /// is read-only the temporary compiled copy is used.
+    static func compiled(_ package: URL) async throws -> URL {
+        let destination = package.deletingPathExtension().appendingPathExtension("mlmodelc")
+        let manager = FileManager.default
+        if manager.fileExists(atPath: destination.path) { return destination }
+        let temporary = try await MLModel.compileModel(at: package)
+        do {
+            try manager.moveItem(at: temporary, to: destination)
+            return destination
+        } catch {
+            return temporary
+        }
+    }
+
+    /// `eager: false` defers loading each row bucket's model to its first question.
+    public static func load(
+        from directory: URL, computeUnits: MLComputeUnits = .all, eager: Bool = true
+    ) async throws -> KevManager {
         let tokenizer = try QwenBPETokenizer(tokenizerJsonURL: directory.appendingPathComponent("tokenizer.json"))
         let folders = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             .map { $0.resolvingSymlinksInPath() }
@@ -108,20 +147,14 @@ public final class KevManager: Sendable {
             else { throw KevError.invalidAsset("Unreadable \(folder.lastPathComponent)/config.json") }
             config = parsed
             let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
-            let modelURL: URL
-            if let compiled = files.first(where: { $0.pathExtension == "mlmodelc" }) {
-                modelURL = compiled
-            } else if let package = files.first(where: { $0.pathExtension == "mlpackage" }) {
-                modelURL = try await MLModel.compileModel(at: package)
-            } else {
-                throw KevError.invalidAsset("No Core ML model in \(folder.lastPathComponent)")
-            }
-            let configuration = MLModelConfiguration()
-            configuration.computeUnits = computeUnits
+            guard
+                let modelURL = files.first(where: { $0.pathExtension == "mlmodelc" })
+                    ?? files.first(where: { $0.pathExtension == "mlpackage" })
+            else { throw KevError.invalidAsset("No Core ML model in \(folder.lastPathComponent)") }
             buckets.append(
                 Bucket(
                     length: parsed["length"] as? Int ?? 0, maxOptions: parsed["max_options"] as? Int ?? 0,
-                    model: try await MLModel.load(contentsOf: modelURL, configuration: configuration)))
+                    url: modelURL))
         }
         guard let hidden = config["hidden_size"] as? Int, let rotary = config["rotary_dim"] as? Int,
             let theta = (config["rope_theta"] as? NSNumber)?.doubleValue, let pad = config["pad_id"] as? Int,
@@ -137,18 +170,25 @@ public final class KevManager: Sendable {
         guard embeddings.count == vocab * hidden * 2 else {
             throw KevError.invalidAsset("embeddings.f16 has \(embeddings.count) bytes, expected \(vocab * hidden * 2)")
         }
+        let rowModels = RowModels(computeUnits: computeUnits)
+        if eager {
+            for bucket in buckets { _ = try await rowModels.model(for: bucket) }
+        }
         return KevManager(
-            tokenizer: tokenizer, buckets: buckets.sorted { $0.length < $1.length }, embeddings: embeddings,
+            tokenizer: tokenizer, buckets: buckets.sorted { $0.length < $1.length }, rowModels: rowModels,
+            embeddings: embeddings,
             hiddenSize: hidden, rotaryDim: rotary, ropeTheta: theta, padID: pad,
             special: Special(state: state, question: question, option: option, closeOption: close, decide: decide))
     }
 
     init(
-        tokenizer: QwenBPETokenizer, buckets: [Bucket], embeddings: Data, hiddenSize: Int, rotaryDim: Int,
+        tokenizer: QwenBPETokenizer, buckets: [Bucket], rowModels: RowModels, embeddings: Data, hiddenSize: Int,
+        rotaryDim: Int,
         ropeTheta: Double, padID: Int, special: Special
     ) {
         self.tokenizer = tokenizer
         self.buckets = buckets
+        self.rowModels = rowModels
         self.embeddings = embeddings
         self.hiddenSize = hiddenSize
         self.rotaryDim = rotaryDim
@@ -208,7 +248,7 @@ public final class KevManager: Sendable {
             throw KevError.tooLong("\(ids.count) tokens / \(optionEnds.count) options exceed every bucket")
         }
         let features = try inputs(ids: ids, decide: decideIndex, options: optionEnds, bucket: bucket)
-        let output = try await bucket.model.prediction(from: features)
+        let output = try await rowModels.model(for: bucket).prediction(from: features)
         guard let logits = output.featureValue(for: "logits")?.multiArrayValue else {
             throw KevError.invalidOutput("missing logits")
         }

@@ -8,6 +8,7 @@ import Foundation
 ///     swift run -c release KevCheck serving <model directory>   (Kev's scripts/serving_bench.py cases)
 ///     swift run -c release KevCheck fast-parity <model directory> <records.json>   (state-cache runtime)
 ///     swift run -c release KevCheck fast-serving <model directory>
+///     swift run -c release KevCheck bios <model directory> <workload.json> <out.json>   (yes/no questions per state)
 @main
 struct KevCheck {
     struct Fixture: Decodable {
@@ -17,6 +18,12 @@ struct KevCheck {
 
     static func main() async throws {
         let arguments = Array(CommandLine.arguments.dropFirst())
+        if #available(macOS 15.0, *), arguments.first == "bios", arguments.count == 4 {
+            try await bios(
+                directory: URL(fileURLWithPath: arguments[1]), workload: URL(fileURLWithPath: arguments[2]),
+                output: URL(fileURLWithPath: arguments[3]))
+            return
+        }
         if #available(macOS 15.0, *), arguments.first == "fast-serving", arguments.count == 2 {
             let manager = try await KevFastManager.load(from: URL(fileURLWithPath: arguments[1]))
             try await serving { try await manager.answer(state: $0, questions: $1, maxStateTokens: 8192) }
@@ -145,6 +152,46 @@ struct KevCheck {
                 format: "questions %d, top-answer flips %d, max |dp| %.5f, skipped records %d, %.1f ms/question",
                 questions,
                 flips, worst, skipped, 1000 * Date().timeIntervalSince(runStart) / Double(max(questions, 1))))
+    }
+
+    /// Timed run of yes/no records (`[{"state", "questions": {"q0": {"instructions"}, ...}}]`) through the fused path.
+    @available(macOS 15.0, *)
+    static func bios(directory: URL, workload: URL, output: URL) async throws {
+        guard let records = try JSONSerialization.jsonObject(with: Data(contentsOf: workload)) as? [[String: Any]]
+        else { throw KevError.invalidAsset("workload") }
+        func seconds(since start: UInt64) -> Double { Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9 }
+        var start = DispatchTime.now().uptimeNanoseconds
+        let manager = try await KevFastManager.load(from: directory)
+        let load = seconds(since: start)
+        start = DispatchTime.now().uptimeNanoseconds
+        try await manager.warm()
+        let warm = seconds(since: start)
+        var times: [Double] = []
+        var probabilities: [[Float]] = []
+        let runStart = DispatchTime.now().uptimeNanoseconds
+        for record in records {
+            guard let state = record["state"] as? String,
+                let questions = record["questions"] as? [String: [String: Any]]
+            else { continue }
+            let typed = (0..<questions.count).map {
+                KevQuestion.noul(questions["q\($0)"]?["instructions"] as? String ?? "")
+            }
+            let callStart = DispatchTime.now().uptimeNanoseconds
+            let answers = try await manager.answer(state: state, questions: typed)
+            times.append(seconds(since: callStart) * 1000)
+            probabilities.append(answers.map { $0.probabilities[1] })
+        }
+        let total = seconds(since: runStart)
+        let sorted = times.sorted()
+        let result: [String: Any] = [
+            "load_s": load, "warm_s": warm, "total_s": total, "median_ms": sorted[sorted.count / 2],
+            "per_call_ms": times, "p_yes": probabilities,
+        ]
+        try JSONSerialization.data(withJSONObject: result).write(to: output)
+        print(
+            String(
+                format: "load %.1f s, warm %.1f s, %d states x %d questions in %.2f s, median %.1f ms", load, warm,
+                probabilities.count, probabilities.first?.count ?? 0, total, sorted[sorted.count / 2]))
     }
 
     /// The request shapes of Kev's `scripts/serving_bench.py`, with the same texts and questions.
