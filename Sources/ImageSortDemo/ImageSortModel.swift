@@ -128,15 +128,39 @@ final class ImageSortModel: ObservableObject {
         }
     }
 
-    func reset() {
-        runner?.cancel()
-        runner = nil
-        chart = PhotoChart(rows: breeds.count) { [breeds] row in
+    /// Pixel size and shape of the chart bitmap, for the view's layout.
+    struct ChartGeometry: Equatable {
+        var width = 1
+        var height = 1
+        var rowHeight = 1
+    }
+
+    @Published private(set) var chartGeometry = ChartGeometry()
+    private var levels = 2
+
+    private func makeChart() {
+        let chart = PhotoChart(rows: breeds.count, levels: levels) { [breeds] row in
             Self.cats.contains(breeds[row])
                 ? CGColor(red: 1, green: 0.6, blue: 0.2, alpha: 0.10)
                 : CGColor(red: 0.3, green: 0.55, blue: 1, alpha: 0.10)
         }
-        chartImage = chart?.snapshot()
+        self.chart = chart
+        chartGeometry = ChartGeometry(width: chart.width, height: chart.height, rowHeight: chart.rowHeight)
+        chartImage = chart.snapshot()
+    }
+
+    /// Reshapes the empty chart to fill `size` (points available for the tiles). Ignored once sorting has begun.
+    func fitChart(to size: CGSize) {
+        let best = PhotoChart.bestLevels(rows: breeds.count, size: size)
+        guard best != levels, sorted == 0, flights.isEmpty, phase != .running, chart != nil else { return }
+        levels = best
+        makeChart()
+    }
+
+    func reset() {
+        runner?.cancel()
+        runner = nil
+        makeChart()
         queue = items
         remaining = items.count
         landed = []
@@ -196,11 +220,8 @@ final class ImageSortModel: ObservableObject {
             currentImage = Self.thumbnail(placed.item.file, size: 480)
             let breed = placed.result.breed
             let row = breeds.firstIndex(of: breed) ?? 0
-            let inAir = flights.filter {
-                $0.slot.minY >= CGFloat(row * PhotoChart.rowHeight)
-                    && $0.slot.minY < CGFloat((row + 1) * PhotoChart.rowHeight)
-            }.count
-            if let slot = PhotoChart.slot(row: row, index: (counts[breed] ?? 0) + inAir) {
+            let inAir = flights.filter { chart?.row(of: $0.slot) == row }.count
+            if let slot = chart?.slot(row: row, index: (counts[breed] ?? 0) + inAir) {
                 fly(image: placed.tile ?? currentImage, to: slot, wrong: !placed.matchesGold) { [weak self] in
                     self?.land([placed], highlight: true, updateCurrent: false)
                 }
@@ -315,7 +336,7 @@ final class ImageSortModel: ObservableObject {
             let index = updated[placed.result.breed, default: 0]
             let row = breeds.firstIndex(of: placed.result.breed) ?? 0
             chart.draw(placed.tile, row: row, index: index, wrong: !placed.matchesGold)
-            if let slot = PhotoChart.slot(row: row, index: index) { slots.append((placed, slot)) }
+            if let slot = chart.slot(row: row, index: index) { slots.append((placed, slot)) }
             updated[placed.result.breed] = index + 1
             correct += placed.matchesGold ? 1 : 0
             modelMilliseconds.append(placed.result.milliseconds)

@@ -120,9 +120,19 @@ struct ContentView: View {
     }
 
     private var board: some View {
-        HStack(alignment: .top, spacing: 18) {
-            nowSorting.frame(width: 250)
-            chart
+        GeometryReader { proxy in
+            // Narrow windows stack the current photo above the chart so the chart gets the full width.
+            if proxy.size.width < 980 {
+                VStack(alignment: .leading, spacing: 12) {
+                    compactNowSorting.frame(height: min(200, proxy.size.height * 0.28))
+                    chart(labelWidth: 150)
+                }
+            } else {
+                HStack(alignment: .top, spacing: 18) {
+                    nowSorting.frame(width: 250)
+                    chart(labelWidth: 190)
+                }
+            }
         }
         .padding(14)
         .coordinateSpace(name: "board")
@@ -134,7 +144,7 @@ struct ContentView: View {
     private var flying: some View {
         ZStack(alignment: .topLeading) {
             if let from = frames["photo"], let chart = frames["chart"] {
-                let scale = chart.width / CGFloat(PhotoChart.columns * PhotoChart.tile)
+                let scale = chart.width / CGFloat(model.chartGeometry.width)
                 ForEach(model.flights) { flight in
                     let target = CGRect(
                         x: chart.minX + flight.slot.minX * scale, y: chart.minY + flight.slot.minY * scale,
@@ -161,34 +171,59 @@ struct ContentView: View {
         .allowsHitTesting(false)
     }
 
+    private var photo: some View {
+        Color.secondary.opacity(0.08)
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                if let image = model.currentImage {
+                    Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .reportFrame("photo")
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(model.current.map { $0.matchesGold ? Color.green : Color.red } ?? .clear, lineWidth: 3))
+    }
+
+    @ViewBuilder
+    private var topFive: some View {
+        if let current = model.current {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(Array(current.result.top.enumerated()), id: \.offset) { rank, entry in
+                    topRow(entry.breed, share: entry.share, first: rank == 0, gold: current.item.breed)
+                }
+                if !current.matchesGold {
+                    Text("label: \(current.item.breed)").font(.caption.weight(.semibold)).foregroundStyle(.red)
+                }
+            }
+        }
+    }
+
     private var nowSorting: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("NOW SORTING · \(model.remaining) left").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            Color.secondary.opacity(0.08)
-                .aspectRatio(1, contentMode: .fit)
-                .overlay {
-                    if let image = model.currentImage {
-                        Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .reportFrame("photo")
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(model.current.map { $0.matchesGold ? Color.green : Color.red } ?? .clear, lineWidth: 3))
-            if let current = model.current {
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(Array(current.result.top.enumerated()), id: \.offset) { rank, entry in
-                        topRow(entry.breed, share: entry.share, first: rank == 0, gold: current.item.breed)
-                    }
-                    if !current.matchesGold {
-                        Text("label: \(current.item.breed)").font(.caption.weight(.semibold)).foregroundStyle(.red)
-                    }
-                }
-            }
+            photo
+            topFive
             Spacer(minLength: 0)
             Text("Labels are the 37 breed names, typed once: \"a photo of a {breed}, a type of pet.\"")
                 .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var compactNowSorting: some View {
+        HStack(alignment: .top, spacing: 14) {
+            photo
+            VStack(alignment: .leading, spacing: 8) {
+                Text("NOW SORTING · \(model.remaining) left").font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                topFive
+                Spacer(minLength: 0)
+                Text("Labels are the 37 breed names, typed once: \"a photo of a {breed}, a type of pet.\"")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: 420, alignment: .leading)
+            Spacer(minLength: 0)
         }
     }
 
@@ -205,22 +240,23 @@ struct ContentView: View {
         }
     }
 
-    private var chart: some View {
+    private func chart(labelWidth: CGFloat) -> some View {
         GeometryReader { proxy in
-            let labelWidth: CGFloat = 190
-            let width = CGFloat(PhotoChart.columns * PhotoChart.tile)
-            let height = CGFloat(model.breeds.count * PhotoChart.rowHeight)
-            let scale = min((proxy.size.width - labelWidth) / width, proxy.size.height / height)
-            let rowHeight = CGFloat(PhotoChart.rowHeight) * scale
+            let geometry = model.chartGeometry
+            let width = CGFloat(geometry.width)
+            let height = CGFloat(geometry.height)
+            let available = CGSize(width: proxy.size.width - labelWidth, height: proxy.size.height)
+            let scale = min(available.width / width, available.height / height)
+            let rowHeight = CGFloat(geometry.rowHeight) * scale
             HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .trailing, spacing: 0) {
                     ForEach(model.breeds, id: \.self) { breed in
                         HStack(spacing: 6) {
-                            Text(breed).lineLimit(1).foregroundStyle(color(for: breed))
+                            Text(breed).lineLimit(1).minimumScaleFactor(0.7).foregroundStyle(color(for: breed))
                             Text("\(model.counts[breed] ?? 0)").monospacedDigit().foregroundStyle(.secondary)
-                                .frame(width: 34, alignment: .trailing)
+                                .frame(width: 30, alignment: .trailing)
                         }
-                        .font(.system(size: max(9, min(13, rowHeight * 0.55)), weight: .semibold))
+                        .font(.system(size: max(8, min(13, rowHeight * 0.6)), weight: .semibold))
                         .frame(width: labelWidth - 8, height: rowHeight, alignment: .trailing)
                         .padding(.trailing, 8)
                     }
@@ -239,6 +275,8 @@ struct ContentView: View {
                 .frame(width: width * scale, height: height * scale, alignment: .topLeading)
                 .reportFrame("chart")
             }
+            .onAppear { model.fitChart(to: available) }
+            .onChange(of: available) { _, size in model.fitChart(to: size) }
         }
     }
 
