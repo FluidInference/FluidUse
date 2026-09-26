@@ -9,6 +9,8 @@ public final class ImageSorter: Sendable {
         public let breed: String
         /// SigLIP's own sigmoid probability for the chosen label.
         public let probability: Float
+        /// Softmax of the scaled similarities across all labels: the chosen label's share among the candidates.
+        public let share: Float
         public let milliseconds: Double
     }
 
@@ -39,8 +41,11 @@ public final class ImageSorter: Sendable {
         let start = DispatchTime.now().uptimeNanoseconds
         let answer = try await manager.classify(image: image, labels: breeds, labelEmbeddings: embeddings)
         let milliseconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6
+        let scale = manager.config.logitScale
+        let top = answer.similarities[answer.selectedIndex]
+        let total = answer.similarities.reduce(Float(0)) { $0 + exp(scale * ($1 - top)) }
         return Result(
-            breed: answer.selectedLabel, probability: answer.probabilities[answer.selectedIndex],
+            breed: answer.selectedLabel, probability: answer.probabilities[answer.selectedIndex], share: 1 / total,
             milliseconds: milliseconds)
     }
 

@@ -66,6 +66,8 @@ final class ImageSortModel: ObservableObject {
     ]
 
     private let environment = ProcessInfo.processInfo.environment
+    /// IMAGE_SORT_LOG=1 prints every decision to stdout (for a terminal next to the window).
+    private let logDecisions = ProcessInfo.processInfo.environment["IMAGE_SORT_LOG"] == "1"
     private var landed: Set<Int> = []
     private var items: [PetItem] = []
     private var sorter: ImageSorter?
@@ -277,6 +279,23 @@ final class ImageSortModel: ObservableObject {
         queue.removeAll { ids.contains($0.id) }
         sorted += batch.count
         tick()
+        if logDecisions { log(batch) }
+    }
+
+    private func log(_ batch: [Placed]) {
+        let (cyan, yellow, red, green, dim, reset) =
+            ("\u{1B}[1;36m", "\u{1B}[33m", "\u{1B}[31m", "\u{1B}[32m", "\u{1B}[2m", "\u{1B}[0m")
+        var lines = ""
+        for (offset, placed) in batch.enumerated() {
+            let number = sorted - batch.count + offset + 1
+            let mark = placed.matchesGold ? "\(green)✓\(reset)" : "\(red)✗ label: \(placed.item.breed)\(reset)"
+            lines += "\(cyan)▶ #\(number) photo \(placed.item.id).jpg\(reset)\n"
+            lines +=
+                "  \(yellow)→ \(placed.result.breed)\(reset) · \(Int(placed.result.share * 100))% of 37 · "
+                + "\(red)model call \(String(format: "%.1f", placed.result.milliseconds)) ms\(reset)  \(mark)\n"
+        }
+        lines += "\(dim)  sorted \(sorted)/\(total) · \(String(format: "%.1f", elapsed)) s\(reset)\n"
+        print(lines, terminator: "")
     }
 
     /// Photos per bucket (the bucket itself only keeps the latest few for display).
