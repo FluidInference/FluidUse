@@ -11,6 +11,8 @@ public final class ImageSorter: Sendable {
         public let probability: Float
         /// Softmax of the scaled similarities across all labels: the chosen label's share among the candidates.
         public let share: Float
+        /// The five most likely breeds with their shares, best first.
+        public let top: [(breed: String, share: Float)]
         public let milliseconds: Double
     }
 
@@ -42,11 +44,15 @@ public final class ImageSorter: Sendable {
         let answer = try await manager.classify(image: image, labels: breeds, labelEmbeddings: embeddings)
         let milliseconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6
         let scale = manager.config.logitScale
-        let top = answer.similarities[answer.selectedIndex]
-        let total = answer.similarities.reduce(Float(0)) { $0 + exp(scale * ($1 - top)) }
+        let best = answer.similarities[answer.selectedIndex]
+        let weights = answer.similarities.map { exp(scale * ($0 - best)) }
+        let total = weights.reduce(0, +)
+        let ranked = weights.indices.sorted { weights[$0] > weights[$1] }.prefix(5).map {
+            (breed: breeds[$0], share: weights[$0] / total)
+        }
         return Result(
             breed: answer.selectedLabel, probability: answer.probabilities[answer.selectedIndex], share: 1 / total,
-            milliseconds: milliseconds)
+            top: ranked, milliseconds: milliseconds)
     }
 
     public static func decode(_ file: URL) throws -> CGImage {

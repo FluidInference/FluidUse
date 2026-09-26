@@ -19,7 +19,7 @@ struct ImageSortDemoApp: App {
         WindowGroup("Sort photos — SigLIP 2 on-device") {
             ContentView()
                 .environmentObject(model)
-                .frame(minWidth: 900, minHeight: 620)
+                .frame(minWidth: 640, minHeight: 560)
                 .task { await model.prepare() }
         }
         .defaultSize(width: 1560, height: 980)

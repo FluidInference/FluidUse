@@ -11,7 +11,7 @@ public struct PetItem: Codable, Sendable, Identifiable, Hashable {
 /// Seeded sample of the Oxford-IIIT Pets test split (CC BY-SA 4.0), fetched from the Hugging Face dataset viewer
 /// API on first use and cached locally. Nothing is bundled.
 public enum PetsSample {
-    public static let attribution = "Oxford-IIIT Pets test split (Parkhi et al., 2012) · CC BY-SA 4.0"
+    public static let attribution = "Oxford-IIIT Pets (Parkhi et al., 2012) · CC BY-SA 4.0"
     public static let testCount = 3669
 
     /// The 37 breeds in dataset label order.
@@ -53,7 +53,8 @@ public enum PetsSample {
             .appendingPathComponent("FluidUse/image-sort/oxford-pets-test")
     }
 
-    /// `count` photos in a seeded shuffled order (all 3,669 when `count` is nil). `progress` gets photos cached so far.
+    /// `count` photos in a seeded shuffled order (every cached photo when `count` is nil). The viewer API fetches the
+    /// 3,669 test photos; a cache that also holds the train split (ids from 3,669) samples from both.
     public static func load(
         count: Int? = 1000, seed: UInt64 = 0, progress: (@Sendable (Int, Int) -> Void)? = nil
     ) async throws -> [PetItem] {
@@ -65,12 +66,12 @@ public enum PetsSample {
         var labels: [Int: Int] = [:]
         if let data = try? Data(contentsOf: manifestURL),
             let saved = try? JSONDecoder().decode([Int: Int].self, from: data),
-            saved.count == testCount
+            saved.count >= testCount
         {
             labels = saved
         }
         var sources: [Int: String] = [:]
-        if labels.count != testCount {
+        if labels.count < testCount {
             for offset in stride(from: 0, to: testCount, by: pageSize) {
                 for entry in try await page(offset: offset) {
                     labels[entry.rowIndex] = entry.row.label
@@ -81,7 +82,7 @@ public enum PetsSample {
         }
 
         var generator = SeededGenerator(seed: seed)
-        let chosen = Array(labels.keys.sorted().shuffled(using: &generator).prefix(count ?? testCount))
+        let chosen = Array(labels.keys.sorted().shuffled(using: &generator).prefix(count ?? labels.count))
         let missing = chosen.filter { !manager.fileExists(atPath: file(for: $0).path) }
         if !missing.isEmpty {
             if sources.isEmpty {

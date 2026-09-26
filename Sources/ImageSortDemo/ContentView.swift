@@ -1,27 +1,8 @@
 import ImageSort
 import SwiftUI
 
-private struct FramesKey: PreferenceKey {
-    static let defaultValue: [String: CGRect] = [:]
-    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
-        value.merge(nextValue()) { $1 }
-    }
-}
-
-extension View {
-    fileprivate func reportFrame(_ key: String) -> some View {
-        background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: FramesKey.self, value: [key: proxy.frame(in: .named("board"))])
-            })
-    }
-}
-
-private let incomingKey = "__incoming"
-
 struct ContentView: View {
     @EnvironmentObject private var model: ImageSortModel
-    @State private var frames: [String: CGRect] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,24 +23,42 @@ struct ContentView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 18) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Sort photos").font(.system(size: 26, weight: .bold))
-                Text("SigLIP 2 · Core ML on the Neural Engine · 37 breeds, zero-shot, nothing trained on these photos")
-                    .font(.callout).foregroundStyle(.secondary).lineLimit(1)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 18) {
+                titleBlock
+                Spacer(minLength: 12)
+                stats
+                controls
             }
-            Spacer(minLength: 12)
-            HStack(spacing: 16) {
-                stat("Sorted", "\(model.sorted) / \(model.total)")
-                stat("Photos / s", model.sorted > 0 ? String(format: "%.0f", model.photosPerSecond) : "–")
-                stat("Elapsed", String(format: "%.1f s", model.elapsed))
-                stat("ms / photo", millisecondsPerPhoto)
-                stat("Correct breed", model.accuracy.map { String(format: "%.1f%%", $0 * 100) } ?? "–")
+            VStack(alignment: .leading, spacing: 10) {
+                titleBlock
+                HStack(alignment: .center, spacing: 14) {
+                    stats
+                    Spacer(minLength: 8)
+                    controls
+                }
             }
-            controls
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Sort photos").font(.system(size: 26, weight: .bold))
+            Text("SigLIP 2 · Core ML on the Neural Engine · 37 breeds, zero-shot")
+                .font(.callout).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+        }
+    }
+
+    private var stats: some View {
+        HStack(spacing: 16) {
+            stat("Sorted", "\(model.sorted) / \(model.total)")
+            stat("Photos / s", model.sorted > 0 ? String(format: "%.0f", model.photosPerSecond) : "–")
+            stat("Elapsed", String(format: "%.1f s", model.elapsed))
+            stat("ms / photo", millisecondsPerPhoto)
+            stat("Correct breed", model.accuracy.map { String(format: "%.1f%%", $0 * 100) } ?? "–")
+        }
     }
 
     /// Show: one model call, pre- and post-processing included. Turbo: wall time per photo with calls overlapping.
@@ -72,6 +71,7 @@ struct ContentView: View {
     private func stat(_ title: String, _ value: String) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
             Text(title.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                .lineLimit(1).fixedSize()
             Text(value).font(.system(size: 20, weight: .semibold, design: .rounded)).monospacedDigit()
                 .contentTransition(.numericText()).fixedSize()
         }
@@ -103,71 +103,90 @@ struct ContentView: View {
     }
 
     private var board: some View {
-        GeometryReader { outer in
-            let incomingWidth = min(260, max(190, outer.size.width * 0.17))
-            HStack(alignment: .top, spacing: 14) {
-                incoming.frame(width: incomingWidth)
-                GeometryReader { proxy in
-                    let columns = max(4, min(8, Int(proxy.size.width / 150)))
-                    let rows = (model.breeds.count + columns - 1) / columns
-                    let height = max(78, (proxy.size.height - CGFloat(rows - 1) * 8) / CGFloat(rows))
-                    ScrollView {
-                        LazyVGrid(
-                            columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: columns), spacing: 8
-                        ) {
-                            ForEach(model.breeds, id: \.self) { breed in
-                                BucketView(
-                                    name: breed, placed: model.buckets[breed] ?? [], count: model.counts[breed] ?? 0,
-                                    color: color(for: breed), height: height
-                                )
-                                .reportFrame(breed)
-                            }
-                        }
-                    }
-                }
-            }
+        HStack(alignment: .top, spacing: 18) {
+            nowSorting.frame(width: 250)
+            chart
         }
         .padding(14)
-        .coordinateSpace(name: "board")
-        .onPreferenceChange(FramesKey.self) { frames = $0 }
-        .overlay(alignment: .topLeading) { flying }
     }
 
-    private var incoming: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("INCOMING · \(model.queue.count) left").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            ZStack {
-                RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.06))
-                if model.incomingImage != nil { PhotoView(image: model.incomingImage).padding(8) }
-            }
-            .aspectRatio(1, contentMode: .fit)
-            .reportFrame(incomingKey)
-            Text("Labels are just the 37 breed names, typed once:\n\"a photo of a {breed}, a type of pet.\"")
-                .font(.caption).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-        }
-    }
-
-    private var flying: some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(model.flights) { flight in
-                if let from = frames[incomingKey], let to = frames[flight.placed.result.breed] {
-                    let target = flight.arrived ? to : from
-                    VStack(spacing: 4) {
-                        PhotoView(image: flight.placed.thumbnail)
-                        Text("→ \(flight.placed.result.breed)").font(.headline)
-                            .foregroundStyle(flight.placed.matchesGold ? Color.green : Color.red)
+    private var nowSorting: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("NOW SORTING · \(model.remaining) left").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Color.secondary.opacity(0.08)
+                .aspectRatio(1, contentMode: .fit)
+                .overlay {
+                    if let image = model.currentImage {
+                        Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
                     }
-                    .padding(6)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
-                    .frame(width: model.mode == .turbo ? 130 : from.width - 16)
-                    .scaleEffect(flight.arrived ? 0.3 : 1)
-                    .opacity(flight.arrived ? 0.2 : 1)
-                    .position(x: target.midX, y: target.midY)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(model.current.map { $0.matchesGold ? Color.green : Color.red } ?? .clear, lineWidth: 3))
+            if let current = model.current {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(Array(current.result.top.enumerated()), id: \.offset) { rank, entry in
+                        topRow(entry.breed, share: entry.share, first: rank == 0, gold: current.item.breed)
+                    }
+                    if !current.matchesGold {
+                        Text("label: \(current.item.breed)").font(.caption.weight(.semibold)).foregroundStyle(.red)
+                    }
                 }
             }
+            Spacer(minLength: 0)
+            Text("Labels are the 37 breed names, typed once: \"a photo of a {breed}, a type of pet.\"")
+                .font(.caption).foregroundStyle(.secondary)
         }
-        .allowsHitTesting(false)
+    }
+
+    private func topRow(_ breed: String, share: Float, first: Bool, gold: String) -> some View {
+        HStack(spacing: 6) {
+            Text(breed).font(first ? .callout.weight(.bold) : .caption).lineLimit(1)
+                .frame(width: 128, alignment: .leading)
+            GeometryReader { proxy in
+                Capsule().fill(breed == gold ? Color.green : color(for: breed))
+                    .frame(width: max(2, proxy.size.width * CGFloat(share)))
+            }
+            .frame(height: first ? 10 : 6)
+            Text("\(Int(share * 100))%").font(.caption).monospacedDigit().frame(width: 34, alignment: .trailing)
+        }
+    }
+
+    private var chart: some View {
+        GeometryReader { proxy in
+            let labelWidth: CGFloat = 190
+            let width = CGFloat(PhotoChart.columns * PhotoChart.tile)
+            let height = CGFloat(model.breeds.count * PhotoChart.rowHeight)
+            let scale = min((proxy.size.width - labelWidth) / width, proxy.size.height / height)
+            let rowHeight = CGFloat(PhotoChart.rowHeight) * scale
+            HStack(alignment: .top, spacing: 0) {
+                VStack(alignment: .trailing, spacing: 0) {
+                    ForEach(model.breeds, id: \.self) { breed in
+                        HStack(spacing: 6) {
+                            Text(breed).lineLimit(1).foregroundStyle(color(for: breed))
+                            Text("\(model.counts[breed] ?? 0)").monospacedDigit().foregroundStyle(.secondary)
+                                .frame(width: 34, alignment: .trailing)
+                        }
+                        .font(.system(size: max(9, min(13, rowHeight * 0.55)), weight: .semibold))
+                        .frame(width: labelWidth - 8, height: rowHeight, alignment: .trailing)
+                        .padding(.trailing, 8)
+                    }
+                }
+                ZStack(alignment: .topLeading) {
+                    if let image = model.chartImage {
+                        Image(decorative: image, scale: 1).resizable().interpolation(.medium)
+                            .frame(width: width * scale, height: height * scale)
+                    }
+                    if let slot = model.lastSlot {
+                        RoundedRectangle(cornerRadius: 3).stroke(Color.yellow, lineWidth: 2)
+                            .frame(width: slot.width * scale + 6, height: slot.height * scale + 6)
+                            .offset(x: slot.minX * scale - 3, y: slot.minY * scale - 3)
+                    }
+                }
+                .frame(width: width * scale, height: height * scale, alignment: .topLeading)
+            }
+        }
     }
 
     private func status(_ message: String, spinning: Bool) -> some View {
@@ -189,61 +208,4 @@ struct ContentView: View {
     }
 
     private func color(for breed: String) -> Color { ImageSortModel.cats.contains(breed) ? .orange : .blue }
-}
-
-private struct PhotoView: View {
-    let image: CGImage?
-
-    var body: some View {
-        Color.secondary.opacity(0.1)
-            .aspectRatio(1, contentMode: .fit)
-            .overlay {
-                if let image { Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill) }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private struct BucketView: View {
-    let name: String
-    let placed: [ImageSortModel.Placed]
-    let count: Int
-    let color: Color
-    let height: CGFloat
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(name).font(.callout.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 2)
-                Text("\(count)").font(.headline).monospacedDigit().contentTransition(.numericText())
-            }
-            GeometryReader { proxy in
-                let side = max(20, min(proxy.size.height, (proxy.size.width - 8) / 3))
-                HStack(spacing: 4) {
-                    ForEach(placed.prefix(3)) { entry in
-                        Image(decorative: entry.thumbnail ?? blank, scale: 1).resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: side, height: side).clipped()
-                            .clipShape(RoundedRectangle(cornerRadius: 5))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 5)
-                                    .stroke(entry.matchesGold ? Color.green : Color.red, lineWidth: 2)
-                            )
-                            .help("Gold breed: \(entry.item.breed)")
-                    }
-                }
-            }
-        }
-        .padding(8)
-        .frame(height: height)
-        .background(RoundedRectangle(cornerRadius: 10).fill(color.opacity(0.10)))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(color.opacity(0.35), lineWidth: 1))
-    }
-
-    private var blank: CGImage {
-        CGContext(
-            data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!.makeImage()!
-    }
 }
