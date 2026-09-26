@@ -29,6 +29,8 @@ final class ImageSortModel: ObservableObject {
     @Published private(set) var sorted = 0
     @Published private(set) var correct = 0
     @Published private(set) var elapsed: Double = 0
+    /// Image encoder alone, measured once at launch.
+    @Published private(set) var encoderMilliseconds: Double?
     @Published private(set) var counts: [String: Int] = [:]
     @Published private(set) var chartImage: CGImage?
     /// The photo just sorted, shown large with its top-5 breeds.
@@ -95,6 +97,7 @@ final class ImageSortModel: ObservableObject {
             phase = .loading("Loading SigLIP 2 and embedding 37 breed names…")
             sorter = try await ImageSorter.load()
             _ = try await sorter?.sort(items[0])
+            encoderMilliseconds = try await sorter?.encoderMilliseconds()
             reset()
             print("ready at \(Date().timeIntervalSince1970)")
             // IMAGE_SORT_WAIT=1 keeps the chart empty until Start (Space).
