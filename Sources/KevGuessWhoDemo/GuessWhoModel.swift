@@ -127,8 +127,10 @@ final class GuessWhoModel: ObservableObject {
 
     /// Abandons the current game and deals a fresh wall.
     func reset() {
-        guard ready, runner != nil else { return }
+        guard ready else { return }
         runner?.cancel()
+        paused = false
+        Task { await gate.set(false) }
         callTimes = []
         lastCallMs = 0
         medianCallMs = 0
@@ -141,10 +143,10 @@ final class GuessWhoModel: ObservableObject {
     private func run() {
         runner = Task {
             do {
-                while !Task.isCancelled {
-                    try await playGame()
-                    try await pause(for: .seconds(3))
-                }
+                // one game per Play; it stops on the result and Play (or Reset) deals the next wall
+                try await playGame()
+                runner = nil
+                paused = true
             } catch is CancellationError {
             } catch {
                 phase = .failed(error.localizedDescription)
