@@ -19,8 +19,6 @@ public final class KevFastManager: Sendable {
         let options: [Int]
     }
 
-    static let stateBuckets = [32, 64, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048, 2560, 3072, 4096, 6144]
-    static let packedBuckets = [32, 64, 128, 256]
     static let lane = 128
     static let readouts = 16
     static let maxOptions = 16
@@ -31,6 +29,10 @@ public final class KevFastManager: Sendable {
     private let shape: Shape
     private let embeddings: Data
     private let padID: Int
+    /// State bucket -> packed buckets, from the package's function names.
+    private let buckets: [Int: [Int]]
+    private let stateBuckets: [Int]
+    private let largestPacked: Int
     private let functions = FunctionCache()
 
     actor FunctionCache {
@@ -72,29 +74,47 @@ public final class KevFastManager: Sendable {
         let embeddings = try Data(
             contentsOf: rowFolder.appendingPathComponent("embeddings.f16"), options: .alwaysMapped)
         guard embeddings.count == vocab * hidden * 2 else { throw KevError.invalidAsset("embeddings.f16 size") }
+        var buckets: [Int: [Int]] = [:]
+        let suffix = "_B\(readouts)_K\(maxOptions)"
+        for name in try await MLModelAsset(url: compiled).functionNames
+        where name.hasPrefix("fused_S") && name.hasSuffix(suffix) {
+            let numbers = name.dropLast(suffix.count).split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+            guard numbers.count == 2 else { continue }
+            buckets[numbers[0], default: []].append(numbers[1])
+        }
+        guard !buckets.isEmpty else {
+            throw KevError.invalidAsset("no fused_S*_P* functions in \(compiled.lastPathComponent)")
+        }
         return KevFastManager(
             rows: rows, compiled: compiled, computeUnits: computeUnits,
             shape: Shape(hidden: hidden, rotary: rotary, theta: theta, convTail: kernel - 1), embeddings: embeddings,
-            padID: pad)
+            padID: pad, buckets: buckets.mapValues { $0.sorted() })
     }
 
-    init(rows: KevManager, compiled: URL, computeUnits: MLComputeUnits, shape: Shape, embeddings: Data, padID: Int) {
+    init(
+        rows: KevManager, compiled: URL, computeUnits: MLComputeUnits, shape: Shape, embeddings: Data, padID: Int,
+        buckets: [Int: [Int]]
+    ) {
         self.rows = rows
         self.compiled = compiled
         self.computeUnits = computeUnits
         self.shape = shape
         self.embeddings = embeddings
         self.padID = padID
+        self.buckets = buckets
+        self.stateBuckets = buckets.keys.sorted()
+        self.largestPacked = buckets.values.compactMap(\.last).min() ?? 0
     }
 
-    /// Loads these functions now, so the first request of that shape does not pay for it.
-    public func warm(
-        stateBuckets: [Int] = [32, 64, 128, 256, 384, 512], packedBuckets: [Int] = [32, 64, 128, 256]
-    )
-        async throws
-    {
-        for s in stateBuckets {
-            for p in packedBuckets { _ = try await model(state: s, packed: p) }
+    /// Loads every function (or those of `stateBuckets`) and runs it once, so no request pays for loading or for the
+    /// first GPU dispatch.
+    public func warm(stateBuckets: [Int]? = nil) async throws {
+        for s in stateBuckets ?? self.stateBuckets {
+            for p in buckets[s] ?? [] {
+                _ = try await run(
+                    stateIDs: [padID], stateLen: s, branches: [Branch(ids: [padID], decide: 0, options: [0])],
+                    starts: [0], packedLen: p)
+            }
         }
     }
 
@@ -118,7 +138,7 @@ public final class KevFastManager: Sendable {
         let fits = branches.indices.filter {
             branches[$0].ids.count <= Self.lane && branches[$0].options.count <= Self.maxOptions
         }
-        guard let stateLen = Self.stateBuckets.first(where: { stateIDs.count <= $0 }) else {
+        guard let stateLen = stateBuckets.first(where: { stateIDs.count <= $0 }) else {
             for index in answers.indices {
                 answers[index] = try await rows.answer(stateIDs: stateIDs, question: questions[index])
             }
@@ -127,11 +147,13 @@ public final class KevFastManager: Sendable {
         for index in answers.indices where !fits.contains(index) {
             answers[index] = try await rows.answer(stateIDs: stateIDs, question: questions[index])
         }
-        for group in Self.packGroups(fits.map { branches[$0].ids.count }) {
+        for group in Self.packGroups(fits.map { branches[$0].ids.count }, packedLen: largestPacked) {
             let indices = group.map { fits[$0] }
             let starts = Self.laneStarts(indices.map { branches[$0].ids.count })
             let extent = zip(starts, indices).map { $0 + branches[$1].ids.count }.max() ?? 1
-            let packedLen = Self.packedBuckets.first { extent <= $0 }!
+            guard let packedLen = buckets[stateLen]?.first(where: { extent <= $0 }) else {
+                throw KevError.invalidAsset("no packed bucket of \(extent) tokens for state bucket \(stateLen)")
+            }
             let probabilities = try await run(
                 stateIDs: stateIDs, stateLen: stateLen, branches: indices.map { branches[$0] }, starts: starts,
                 packedLen: packedLen)
@@ -156,15 +178,15 @@ public final class KevFastManager: Sendable {
         return starts
     }
 
-    /// Greedy in-order groups of question indices that fit one call (largest packed bucket, readout count).
-    static func packGroups(_ lengths: [Int]) -> [[Int]] {
+    /// Greedy in-order groups of question indices that fit one call (`packedLen` tokens, readout count).
+    static func packGroups(_ lengths: [Int], packedLen: Int) -> [[Int]] {
         var groups: [[Int]] = []
         var current: [Int] = []
         for (index, _) in lengths.enumerated() {
             let candidate = current + [index]
             let starts = laneStarts(candidate.map { lengths[$0] })
             let extent = starts.last! + lengths[index]
-            if !current.isEmpty && (extent > packedBuckets.last! || candidate.count > readouts) {
+            if !current.isEmpty && (extent > packedLen || candidate.count > readouts) {
                 groups.append(current)
                 current = [index]
             } else {

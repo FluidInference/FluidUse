@@ -19,7 +19,6 @@ struct KevCheck {
         let arguments = Array(CommandLine.arguments.dropFirst())
         if #available(macOS 15.0, *), arguments.first == "fast-serving", arguments.count == 2 {
             let manager = try await KevFastManager.load(from: URL(fileURLWithPath: arguments[1]))
-            try await manager.warm()
             try await serving { try await manager.answer(state: $0, questions: $1, maxStateTokens: 8192) }
             return
         }
