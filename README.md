@@ -107,6 +107,30 @@ The current ten-seed capped run averages 3,667 pieces for GLiClass LUT8 and 2,87
 heuristic control. See [Benchmarks.md](Benchmarks.md) for the exact policy, per-seed results, and the
 limits of comparison with the older laya measurements.
 
+## Cua-S1-4B GUI decisions
+
+`CuaS1FourBManager` runs [Cua-S1-4B-0.2](https://huggingface.co/cua-ai/cua-s1-4b-0.2) (Qwen3.5-4B + Cua's
+LoRA adapters) on the GPU: one prefill pass scores a closed list of `(element, action)` options for an
+accessibility tree (`.text`) or a screenshot (`.multimodal`). Models download pinned and SHA-256 checked from
+[FluidInference/cua-s1-4b-coreml](https://huggingface.co/FluidInference/cua-s1-4b-coreml) on first use.
+
+```swift
+let cua = try await CuaS1FourBManager.load(configuration: .init(modality: .text, variant: "gptq"))
+let decision = try await cua.decide(CuaS1FourBState(
+    app: "portal", taskFamily: "login_auth", goal: "Log in",
+    accessibilityTree: "- [el_0] Button \"Log in\"",
+    options: [.init(elementId: "el_0", role: "Button", label: "Log in", action: "click"),
+              .init(elementId: "el_0", role: "Button", label: "Log in", action: "skip")]))
+print(decision.bestPerElement())
+```
+
+On a 613-task GUI-360 text split the fp16 and `gptq` (2.6 GB) builds both score 85.5% at about 1.1 s per
+decision on an M5 Pro; the Swift runtime matches the Python Core ML path exactly (38/38 fixture parity for
+both modalities). `swift run -c release FluidUseCuaS1 parity --models <dir> --fixtures <swift-text.json>`
+reruns the parity check against a local mobius build. Call `prewarm()` after `load` in an app: the first prediction of a fresh
+4B Core ML graph spends about 100 s specializing GPU kernels (cached by the OS afterwards). The text decoder is 2.6-6.8 GB and the multimodal
+one 4.0-7.4 GB, so this is a Mac-class model.
+
 ## GLiNER 2.5 classification
 
 `GLiNER2Manager` runs the published base or multilingual classification head on device. Both
