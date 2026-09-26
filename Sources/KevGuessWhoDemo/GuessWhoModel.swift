@@ -102,14 +102,23 @@ final class GuessWhoModel: ObservableObject {
             log(
                 "ready · Kev-0.8B fused Core ML (GPU) · \(people.count) Wikipedia people · \(Self.questions.count) questions"
             )
+            // waits for Play: nothing runs until the presenter starts it
+            paused = true
+            phase = .loading("Ready — press Play")
             ready = true
-            run()
         } catch {
             phase = .failed(error.localizedDescription)
         }
     }
 
     func togglePause() {
+        guard ready else { return }
+        guard runner != nil else {
+            paused = false
+            log("playing")
+            run()
+            return
+        }
         paused.toggle()
         log(paused ? "paused" : "playing")
         let value = paused
@@ -118,7 +127,7 @@ final class GuessWhoModel: ObservableObject {
 
     /// Abandons the current game and deals a fresh wall.
     func reset() {
-        guard ready else { return }
+        guard ready, runner != nil else { return }
         runner?.cancel()
         callTimes = []
         lastCallMs = 0
@@ -162,6 +171,7 @@ final class GuessWhoModel: ObservableObject {
         phase = .dealing
         let warmStart = DispatchTime.now().uptimeNanoseconds
         try await warm?()
+        try Task.checkCancellation()
         log(
             String(
                 format: "GPU functions re-warmed in %.2f s",
@@ -202,6 +212,8 @@ final class GuessWhoModel: ObservableObject {
                     + "\(cards[index].item.title) → yes: \(yes.isEmpty ? "none" : yes.joined(separator: ", "))",
                 model: true)
         }
+        // a cancelled (reset) game ends the stream without an error; stop here, the new game owns `cards`
+        try Task.checkCancellation()
         log(
             String(
                 format: "scan done · %d decisions in %.2f s · %.0f decisions/s", scanned * Self.questions.count,
@@ -222,8 +234,8 @@ final class GuessWhoModel: ObservableObject {
                 split(a, alive) < split(b, alive)
             }!
             unused.removeAll { $0 == pick }
-            let target = cards[hidden].answers![pick]
-            let losers = alive.filter { cards[$0].answers![pick] != target }
+            let target = says(hidden, pick)
+            let losers = alive.filter { says($0, pick) != target }
             if losers.isEmpty { continue }
             phase = .asking(Self.questions[pick])
             try await pause(for: .milliseconds(900))
@@ -260,9 +272,15 @@ final class GuessWhoModel: ObservableObject {
         print(model ? "\(time) \u{1B}[31m[Core ML]\u{1B}[0m \(text)" : "\(time) \u{1B}[36m[game]\u{1B}[0m \(text)")
     }
 
+    /// Kev's yes/no for `card` on `question` (false before the card is scanned).
+    private func says(_ card: Int, _ question: Int) -> Bool {
+        guard let answers = cards[card].answers, question < answers.count else { return false }
+        return answers[question]
+    }
+
     /// How far a question is from a 50/50 split of the cards still up.
     private func split(_ question: Int, _ alive: [Int]) -> Int {
-        let yes = alive.filter { cards[$0].answers![question] }.count
+        let yes = alive.filter { says($0, question) }.count
         return abs(2 * yes - alive.count)
     }
 

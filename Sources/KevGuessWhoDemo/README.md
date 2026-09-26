@@ -17,7 +17,7 @@ Sources/KevGuessWhoDemo/demo.sh [model dir]            # app + Terminal: asitop 
 KEV_MODEL_DIR=<model dir> swift run -c release KevGuessWhoDemo   # app only
 ```
 
-Header controls: Pause / Play (Space), Reset to a fresh wall (⌘R). The launcher's asitop pane asks for the sudo
+The app opens idle; Play (Space) starts it, Pause / Play toggles, Reset (⌘R) deals a fresh wall. The launcher's asitop pane asks for the sudo
 password (powermetrics); the tmux session is reused across launches.
 
 `<model dir>` holds `tokenizer.json`, one row bucket (`L512_K16/` with `embeddings.f16`), and `fused/` with the

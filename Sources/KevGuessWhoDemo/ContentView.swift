@@ -19,7 +19,7 @@ struct ContentView: View {
                     .padding(.bottom, 8)
                 }
                 .frame(maxWidth: .infinity)
-                sidebar.frame(width: 300)
+                sidebar.frame(width: 280)
             }
             .padding(16)
             Text(DBpediaSample.attribution + " · questions answered by Kev-0.8B (jaredpalmer/kev, Apache-2.0)")
@@ -35,19 +35,20 @@ struct ContentView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 28) {
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 20) {
                 Text("GUESS WHO").font(.system(size: 13, weight: .heavy)).tracking(3).foregroundStyle(.orange)
-                Text(status).font(.system(size: 28, weight: .bold)).lineLimit(1).minimumScaleFactor(0.5)
-                    .contentTransition(.opacity)
+                    .fixedSize()
+                controls
+                Spacer(minLength: 12)
+                stat(String(format: "%.1f ms", model.lastCallMs), "last call")
+                stat(String(format: "%.1f ms", model.medianCallMs), "median call")
+                stat(String(format: "%.0f/s", model.scanRate), "decisions / s")
+                stat("\(model.totalDecisions)", "decisions")
             }
-            .layoutPriority(1)
-            Spacer(minLength: 12)
-            controls
-            stat(String(format: "%.1f ms", model.lastCallMs), "last call")
-            stat(String(format: "%.1f ms", model.medianCallMs), "median call")
-            stat(String(format: "%.0f/s", model.scanRate), "decisions / s")
-            stat("\(model.totalDecisions)", "decisions")
+            // second row, full width: a changing status never moves the controls or metrics
+            Text(status).font(.system(size: 30, weight: .bold)).lineLimit(1).truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 20).padding(.vertical, 14)
         .background(Color.white.opacity(0.04))
@@ -57,8 +58,7 @@ struct ContentView: View {
         switch model.phase {
         case .loading(let text): text
         case .dealing: "Dealing \(model.cards.count) new cards…"
-        case .scanning:
-            "Reading \(model.scanned)/\(model.cards.count) bios · \(GuessWhoModel.questions.count) questions each"
+        case .scanning: "Reading \(model.cards.count) bios · \(GuessWhoModel.questions.count) questions each"
         case .asking(let question): question
         case .solved(let name): "It's \(name)!"
         case .failed(let error): "Error: \(error)"
@@ -68,9 +68,9 @@ struct ContentView: View {
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
             Text(value).font(.system(size: 22, weight: .semibold, design: .monospaced)).lineLimit(1)
-                .minimumScaleFactor(0.6).contentTransition(.numericText())
             Text(label).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
+        .frame(width: 112, alignment: .trailing)
     }
 
     private var controls: some View {
@@ -82,6 +82,7 @@ struct ContentView: View {
                     .frame(width: 78)
             }
             .keyboardShortcut(.space, modifiers: [])
+            .focusable(false)
             .help("Play / pause (Space)")
             Button {
                 model.reset()
@@ -89,6 +90,7 @@ struct ContentView: View {
                 Label("Reset", systemImage: "arrow.counterclockwise").frame(width: 78)
             }
             .keyboardShortcut("r", modifiers: [.command])
+            .focusable(false)
             .help("New wall (⌘R)")
         }
         .buttonStyle(.borderedProminent)
