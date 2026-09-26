@@ -93,8 +93,14 @@ final class GuessWhoModel: ObservableObject {
                 phase = .failed("Kev's fused Core ML path needs macOS 15")
                 return
             }
-            let directory = Self.modelDirectory()
-            phase = .loading("Loading Kev-0.8B Core ML from \(directory.lastPathComponent)…")
+            let directory: URL
+            if let local = Self.localModelDirectory() {
+                directory = local
+            } else {
+                phase = .loading("Downloading Kev-0.8B Core ML (FluidInference/kev-0.8b-coreml)…")
+                directory = try await KevModelStore.ensure()
+            }
+            phase = .loading("Loading Kev-0.8B Core ML…")
             let manager = try await KevFastManager.load(from: directory)
             phase = .loading("Compiling the GPU functions…")
             try await manager.warm()
@@ -301,10 +307,12 @@ final class GuessWhoModel: ObservableObject {
         totalDecisions += decisions
     }
 
-    static func modelDirectory() -> URL {
-        if let path = ProcessInfo.processInfo.environment["KEV_MODEL_DIR"] { return URL(fileURLWithPath: path) }
+    /// A local model directory (`KEV_MODEL_DIR` or the first argument); otherwise the pinned Hugging Face snapshot.
+    static func localModelDirectory() -> URL? {
+        if let path = ProcessInfo.processInfo.environment["KEV_MODEL_DIR"], !path.isEmpty {
+            return URL(fileURLWithPath: path)
+        }
         if CommandLine.arguments.count > 1 { return URL(fileURLWithPath: CommandLine.arguments[1]) }
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-            "Documents/mobius-kev-0.8b/models/computer-use/kev-0.8b/coreml/build/kev-model")
+        return nil
     }
 }

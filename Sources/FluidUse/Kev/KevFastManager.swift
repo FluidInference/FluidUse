@@ -67,12 +67,13 @@ public final class KevFastManager: Sendable {
             let rotary = config["rotary_dim"] as? Int, let theta = (config["rope_theta"] as? NSNumber)?.doubleValue,
             let pad = config["pad_id"] as? Int, let vocab = config["vocab_size"] as? Int
         else { throw KevError.invalidAsset("fused/config.json is missing fields") }
-        let rowFolder = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-            .map { $0.resolvingSymlinksInPath() }
-            .first { $0.lastPathComponent.range(of: #"^L\d+_K\d+$"#, options: .regularExpression) != nil }
-        guard let rowFolder else { throw KevError.invalidAsset("no row bucket for the embedding table") }
-        let embeddings = try Data(
-            contentsOf: rowFolder.appendingPathComponent("embeddings.f16"), options: .alwaysMapped)
+        // the embedding table ships once, in one of the row bucket folders
+        guard
+            let table = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .map({ $0.resolvingSymlinksInPath().appendingPathComponent("embeddings.f16") })
+                .first(where: { FileManager.default.fileExists(atPath: $0.path) })
+        else { throw KevError.invalidAsset("no row bucket folder has embeddings.f16") }
+        let embeddings = try Data(contentsOf: table, options: .alwaysMapped)
         guard embeddings.count == vocab * hidden * 2 else { throw KevError.invalidAsset("embeddings.f16 size") }
         var buckets: [Int: [Int]] = [:]
         let suffix = "_B\(readouts)_K\(maxOptions)"

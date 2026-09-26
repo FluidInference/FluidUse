@@ -1,9 +1,9 @@
 #!/bin/zsh
 # Guess Who demo, plus a terminal (Ghostty if installed) with asitop (GPU / ANE / power) and the live model log side by side.
-#   Sources/KevGuessWhoDemo/demo.sh [model dir]      (or KEV_MODEL_DIR)
+#   Sources/KevGuessWhoDemo/demo.sh [model dir]      (or KEV_MODEL_DIR; default: download FluidInference/kev-0.8b-coreml)
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-MODEL=${1:-${KEV_MODEL_DIR:-$HOME/Documents/mobius-kev-0.8b/models/computer-use/kev-0.8b/coreml/build/kev-demo-model}}
+MODEL=${1:-${KEV_MODEL_DIR:-}}
 LOG=${TMPDIR:-/tmp}/kev-guess-who.log
 ASITOP=$(command -v asitop || echo "$HOME/.local/bin/asitop")
 

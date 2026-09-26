@@ -129,8 +129,11 @@ public final class KevManager: Sendable {
             let state = tokens["state"], let question = tokens["q"], let option = tokens["opt"],
             let close = tokens["close_opt"], let decide = tokens["decide"]
         else { throw KevError.invalidAsset("config.json is missing Kev fields") }
-        let embeddings = try Data(
-            contentsOf: folders[0].appendingPathComponent("embeddings.f16"), options: .alwaysMapped)
+        guard
+            let table = folders.map({ $0.appendingPathComponent("embeddings.f16") })
+                .first(where: { FileManager.default.fileExists(atPath: $0.path) })
+        else { throw KevError.invalidAsset("no bucket folder has embeddings.f16") }
+        let embeddings = try Data(contentsOf: table, options: .alwaysMapped)
         guard embeddings.count == vocab * hidden * 2 else {
             throw KevError.invalidAsset("embeddings.f16 has \(embeddings.count) bytes, expected \(vocab * hidden * 2)")
         }

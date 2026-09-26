@@ -14,17 +14,16 @@ runs on the GPU through Core ML; there is no input.
 
 ```bash
 Sources/KevGuessWhoDemo/demo.sh [model dir]            # app + Terminal: asitop on top, live model log below
-KEV_MODEL_DIR=<model dir> swift run -c release KevGuessWhoDemo   # app only
+swift run -c release KevGuessWhoDemo [model dir]              # app only
 ```
 
 The app opens idle. Play (Space) plays a set of up to 4 games and stops on the last result; Pause / Play toggles mid-game; Reset (⌘R) starts a fresh set. The launcher's asitop pane asks for the sudo
 password (powermetrics); the tmux session is reused across launches.
 
-`<model dir>` holds `tokenizer.json`, one row bucket (`L512_K16/` with `embeddings.f16`), and `fused/` with the
-multifunction `KevFused.mlmodelc` + `config.json` built by mobius `models/computer-use/kev-0.8b/coreml`
-(`convert-stages.py --stage fused`, `combine-stages.py`). The demo uses `fused_S{32,64,128,192,256,384}_P192_B16_K16`
-only: every function in a package adds to load time, so a package with just these starts in ~30–45 s (the first launch
-of a new package also compiles the GPU programs, which takes a few minutes).
+The model downloads on first run from
+[FluidInference/kev-0.8b-coreml](https://huggingface.co/FluidInference/kev-0.8b-coreml) (pinned revision, checksummed;
+~3.3 GB) into the FluidUse cache; pass a directory with the same layout to use a local conversion. The first launch
+also compiles the GPU programs, which takes a few minutes; later launches start in well under a minute.
 
 ## Numbers (M5 Pro)
 
