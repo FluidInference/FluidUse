@@ -29,11 +29,8 @@ final class ImageSortModel: ObservableObject {
     @Published private(set) var sorted = 0
     @Published private(set) var correct = 0
     @Published private(set) var elapsed: Double = 0
-    /// Live Neural Engine time per image: each call's end minus the later of its start and the previous call's end
-    /// (calls run one at a time, so this removes queueing), median of the last 200.
-    @Published private(set) var liveEncoderMilliseconds: Double?
-    private var serviceTimes: [Double] = []
-    private var lastPredictionEnd: UInt64 = 0
+    /// Chart slot of the photo shown in the Now Sorting panel.
+    private var currentSlot: CGRect?
     @Published private(set) var counts: [String: Int] = [:]
     @Published private(set) var chartImage: CGImage?
     /// The photo just sorted, shown large with its top-5 breeds.
@@ -151,15 +148,13 @@ final class ImageSortModel: ObservableObject {
         counts = [:]
         current = nil
         currentImage = nil
+        currentSlot = nil
         flights = []
         sorted = 0
         correct = 0
         elapsed = 0
         elapsedBeforePause = 0
         modelMilliseconds = []
-        serviceTimes = []
-        lastPredictionEnd = 0
-        liveEncoderMilliseconds = nil
         phase = .ready
     }
 
@@ -187,6 +182,13 @@ final class ImageSortModel: ObservableObject {
         if !Task.isCancelled, queue.isEmpty {
             tick()
             phase = .finished
+            // The last photo leaves the panel for its tile too, leaving only the finished chart.
+            if let current, let slot = currentSlot {
+                fly(image: currentImage ?? current.tile, to: slot, wrong: !current.matchesGold)
+            }
+            current = nil
+            currentImage = nil
+            currentSlot = nil
             print(
                 "finished \(sorted) photos in \(String(format: "%.2f", elapsed)) s "
                     + "(\(String(format: "%.0f", photosPerSecond)) photos/s), "
@@ -294,18 +296,10 @@ final class ImageSortModel: ObservableObject {
             modelMilliseconds.append(placed.result.milliseconds)
         }
         counts = updated
-        for placed in batch.sorted(by: { $0.result.predictionEnd < $1.result.predictionEnd }) {
-            let begin = max(placed.result.predictionStart, lastPredictionEnd)
-            if placed.result.predictionEnd > begin {
-                serviceTimes.append(Double(placed.result.predictionEnd - begin) / 1e6)
-            }
-            lastPredictionEnd = max(lastPredictionEnd, placed.result.predictionEnd)
-        }
-        if serviceTimes.count > 200 { serviceTimes.removeFirst(serviceTimes.count - 200) }
-        if !serviceTimes.isEmpty { liveEncoderMilliseconds = serviceTimes.sorted()[serviceTimes.count / 2] }
         chartImage = chart.snapshot()
         current = last
         currentImage = Self.thumbnail(last.item.file, size: 480)
+        currentSlot = slots.last { $0.0.id == last.id }?.1
         let ids = Set(batch.map(\.id))
         queue.removeAll { ids.contains($0.id) }
         remaining = queue.count

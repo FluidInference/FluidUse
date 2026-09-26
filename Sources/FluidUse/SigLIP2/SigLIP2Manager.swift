@@ -96,22 +96,6 @@ public final class SigLIP2Manager: Sendable {
             embedding: try Self.vector(output, name: "image_embeds"), predictionStart: start, predictionEnd: end)
     }
 
-    /// Median wall time of the image encoder alone (no decoding or resizing), one call at a time after `warmup`
-    /// calls. Measures the compute units the manager was loaded with.
-    public func imageEncoderMilliseconds(iterations: Int = 30, warmup: Int = 5) async throws -> Double {
-        let size = NSNumber(value: config.imageSize)
-        let input = try MLMultiArray(shape: [1, 3, size, size], dataType: .float32)
-        input.dataPointer.initializeMemory(as: Float.self, repeating: 0, count: input.count)
-        let features = try MLDictionaryFeatureProvider(dictionary: ["pixel_values": MLFeatureValue(multiArray: input)])
-        var times: [Double] = []
-        for index in 0..<(warmup + iterations) {
-            let start = DispatchTime.now().uptimeNanoseconds
-            _ = try await imageModel.prediction(from: features)
-            if index >= warmup { times.append(Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6) }
-        }
-        return times.sorted()[times.count / 2]
-    }
-
     /// Scores `image` against label embeddings from `embed(labels:)`.
     public func classify(image: CGImage, labels: [String], labelEmbeddings: [[Float]]) async throws -> SigLIP2Answer {
         guard labels.count == labelEmbeddings.count, !labels.isEmpty else {

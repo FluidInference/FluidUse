@@ -41,9 +41,6 @@ public final class ImageSorter: Sendable {
 
     public var modelName: String { manager.config.name }
 
-    /// Median time of the image encoder alone on the Neural Engine, one call at a time.
-    public func encoderMilliseconds() async throws -> Double { try await manager.imageEncoderMilliseconds() }
-
     public func sort(_ item: PetItem) async throws -> Result {
         let image = try Self.decode(item.file)
         let start = DispatchTime.now().uptimeNanoseconds

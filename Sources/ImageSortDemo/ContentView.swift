@@ -98,14 +98,8 @@ struct ContentView: View {
             stat("Elapsed time", String(format: "%.1f s", model.elapsed), size: size)
             stat("Photos/s", String(format: "%.0f", model.sorted > 0 ? model.photosPerSecond : 0), size: size)
             stat("ms/photo", millisecondsPerPhoto, size: size)
-            stat("Neural Engine", neuralEngineMilliseconds + " ms", size: size)
             stat("Accuracy", String(format: "%.1f%%", (model.accuracy ?? 0) * 100), size: size)
         }
-    }
-
-    /// Live Neural Engine time per image during the run; 0.0 before Start and after Reset.
-    private var neuralEngineMilliseconds: String {
-        model.liveEncoderMilliseconds.map { String(format: "%.1f", $0) } ?? "0.0"
     }
 
     /// Wall time per photo with several model calls overlapping.
