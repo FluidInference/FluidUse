@@ -44,41 +44,50 @@ public enum DBpediaSample {
         let rows: [Entry]
     }
 
-    public static func cacheURL(count: Int, seed: UInt64) -> URL {
+    public static func cacheURL(count: Int, seed: UInt64, classes: [String] = categories) -> URL {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("FluidUse/sort-anything/dbpedia-test-\(count)-seed\(seed).json")
+        let suffix = classes == categories ? "" : "-" + classes.joined(separator: "+")
+        return base.appendingPathComponent("FluidUse/sort-anything/dbpedia-test-\(count)-seed\(seed)\(suffix).json")
     }
 
-    /// `count` items, as even across the 14 classes as possible, in a seeded shuffled order.
-    public static func load(count: Int = 1000, seed: UInt64 = 0) async throws -> [SortItem] {
-        let cache = cacheURL(count: count, seed: seed)
+    /// `count` items, as even across `classes` (default: all 14) as possible, in a seeded shuffled order.
+    public static func load(
+        count: Int = 1000, seed: UInt64 = 0, classes: [String] = categories
+    ) async throws
+        -> [SortItem]
+    {
+        let cache = cacheURL(count: count, seed: seed, classes: classes)
         if let data = try? Data(contentsOf: cache), let items = try? JSONDecoder().decode([SortItem].self, from: data),
             items.count == count
         {
             return items
         }
         var generator = SeededGenerator(seed: seed)
-        let perClass = (count + categories.count - 1) / categories.count
+        let labels = classes.compactMap { categories.firstIndex(of: $0) }
+        let perClass = (count + labels.count - 1) / labels.count
         var items: [SortItem] = []
-        for label in categories.indices {
+        for label in labels {
             let offset = label * rowsPerClass + Int(generator.next() % UInt64(rowsPerClass - perClass))
-            var components = URLComponents(string: endpoint)!
-            components.queryItems = [
-                URLQueryItem(name: "dataset", value: "fancyzhx/dbpedia_14"),
-                URLQueryItem(name: "config", value: "dbpedia_14"),
-                URLQueryItem(name: "split", value: "test"),
-                URLQueryItem(name: "offset", value: String(offset)),
-                URLQueryItem(name: "length", value: String(perClass)),
-            ]
-            let (data, response) = try await URLSession.shared.data(from: components.url!)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                throw URLError(.badServerResponse)
-            }
-            for entry in try JSONDecoder().decode(Page.self, from: data).rows where entry.row.label == label {
-                items.append(
-                    SortItem(
-                        id: entry.rowIndex, title: entry.row.title.trimmingCharacters(in: .whitespaces),
-                        content: entry.row.content.trimmingCharacters(in: .whitespaces), gold: categories[label]))
+            // the dataset viewer serves at most 100 rows per request
+            for page in stride(from: 0, to: perClass, by: 100) {
+                var components = URLComponents(string: endpoint)!
+                components.queryItems = [
+                    URLQueryItem(name: "dataset", value: "fancyzhx/dbpedia_14"),
+                    URLQueryItem(name: "config", value: "dbpedia_14"),
+                    URLQueryItem(name: "split", value: "test"),
+                    URLQueryItem(name: "offset", value: String(offset + page)),
+                    URLQueryItem(name: "length", value: String(min(100, perClass - page))),
+                ]
+                let (data, response) = try await URLSession.shared.data(from: components.url!)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                    throw URLError(.badServerResponse)
+                }
+                for entry in try JSONDecoder().decode(Page.self, from: data).rows where entry.row.label == label {
+                    items.append(
+                        SortItem(
+                            id: entry.rowIndex, title: entry.row.title.trimmingCharacters(in: .whitespaces),
+                            content: entry.row.content.trimmingCharacters(in: .whitespaces), gold: categories[label]))
+                }
             }
         }
         items.shuffle(using: &generator)
