@@ -101,8 +101,10 @@ struct ContentView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("\(model.remaining) of \(model.cards.count) left")
-                .font(.headline)
+            Text(
+                "Game \(max(model.setGame, 1)) of \(GuessWhoModel.gamesPerPlay) · \(model.remaining) of \(model.cards.count) left"
+            )
+            .font(.headline)
             if model.scanSeconds > 0 {
                 Text(
                     String(

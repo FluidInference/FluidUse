@@ -53,12 +53,15 @@ final class GuessWhoModel: ObservableObject {
         "Is this person a writer or poet?",
     ]
     static let cardsPerGame = 80
+    static let gamesPerPlay = 4
 
     @Published var cards: [Card] = []
     @Published var phase: Phase = .loading("Loading Kev-0.8B…")
     @Published var secret: Int?
     @Published var asked: [(question: String, answer: Bool, removed: Int)] = []
     @Published var game = 0
+    /// Position of the current game in the set started by Play.
+    @Published var setGame = 0
     @Published var scanned = 0
     @Published var scanSeconds: Double = 0
     @Published var lastCallMs: Double = 0
@@ -143,8 +146,12 @@ final class GuessWhoModel: ObservableObject {
     private func run() {
         runner = Task {
             do {
-                // one game per Play; it stops on the result and Play (or Reset) deals the next wall
-                try await playGame()
+                // a set of games per Play; it stops on the last result and Play (or Reset) deals a new set
+                for round in 1...Self.gamesPerPlay {
+                    setGame = round
+                    try await playGame()
+                    if round < Self.gamesPerPlay { try await pause(for: .seconds(3)) }
+                }
                 runner = nil
                 paused = true
             } catch is CancellationError {
