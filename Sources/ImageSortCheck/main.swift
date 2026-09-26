@@ -4,7 +4,8 @@ import ImageSort
 
 // Headless checks for the SigLIP 2 image sorter.
 //   ImageSortCheck tokenizer <cases.json>   token ids must equal the Python tokenizer's
-//   ImageSortCheck [--count=N] [--inflight=N] [--predictions=out.json]   zero-shot Pets accuracy and speed
+//   ImageSortCheck [--split=test|all] [--count=N] [--inflight=N] [--predictions=out.json]
+//       zero-shot Pets accuracy and speed; test split (3,669) by default, all 7,349 when the train split is cached
 setvbuf(stdout, nil, _IOLBF, 0)
 let arguments = CommandLine.arguments.dropFirst()
 
@@ -39,7 +40,8 @@ if arguments.first == "tokenizer", let path = arguments.dropFirst().first {
 
 let count = option("count").flatMap(Int.init)
 let inFlight = option("inflight").flatMap(Int.init) ?? 4
-let items = try await PetsSample.load(count: count ?? PetsSample.testCount) { done, total in
+let testOnly = option("split") != "all"
+let items = try await PetsSample.load(count: count, testOnly: testOnly) { done, total in
     if done % 250 == 0 || done == total { print("cached \(done)/\(total) photos") }
 }
 let sorter = try await ImageSorter.load()

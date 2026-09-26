@@ -53,10 +53,12 @@ public enum PetsSample {
             .appendingPathComponent("FluidUse/image-sort/oxford-pets-test")
     }
 
-    /// `count` photos in a seeded shuffled order (every cached photo when `count` is nil). The viewer API fetches the
+    /// `count` photos in a seeded shuffled order (every eligible photo when `count` is nil); `testOnly` restricts
+    /// the pool to the 3,669 test photos. The viewer API fetches the
     /// 3,669 test photos; a cache that also holds the train split (ids from 3,669) samples from both.
     public static func load(
-        count: Int? = 1000, seed: UInt64 = 0, progress: (@Sendable (Int, Int) -> Void)? = nil
+        count: Int? = 1000, seed: UInt64 = 0, testOnly: Bool = false,
+        progress: (@Sendable (Int, Int) -> Void)? = nil
     ) async throws -> [PetItem] {
         let directory = cacheDirectory()
         let manifestURL = directory.appendingPathComponent("manifest.json")
@@ -82,7 +84,8 @@ public enum PetsSample {
         }
 
         var generator = SeededGenerator(seed: seed)
-        let chosen = Array(labels.keys.sorted().shuffled(using: &generator).prefix(count ?? labels.count))
+        let pool = labels.keys.filter { !testOnly || $0 < testCount }.sorted()
+        let chosen = Array(pool.shuffled(using: &generator).prefix(count ?? pool.count))
         let missing = chosen.filter { !manager.fileExists(atPath: file(for: $0).path) }
         if !missing.isEmpty {
             if sources.isEmpty {

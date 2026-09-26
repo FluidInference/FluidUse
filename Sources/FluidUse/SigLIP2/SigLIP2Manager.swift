@@ -18,6 +18,23 @@ public final class SigLIP2Manager: Sendable {
         self.textModel = textModel
     }
 
+    /// Downloads (once, checksum-verified) and loads the published fp16 packages.
+    public static func load(
+        cacheDirectory: URL? = nil, computeUnits: MLComputeUnits = .cpuAndNeuralEngine,
+        progress: SigLIP2ModelStore.Progress? = nil
+    ) async throws -> SigLIP2Manager {
+        let directory = try await SigLIP2ModelStore.ensure(cacheDirectory: cacheDirectory, progress: progress)
+        return try await load(from: directory, computeUnits: computeUnits)
+    }
+
+    /// Loads the manager from `SIGLIP2_MODEL_DIR` when set, otherwise from the published packages.
+    public static func loadDefault(progress: SigLIP2ModelStore.Progress? = nil) async throws -> SigLIP2Manager {
+        if let path = ProcessInfo.processInfo.environment["SIGLIP2_MODEL_DIR"], !path.isEmpty {
+            return try await load(from: URL(fileURLWithPath: path))
+        }
+        return try await load(progress: progress)
+    }
+
     /// Loads `config.json`, `tokenizer.json`, and the image and text packages (`.mlmodelc` preferred) from
     /// `directory`, as written by the mobius converter.
     public static func load(

@@ -29,12 +29,12 @@ public final class ImageSorter: Sendable {
         self.embeddings = embeddings
     }
 
-    /// Loads the encoders from `SIGLIP2_MODEL_DIR` and embeds the breed prompts once.
-    public static func load(breeds: [String] = PetsSample.breeds) async throws -> ImageSorter {
-        guard let path = ProcessInfo.processInfo.environment["SIGLIP2_MODEL_DIR"], !path.isEmpty else {
-            throw SigLIP2Error.invalidAsset("Set SIGLIP2_MODEL_DIR to the converted siglip2-base-patch16-256 folder")
-        }
-        let manager = try await SigLIP2Manager.load(from: URL(fileURLWithPath: path))
+    /// Loads the encoders (from `SIGLIP2_MODEL_DIR`, or downloaded once from Hugging Face) and embeds the breed
+    /// prompts once.
+    public static func load(
+        breeds: [String] = PetsSample.breeds, progress: SigLIP2ModelStore.Progress? = nil
+    ) async throws -> ImageSorter {
+        let manager = try await SigLIP2Manager.loadDefault(progress: progress)
         let embeddings = try await manager.embed(labels: breeds.map(PetsSample.prompt(for:)))
         return ImageSorter(manager: manager, breeds: breeds, embeddings: embeddings)
     }

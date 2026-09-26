@@ -94,8 +94,11 @@ final class ImageSortModel: ObservableObject {
             items = try await PetsSample.load(count: total) { [weak self] done, all in
                 Task { @MainActor in self?.phase = .loading("Cached \(done) / \(all) photos") }
             }
-            phase = .loading("Loading SigLIP 2 and embedding 37 breed names…")
-            sorter = try await ImageSorter.load()
+            phase = .loading("Loading SigLIP 2 (first run downloads 750 MB) and embedding 37 breed names…")
+            sorter = try await ImageSorter.load { [weak self] file, bytes in
+                guard bytes > 0 else { return }
+                Task { @MainActor in self?.phase = .loading("Downloaded \(file)") }
+            }
             _ = try await sorter?.sort(items[0])
             reset()
             print("ready at \(Date().timeIntervalSince1970)")
