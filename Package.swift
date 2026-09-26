@@ -50,6 +50,9 @@ let package = Package(
         .executableTarget(name: "SortDecisionsCheck", dependencies: ["SortAnything"]),
         .executableTarget(name: "SortDecisionsDemo", dependencies: ["SortAnything"], exclude: ["README.md"]),
         .executableTarget(name: "SortAnythingDemo", dependencies: ["SortAnything"], exclude: ["README.md"]),
+        .target(name: "ImageSort", dependencies: ["FluidUse"]),
+        .executableTarget(name: "ImageSortCheck", dependencies: ["ImageSort", "FluidUse"]),
+        .executableTarget(name: "ImageSortDemo", dependencies: ["ImageSort"], exclude: ["README.md"]),
         .testTarget(
             name: "FluidUseTests", dependencies: ["FluidUse", "LayaTetris"],
             resources: [.copy("Fixtures")]
