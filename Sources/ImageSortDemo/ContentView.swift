@@ -22,21 +22,43 @@ struct ContentView: View {
     @State private var frames: [String: CGRect] = [:]
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            switch model.phase {
-            case .loading(let message):
-                status(message, spinning: true)
-            case .failed(let message):
-                status("Failed: \(message)", spinning: false)
-            default:
-                board
+        GeometryReader { proxy in
+            // Narrow windows merge the header and the current photo into one band so the chart gets the rest.
+            let narrow = proxy.size.width < 980
+            VStack(spacing: 0) {
+                if narrow { compactTop } else { header }
+                Divider()
+                switch model.phase {
+                case .loading(let message):
+                    status(message, spinning: true)
+                case .failed(let message):
+                    status("Failed: \(message)", spinning: false)
+                default:
+                    board(narrow: narrow)
+                }
+                Divider()
+                footer
             }
-            Divider()
-            footer
+            .coordinateSpace(name: "board")
+            .onPreferenceChange(FramesKey.self) { frames = $0 }
+            .overlay(alignment: .topLeading) { flying }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var compactTop: some View {
+        HStack(alignment: .top, spacing: 16) {
+            photo.frame(width: 176, height: 176)
+            VStack(alignment: .leading, spacing: 10) {
+                titleBlock
+                stats(size: 17)
+                topFive.frame(maxWidth: 380, alignment: .leading)
+            }
+            Spacer(minLength: 8)
+            controls
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var header: some View {
@@ -44,13 +66,13 @@ struct ContentView: View {
             HStack(alignment: .center, spacing: 18) {
                 titleBlock
                 Spacer(minLength: 12)
-                stats
+                stats()
                 controls
             }
             VStack(alignment: .leading, spacing: 10) {
                 titleBlock
                 HStack(alignment: .center, spacing: 14) {
-                    stats
+                    stats()
                     Spacer(minLength: 8)
                     controls
                 }
@@ -68,13 +90,13 @@ struct ContentView: View {
         }
     }
 
-    private var stats: some View {
-        HStack(spacing: 16) {
-            stat("Sorted", "\(model.sorted) / \(model.total)")
-            stat("Photos / s", model.sorted > 0 ? String(format: "%.0f", model.photosPerSecond) : "–")
-            stat("Elapsed", String(format: "%.1f s", model.elapsed))
-            stat("ms / photo", millisecondsPerPhoto)
-            stat("Correct breed", model.accuracy.map { String(format: "%.1f%%", $0 * 100) } ?? "–")
+    private func stats(size: CGFloat = 20) -> some View {
+        HStack(spacing: size < 20 ? 12 : 16) {
+            stat("Sorted", "\(model.sorted) / \(model.total)", size: size)
+            stat("Photos / s", model.sorted > 0 ? String(format: "%.0f", model.photosPerSecond) : "–", size: size)
+            stat("Elapsed", String(format: "%.1f s", model.elapsed), size: size)
+            stat("ms / photo", millisecondsPerPhoto, size: size)
+            stat("Correct breed", model.accuracy.map { String(format: "%.1f%%", $0 * 100) } ?? "–", size: size)
         }
     }
 
@@ -85,11 +107,11 @@ struct ContentView: View {
         return model.medianMilliseconds.map { String(format: "%.1f", $0) } ?? "–"
     }
 
-    private func stat(_ title: String, _ value: String) -> some View {
+    private func stat(_ title: String, _ value: String, size: CGFloat) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
             Text(title.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                 .lineLimit(1).fixedSize()
-            Text(value).font(.system(size: 20, weight: .semibold, design: .rounded)).monospacedDigit()
+            Text(value).font(.system(size: size, weight: .semibold, design: .rounded)).monospacedDigit()
                 .contentTransition(.numericText()).fixedSize()
         }
     }
@@ -119,14 +141,10 @@ struct ContentView: View {
         }
     }
 
-    private var board: some View {
-        GeometryReader { proxy in
-            // Narrow windows stack the current photo above the chart so the chart gets the full width.
-            if proxy.size.width < 980 {
-                VStack(alignment: .leading, spacing: 12) {
-                    compactNowSorting.frame(height: min(200, proxy.size.height * 0.28))
-                    chart(labelWidth: 150)
-                }
+    private func board(narrow: Bool) -> some View {
+        Group {
+            if narrow {
+                chart(labelWidth: 150)
             } else {
                 HStack(alignment: .top, spacing: 18) {
                     nowSorting.frame(width: 250)
@@ -135,9 +153,6 @@ struct ContentView: View {
             }
         }
         .padding(14)
-        .coordinateSpace(name: "board")
-        .onPreferenceChange(FramesKey.self) { frames = $0 }
-        .overlay(alignment: .topLeading) { flying }
     }
 
     /// Photos travelling from the Now Sorting panel to their tile; they shrink to tile size on arrival.
@@ -208,22 +223,6 @@ struct ContentView: View {
             Spacer(minLength: 0)
             Text("Labels are the 37 breed names, typed once: \"a photo of a {breed}, a type of pet.\"")
                 .font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private var compactNowSorting: some View {
-        HStack(alignment: .top, spacing: 14) {
-            photo
-            VStack(alignment: .leading, spacing: 8) {
-                Text("NOW SORTING · \(model.remaining) left").font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                topFive
-                Spacer(minLength: 0)
-                Text("Labels are the 37 breed names, typed once: \"a photo of a {breed}, a type of pet.\"")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: 420, alignment: .leading)
-            Spacer(minLength: 0)
         }
     }
 
