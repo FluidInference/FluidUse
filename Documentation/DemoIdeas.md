@@ -94,8 +94,9 @@ between calls
 ([Register](https://www.theregister.com/ai-and-ml/2026/09/16/typesafe-ai-debuts-model-for-machines-that-plays-doom/5296711),
 [doom-jev](https://github.com/mikespins/doom-jev)). We ran both a stock model
 in that style and a small model trained on the game, on ViZDoom
-`defend_the_center` (spin in place and shoot, 60 s episodes). Code is on local
-branch `feat/vizdoom-gliclass` (`Tools/doom`).
+`defend_the_center` (spin in place and shoot, 60 s episodes). Code is in
+[#20](https://github.com/FluidInference/FluidUse/pull/20) (`Tools/doom`); Core ML
+models at [FluidInference/sauerkrautlm-doom-coreml](https://huggingface.co/FluidInference/sauerkrautlm-doom-coreml).
 
 | Player | Input | Kills | Survived | ms per decision |
 | --- | --- | ---: | ---: | ---: |
@@ -126,7 +127,7 @@ identical with, the Sauerkraut setup.
 - Demo is built: split screen with the game, the depth grid, action
   probabilities, and ms per decision, plus Terminal windows for `sudo asitop`
   and a decision log. Seeds 10016 and 10005 reach 25 kills and survive the full
-  60 s. Next step is a Hugging Face upload of the Core ML model.
+  60 s.
 - Stronger follow-up:
   [tiny-doom-defender](https://huggingface.co/anakin87/tiny-doom-defender)
   (1.1M, supervised then PPO) reports 23.12 kills.
