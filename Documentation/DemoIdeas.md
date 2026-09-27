@@ -86,36 +86,67 @@ action**. Parakeet EOU hears the task, laya-browser or CUA-S1-FORMS picks the
 control, FluidUse types it. Each step is still a short choice among described
 options, and it puts the audio stack and the forms demo in one video.
 
-### Doom, the Jev way (optional)
+### Doom (tried) and Minecraft
 
-TypeSafe's Jev Doom demo never sees pixels: ViZDoom game state goes in as
-text (health, ammo, monster bearings), one typed choice comes out, about 10
-decisions per second, and a local controller holds the button between calls
+TypeSafe's Jev Doom demo never sees pixels: ViZDoom state goes in as text, one
+typed choice comes out about 10 times a second, and code holds the button
+between calls
 ([Register](https://www.theregister.com/ai-and-ml/2026/09/16/typesafe-ai-debuts-model-for-machines-that-plays-doom/5296711),
-[doom-jev](https://github.com/mikespins/doom-jev)). One bad pick is death, so
-it is Flappy Bird with better footage unless the harness does the work. A
-local copy is worth one clip because it makes latency visible: the same loop
-with 1–4 ms decisions on the Neural Engine, no API key, nothing leaving the
-Mac.
+[doom-jev](https://github.com/mikespins/doom-jev)). We ran both a stock model
+in that style and a small model trained on the game, on ViZDoom
+`defend_the_center` (spin in place and shoot, 60 s episodes). Code is on local
+branch `feat/vizdoom-gliclass` (`Tools/doom`).
 
-- ViZDoom `defend_the_center` only: spin in place and shoot, forgiving enough
-  for a 30–60 s clip.
-- Text state, three actions (attack, turn left, turn right). Code owns aiming
-  and wall avoidance; the model picks intent, as the Tetris shortlist does.
-- Engine at 35 Hz, model at 10–30 Hz, hold the last action between calls.
-- Show a hand-coded aimer on the same seed. If the model loses to it, say so.
-- Overlay the state string, choice scores, and ms per call. Caption it as
-  "typed decisions are fast enough for a 35 Hz shooter when perception is
-  code", not "our model plays Doom".
+| Player | Input | Kills | Survived | ms per decision |
+| --- | --- | ---: | ---: | ---: |
+| [SauerkrautLM-Doom-MultiVec 1.3M](https://huggingface.co/VAGOsolutions/SauerkrautLM-Doom-MultiVec-1.3M), Core ML fp16, GPU | 40×25 depth grid | 20.54 | 50.6 s | 1.5–3.4 |
+| Same model, PyTorch | same | 20.42 | 50.5 s | 57.7 (1 thread), 19.0 (MPS) |
+| Hand-coded aimer | exact monster bearings | 13.05 | 24.8 s | — |
+| GLiClass LUT8, consequence labels | text state + labels | 11.98 | 23.1 s | 4.5 |
+| GLiClass LUT8, bare labels ("attack", "turn left") | text state | 0.00 | 8.3 s | 3.6 |
+| Random | — | 1.26 | 9.7 s | — |
 
-`deadly_corridor` or full maps need a model trained on heuristic labels, as
-with Connect Four and Snake. Skip Minecraft: the Ender Dragon run is a planner
-(Astra) setting waypoints, Jev picking bounded actions, and Mineflayer moving
-the player on a known route
-([minecraft-agent](https://github.com/rmalde/minecraft-agent)). The planner
-does the hard part, and the Java server stack is unrelated to FluidUse. Doom
-from pixels needs a vision model like QwenJev, which runs on the GPU, so it is
-a separate post.
+Seeds 10000–10099 (GLiClass bare labels: seeds 1–20), 4 tics per decision.
+Aimer and GLiClass use three buttons and 320×240, so they are close to, not
+identical with, the Sauerkraut setup.
+
+- Stock GLiClass turns the right way but never fires on bare labels. With
+  labels that state each action's consequence it reaches the aimer's level,
+  but the labels do most of the deciding. Same lesson as Connect Four and
+  Snake: stock models don't play games where one miss is fatal.
+- SauerkrautLM-Doom (Apache 2.0) converts cleanly: Core ML fp32 matches
+  PyTorch kill for kill on 100 of 100 seeds, and fp16 on the GPU is 17–38×
+  faster than one-thread PyTorch. The Neural Engine is slower than the GPU for
+  this model (about 8 ms). An independent 1,000-episode evaluation of the
+  PyTorch model reports 20.38
+  ([tiny-doom-defender](https://huggingface.co/spaces/anakin87/tiny-doom-defender)).
+- It reads depth, not a text screen. The upstream text channel overflows and
+  is `@` in every cell, in training too, so all information comes from 16-level
+  depth bins. Caption it "plays Doom from a 40×25 depth grid".
+- Demo is built: split screen with the game, the depth grid, action
+  probabilities, and ms per decision, plus Terminal windows for `sudo asitop`
+  and a decision log. Seeds 10016 and 10005 reach 25 kills and survive the full
+  60 s. Next step is a Hugging Face upload of the Core ML model.
+- Stronger follow-up:
+  [tiny-doom-defender](https://huggingface.co/anakin87/tiny-doom-defender)
+  (1.1M, supervised then PPO) reports 23.12 kills.
+
+Minecraft has one real Core ML candidate: [VPT](https://github.com/openai/Video-Pre-Training)
+(OpenAI, MIT), or [STEVE-1](https://github.com/Shalev-Lifshitz/STEVE-1) on top
+of it for text instructions ("chop a tree"). Pixels in, keyboard and mouse out
+at 20 Hz; smaller 1x/2x/3x widths exist, checkpoints on Hugging Face via
+[MineStudio](https://github.com/CraftJarvis/MineStudio). Harder than Doom:
+MineRL needs Java Minecraft on Apple Silicon, the transformer memory has to be
+carried between calls, and there is no single score, so the clip is "gets
+logs in N seconds". Start with a half-day check (MineRL on this Mac, VPT 1x
+size and speed in PyTorch) before converting.
+
+Not worth converting for Minecraft: OpenHA (Qwen2-VL 7B) is too large for real
+time, and the Jev Ender Dragon runs
+([hermes-and-jev](https://github.com/teknium1/hermes-and-jev-play-minecraft),
+[minecraft-agent](https://github.com/rmalde/minecraft-agent)) are a planner
+plus Mineflayer scripts with the decision model picking from valid moves.
+Swapping in a local chooser is easy but the harness does the playing.
 
 ## Models to convert or use
 
