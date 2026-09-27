@@ -7,4 +7,4 @@ DerivedData/
 Tools/doom/sauerkraut/models/
 __pycache__/
 _vizdoom.ini
-*.mp4
+/*.mp4

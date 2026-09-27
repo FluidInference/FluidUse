@@ -358,7 +358,7 @@ def play(policy, args):
             game.set_seed(seed)
             game.new_episode()
             state = game.get_state()
-            paused, quit_requested = False, False
+            paused, quit_requested, skipped = False, False, False
             if not args.autostart:
                 idle = {
                     "bins": np.full((ROWS, COLS), DEPTH_BINS - 1), "probs": np.full(4, 0.25), "action": "—",
@@ -375,6 +375,7 @@ def play(policy, args):
                     quit_requested = True
                     break
                 if command == "next":
+                    skipped = True
                     break
                 if command == "pause":
                     paused = not paused
@@ -409,7 +410,7 @@ def play(policy, args):
                 break
             kills = int(game.get_game_variable(vizdoom.GameVariable.KILLCOUNT))
             survived = game.get_episode_time() / 35
-            outcome = "survived" if not game.is_player_dead() else "died at"
+            outcome = "skipped at" if skipped else "died at" if game.is_player_dead() else "survived"
             last = game.get_state() or state
             for _ in range(70):  # 2 s end card
                 viewer.draw(
