@@ -35,9 +35,8 @@ import time
 import numpy as np
 import vizdoom
 
-MODEL_ID = "VAGOsolutions/SauerkrautLM-Doom-MultiVec-1.3M"
-HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL = os.path.join(HERE, "models", "SauerkrautDoom_L1026_fp16.mlpackage")
+REPO_ID = "FluidInference/sauerkrautlm-doom-coreml"  # Core ML port of VAGOsolutions/SauerkrautLM-Doom-MultiVec-1.3M
+MODEL_NAME = "SauerkrautDoom_L1026_fp16.mlpackage"
 
 ROWS, COLS, DEPTH_BINS = 25, 40, 16
 NO_DEPTH = DEPTH_BINS
@@ -180,9 +179,15 @@ def make_game():
 class Policy:
     def __init__(self, path, units):
         import coremltools as ct
-        from huggingface_hub import hf_hub_download
+        from huggingface_hub import snapshot_download
 
-        with open(hf_hub_download(MODEL_ID, "tokenizer.json")) as f:
+        # Real files, not the hub cache's symlinks: Core ML can't compile a symlinked .mlpackage.
+        repo = snapshot_download(
+            REPO_ID, allow_patterns=[f"{MODEL_NAME}/*", "tokenizer.json", "config.json"],
+            local_dir=os.path.expanduser("~/Library/Caches/FluidUse/sauerkrautlm-doom-coreml"),
+        )
+        path = path or os.path.join(repo, MODEL_NAME)
+        with open(os.path.join(repo, "tokenizer.json")) as f:
             self.vocab = json.load(f)["model"]["vocab"]
         started = time.perf_counter()
         self.model = ct.models.MLModel(path, compute_units=getattr(ct.ComputeUnit, units))
@@ -428,7 +433,7 @@ def play(policy, args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--model", default=None, help=f"local .mlpackage; default downloads {MODEL_NAME} from {REPO_ID}")
     parser.add_argument("--units", default="CPU_AND_GPU", help="CPU_ONLY, CPU_AND_GPU, CPU_AND_NE, ALL")
     parser.add_argument("--seed", type=int, default=10000)
     parser.add_argument("--episodes", type=int, default=100)
@@ -439,7 +444,7 @@ def main():
     parser.add_argument("--check", type=int, default=0, help="headless score check over N seeds, no rendering")
     args = parser.parse_args()
     policy = Policy(args.model, args.units)
-    print(f"Loaded {os.path.basename(args.model)} ({args.units}) in {policy.load_s:.1f} s")
+    print(f"Loaded {os.path.basename(args.model or MODEL_NAME)} ({args.units}) in {policy.load_s:.1f} s")
     if args.check:
         check(policy, args.seed, args.check)
     else:

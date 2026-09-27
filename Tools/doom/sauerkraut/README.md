@@ -1,7 +1,10 @@
 # SauerkrautLM-Doom-MultiVec on Core ML
 
 [SauerkrautLM-Doom-MultiVec-1.3M](https://huggingface.co/VAGOsolutions/SauerkrautLM-Doom-MultiVec-1.3M)
-(Apache 2.0, VAGO solutions) converted to Core ML and playing ViZDoom `defend_the_center`.
+(Apache 2.0, VAGO solutions) converted to Core ML and playing ViZDoom `defend_the_center`. The Core ML
+models are on Hugging Face at
+[FluidInference/sauerkrautlm-doom-coreml](https://huggingface.co/FluidInference/sauerkrautlm-doom-coreml);
+the demo downloads them on first run.
 
 ```bash
 Tools/doom/sauerkraut/demo.sh                                  # game window + asitop + decision log
@@ -52,7 +55,7 @@ embeddings. Both check parity against upstream PyTorch on real frames and need t
 uv venv -p 3.12 convenv && uv pip install -p convenv vizdoom==1.3.0 torch==2.7.* transformers==4.56.2 \
     coremltools git+https://github.com/VAGOsolutions/SauerkrautLM-Doom-MultiVec
 cd Tools/doom/sauerkraut && ../../../convenv/bin/python convert.py && ../../../convenv/bin/python convert_ane.py
-mv *.mlpackage models/
+# then pass one with --model path/to/SauerkrautDoom_L1026_fp16.mlpackage
 ```
 
 `sauer_eval.py` is the PyTorch/Core ML episode evaluator used for the table.
