@@ -9,9 +9,9 @@ Tools/doom/sauerkraut/demo.sh --record doom.mp4 --episodes 1   # also writes an 
 .venv/bin/python Tools/doom/sauerkraut/play.py --check 100     # headless score check, seeds 10000-10099
 ```
 
-`demo.sh` opens two Terminal windows next to the game: `sudo asitop` (type your password there) and
-`tail -f /tmp/doom-demo.log`, one colored line per decision with the action, the four probabilities,
-and the Core ML call time. Keys in the game window: space pause, n next episode, q quit.
+`demo.sh` also opens one Terminal window split into two rows with tmux: `sudo asitop` on top (type
+your password there) and `tail -f /tmp/doom-demo.log` below, one colored line per decision with the
+action, the four probabilities, and the Core ML call time. Without tmux it opens two windows. Keys in the game window: space pause, n next episode, q quit.
 
 ## What the model reads
 
