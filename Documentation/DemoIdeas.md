@@ -65,6 +65,27 @@ platformers, Pac-Man, Breakout), stock models on Connect Four or Snake, and
 multiplayer Snake. Each one ends on the first fatal mistake, which stock models
 make within a few moves.
 
+### Next up
+
+Record before building anything new:
+
+1. **Connect Four train-then-beat** (rank 1). Show seed count and the result
+   as it is: 0 of 20 stock, 5 wins and 3 draws for the 706K model. It does not
+   beat the heuristic outright, so don't caption it that way.
+2. **Lex Snake, same seed** (rank 2). Link the Hugging Face package.
+3. **Safari job-application form fill** (rank 5) with a ms-per-field overlay.
+4. **Sort Anything** (rank 3): a polished 20 s cut if not posted yet, then a
+   follow-up that edits categories mid-run ("add musician") so it doesn't look
+   like a fixed benchmark.
+
+Then start the laya-browser conversion, and build the model race (rank 4) once
+those clips are out.
+
+A combo that fits the same rules: **voice → typed decision → Accessibility
+action**. Parakeet EOU hears the task, laya-browser or CUA-S1-FORMS picks the
+control, FluidUse types it. Each step is still a short choice among described
+options, and it puts the audio stack and the forms demo in one video.
+
 ## Models to convert or use
 
 From the open Jev-style models tracked on
@@ -81,3 +102,9 @@ family, excluding what already ships.
 | [Simple Jev](https://github.com/featherless-ai/simple-jev) | Serves any Hugging Face model as a Jev-style endpoint. | Nothing to convert; use it as a reference for which base models answer typed questions well. |
 | [ProgramAsWeights](https://github.com/programasweights/programasweights-python) | English spec compiled to a LoRA on Qwen3 0.6B or GPT-2. | Generates text, 30–500 ms per call; compare against, not ship. |
 | GLiNER / GLiClass family | Author's family tree lists siblings not yet converted. | Same export as GLiNER 2.5 and GLiClass Edge. |
+
+Conversion order, by closeness to FluidUse's job: laya-browser first (makes
+form fill look like general computer use), then the Kev 0.8B state cache, then
+GLiNER / GLiClass siblings (cheapest). KaLM-Jev Nano and Verdict 2.0 wait on
+licenses, and Nano only if it stays near 1 ms. QwenJev is a GPU-only 4B model,
+so keep it out of the Neural Engine race clips.
