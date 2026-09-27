@@ -86,6 +86,37 @@ action**. Parakeet EOU hears the task, laya-browser or CUA-S1-FORMS picks the
 control, FluidUse types it. Each step is still a short choice among described
 options, and it puts the audio stack and the forms demo in one video.
 
+### Doom, the Jev way (optional)
+
+TypeSafe's Jev Doom demo never sees pixels: ViZDoom game state goes in as
+text (health, ammo, monster bearings), one typed choice comes out, about 10
+decisions per second, and a local controller holds the button between calls
+([Register](https://www.theregister.com/ai-and-ml/2026/09/16/typesafe-ai-debuts-model-for-machines-that-plays-doom/5296711),
+[doom-jev](https://github.com/mikespins/doom-jev)). One bad pick is death, so
+it is Flappy Bird with better footage unless the harness does the work. A
+local copy is worth one clip because it makes latency visible: the same loop
+with 1–4 ms decisions on the Neural Engine, no API key, nothing leaving the
+Mac.
+
+- ViZDoom `defend_the_center` only: spin in place and shoot, forgiving enough
+  for a 30–60 s clip.
+- Text state, three actions (attack, turn left, turn right). Code owns aiming
+  and wall avoidance; the model picks intent, as the Tetris shortlist does.
+- Engine at 35 Hz, model at 10–30 Hz, hold the last action between calls.
+- Show a hand-coded aimer on the same seed. If the model loses to it, say so.
+- Overlay the state string, choice scores, and ms per call. Caption it as
+  "typed decisions are fast enough for a 35 Hz shooter when perception is
+  code", not "our model plays Doom".
+
+`deadly_corridor` or full maps need a model trained on heuristic labels, as
+with Connect Four and Snake. Skip Minecraft: the Ender Dragon run is a planner
+(Astra) setting waypoints, Jev picking bounded actions, and Mineflayer moving
+the player on a known route
+([minecraft-agent](https://github.com/rmalde/minecraft-agent)). The planner
+does the hard part, and the Java server stack is unrelated to FluidUse. Doom
+from pixels needs a vision model like QwenJev, which runs on the GPU, so it is
+a separate post.
+
 ## Models to convert or use
 
 From the open Jev-style models tracked on
