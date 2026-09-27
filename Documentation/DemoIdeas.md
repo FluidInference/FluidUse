@@ -47,6 +47,19 @@ first two seconds, and a result that holds up when someone checks it.
 | 8 | **Codenames guesser** | Semantic association, which is how these models are trained; no lookahead. | Not built |
 | 9 | **Minesweeper calibration** | "80% safe" checked against exact mine probabilities over thousands of positions. A benchmark chart, not a live game. | Not built |
 
+### Different decision shapes
+
+The games above are mostly board geometry. These test other kinds of decision,
+so each shows something the Tetris, Snake, and Connect Four trials do not.
+
+| Demo | Why it is different |
+| --- | --- |
+| Wordle / Connections | Language and constraints, not board geometry. The Wordle guess-picker trial matched random, so Connections grouping is the one to try. |
+| Minesweeper | Uncertainty and null scores: the model must say when no cell is safe. Same idea as rank 9. |
+| Chess puzzles (mate in 1–2) | "Is this the only winning move?" A single correct answer, checkable against an engine. |
+| Customer-support desk | The actual Laya use case, not a game: route or answer tickets from a fixed set of actions. |
+| Model router | Given a prompt, pick ASR vs TTS vs vision vs skip. Maps directly to choosing a FluidAudio model. |
+
 Ruled out as live demos: real-time control games (Flappy Bird, runners,
 platformers, Pac-Man, Breakout), stock models on Connect Four or Snake, and
 multiplayer Snake. Each one ends on the first fatal mistake, which stock models
