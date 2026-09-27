@@ -106,7 +106,7 @@ branch `feat/vizdoom-gliclass` (`Tools/doom`).
 | GLiClass LUT8, bare labels ("attack", "turn left") | text state | 0.00 | 8.3 s | 3.6 |
 | Random | — | 1.26 | 9.7 s | — |
 
-Seeds 10000–10099 (GLiClass bare labels: seeds 1–20), 4 tics per decision.
+Seeds 10000–10099 at 4 tics per decision (GLiClass bare labels: seeds 1–20 at 3 tics).
 Aimer and GLiClass use three buttons and 320×240, so they are close to, not
 identical with, the Sauerkraut setup.
 
