@@ -11,7 +11,7 @@ so the depth bins carry all the information; the panel draws them.
     .venv/bin/python Tools/doom/sauerkraut/play.py --record doom.mp4 --episodes 3
     .venv/bin/python Tools/doom/sauerkraut/play.py --check 10              # headless, no rendering
 
-Window mode also opens one Terminal window split into two rows (tmux): `sudo asitop` (GPU/ANE/CPU
+Window mode also opens one Ghostty window split into two rows (tmux): `sudo asitop` (GPU/ANE/CPU
 power) on top and `tail -f` of the decision log (DOOM_DEMO_LOG, default /tmp/doom-demo.log) below.
 Pass --no-terminals to skip it.
 
@@ -121,8 +121,8 @@ class DecisionLog:
 
 
 def open_terminals(log_path):
-    """One Terminal window, two rows: `sudo asitop` on top (type the password there), the decision log
-    below. Uses tmux for the split; without tmux, opens two windows."""
+    """One Ghostty window, two rows (tmux): `sudo asitop` on top, where the password is typed, and the
+    decision log below. Falls back to Terminal.app when Ghostty or tmux is missing."""
     asitop = next(
         (p for p in (os.path.expanduser("~/.local/bin/asitop"), "/opt/homebrew/bin/asitop", "/usr/local/bin/asitop")
          if os.access(p, os.X_OK)),
@@ -132,19 +132,22 @@ def open_terminals(log_path):
         print("asitop not found: `uv tool install asitop` to show power usage")
     tail = f"tail -n 0 -f {log_path}"
     tmux = next((p for p in ("/opt/homebrew/bin/tmux", "/usr/local/bin/tmux") if os.access(p, os.X_OK)), None)
-    if tmux and asitop:
-        commands = [
-            f"{tmux} kill-session -t doom-demo 2>/dev/null; {tmux} new-session -s doom-demo 'sudo {asitop}' "
-            f"\\\\; split-window -v '{tail}' \\\\; select-pane -t 0"
-        ]
-    else:
-        commands = ([f"sudo {asitop}"] if asitop else []) + [f"clear; {tail}"]
-    for command in commands:
-        script = (
-            'tell application "Terminal"\nactivate\n'
-            f'set t to do script "{command}"\n'
-            "set bounds of front window to {40, 40, 1240, 1000}\nend tell"
+    ghostty = "/Applications/Ghostty.app"
+    if tmux and asitop and os.path.isdir(ghostty):
+        launcher = os.path.join(os.path.dirname(log_path), "doom-demo-terminal.sh")
+        with open(launcher, "w") as f:
+            f.write(
+                f"{tmux} kill-session -t doom-demo 2>/dev/null\n"
+                f"exec {tmux} new-session -s doom-demo 'sudo {asitop}' \\; split-window -v '{tail}' \\; "
+                "select-pane -t 0\n"
+            )
+        subprocess.run(
+            ["open", "-na", ghostty, "--args", "--window-width=170", "--window-height=56", "-e", "/bin/zsh", launcher],
+            check=False,
         )
+        return
+    for command in ([f"sudo {asitop}"] if asitop else []) + [f"clear; {tail}"]:
+        script = f'tell application "Terminal"\nactivate\ndo script "{command}"\nend tell'
         subprocess.run(["osascript", "-e", script], check=False, capture_output=True)
 
 
