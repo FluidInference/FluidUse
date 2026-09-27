@@ -19,7 +19,10 @@ The window renders every game tic (35 fps). ViZDoom's rendering consumes game ra
 seed does not replay the headless benchmark path exactly (`--check` does); the play is equally
 strong (seeds 10000-10029: 19.70 kills / 50.5 s rendered vs 20.37 / 50.7 s headless).
 
-Keys: space pause, n next episode, q quit.
+The window waits on each episode's first frame until you press space (--autostart to skip), and
+can be resized freely; the layout scales to fit.
+
+Keys: space start / pause, n next episode, q quit.
 """
 
 import argparse
@@ -142,7 +145,11 @@ def open_terminals(log_path):
                 "select-pane -t 0\n"
             )
         subprocess.run(
-            ["open", "-na", ghostty, "--args", "--window-width=170", "--window-height=56", "-e", "/bin/zsh", launcher],
+            [
+                "open", "-na", ghostty, "--args", "--font-size=11", "--window-position-x=690",
+                "--window-position-y=30", "--window-width=110", "--window-height=52",
+                f"--command=/bin/zsh {launcher}",
+            ],
             check=False,
         )
         return
@@ -212,25 +219,29 @@ def check(policy, first_seed, episodes):
 
 
 class Viewer:
-    W, H = 1280, 720
-    GAME = (40, 90, 800, 600)  # x, y, w, h
+    """Two rows so a terminal fits beside it: the game on top; below, the depth grid the model reads
+    and its action probabilities, current action, and ms per decision."""
+
+    W, H = 680, 815  # layout size; the window is resizable and the layout scales to fit
+    GAME = (20, 64, 640, 480)  # x, y, w, h
 
     def __init__(self, record, headless):
         if headless:
             os.environ["SDL_VIDEODRIVER"] = "dummy"
+        os.environ.setdefault("SDL_VIDEO_WINDOW_POS", "0,30")
         import pygame
 
         self.pg = pygame
         pygame.init()
-        self.screen = pygame.display.set_mode((self.W, self.H))
+        self.window = pygame.display.set_mode((self.W, self.H), pygame.RESIZABLE)
+        self.screen = pygame.Surface((self.W, self.H))
         pygame.display.set_caption("SauerkrautLM-Doom on Core ML")
         mono = pygame.font.match_font("menlo,monaco,couriernew")
         sans = pygame.font.match_font("helveticaneue,helvetica,arial")
-        self.ascii_font = pygame.font.Font(mono, 11)
         self.mono = pygame.font.Font(mono, 16)
-        self.big = pygame.font.Font(sans, 30)
-        self.label = pygame.font.Font(sans, 18)
-        self.small = pygame.font.Font(sans, 15)
+        self.big = pygame.font.Font(sans, 24)
+        self.label = pygame.font.Font(sans, 17)
+        self.small = pygame.font.Font(sans, 14)
         self.writer = None
         if record:
             import imageio
@@ -242,55 +253,75 @@ class Viewer:
 
     def draw(self, frame, hud):
         pg, s = self.pg, self.screen
+        grey = (150, 155, 165)
         s.fill((16, 17, 20))
-        self.text(self.big, "A 1.3M-parameter model plays Doom from a 40×25 depth grid", (40, 22))
-        self.text(
-            self.small,
-            "SauerkrautLM-Doom-MultiVec · Core ML on the Mac GPU · ViZDoom defend_the_center",
-            (42, 60),
-            (150, 155, 165),
-        )
+        self.text(self.big, "A 1.3M-parameter model plays Doom", (20, 8))
+        self.text(self.small, "from a 40×25 depth grid · SauerkrautLM-Doom-MultiVec · Core ML on the Mac GPU", (21, 38), grey)
         x, y, w, h = self.GAME
         surface = pg.surfarray.make_surface(frame.swapaxes(0, 1))
         s.blit(pg.transform.smoothscale(surface, (w, h)), (x, y))
-
-        px = 870
-        self.text(self.label, "What the model reads: depth, near = bright", (px, 90), (150, 155, 165))
-        cell_w, cell_h = 9, 12
-        for gy, row in enumerate(hud["bins"]):
-            for gx, b in enumerate(row):
-                shade = int(235 - b * 13)
-                pg.draw.rect(s, (shade // 3, shade, shade // 2), (px + gx * cell_w, 118 + gy * cell_h, cell_w - 1, cell_h - 1))
-
-        by = 430
-        self.text(self.label, "Action probabilities", (px, by), (150, 155, 165))
-        for i, name in enumerate(NAMES):
-            yy = by + 30 + i * 30
-            p = hud["probs"][i]
-            self.text(self.small, name.replace("_", " "), (px, yy))
-            pg.draw.rect(s, (45, 48, 55), (px + 110, yy + 2, 250, 16), border_radius=3)
-            pg.draw.rect(s, (90, 170, 250), (px + 110, yy + 2, int(250 * p), 16), border_radius=3)
-            self.text(self.small, f"{p:.2f}", (px + 370, yy))
-        self.text(self.small, f"pressing: {hud['action']}", (px, by + 152), (250, 200, 90))
-
-        sy = 615
-        self.text(self.mono, f"{hud['ms']:.1f} ms", (px, sy), (90, 170, 250))
-        self.text(self.small, "per decision (Core ML, GPU)", (px + 90, sy + 2), (150, 155, 165))
-        self.text(self.mono, f"{PYTORCH_CPU_MS:.0f} ms", (px, sy + 26), (150, 155, 165))
-        self.text(self.small, "same model, PyTorch CPU (1 thread)", (px + 90, sy + 28), (150, 155, 165))
         self.text(
             self.label,
             f"kills {hud['kills']}   health {hud['health']}   ammo {hud['ammo']}   "
             f"{hud['elapsed']:4.1f} s / 60 s   seed {hud['seed']}",
-            (40, 695),
+            (20, y + h + 8),
         )
+
+        top = y + h + 38
+        self.text(self.small, "What the model reads: depth, near = bright", (20, top), grey)
+        cell_w, cell_h = 7, 8
+        for gy, row in enumerate(hud["bins"]):
+            for gx, b in enumerate(row):
+                shade = int(235 - b * 13)
+                pg.draw.rect(
+                    s, (shade // 3, shade, shade // 2), (20 + gx * cell_w, top + 22 + gy * cell_h, cell_w - 1, cell_h - 1)
+                )
+
+        px = 310
+        self.text(self.small, "Action probabilities", (px, top), grey)
+        for i, name in enumerate(NAMES):
+            yy = top + 26 + i * 28
+            p = hud["probs"][i]
+            self.text(self.small, name.replace("_", " "), (px, yy))
+            pg.draw.rect(s, (45, 48, 55), (px + 105, yy + 2, 210, 14), border_radius=3)
+            pg.draw.rect(s, (90, 170, 250), (px + 105, yy + 2, int(210 * p), 14), border_radius=3)
+            self.text(self.small, f"{p:.2f}", (px + 322, yy))
+        self.text(self.small, f"pressing: {hud['action']}", (px, top + 142), (250, 200, 90))
+        self.text(self.mono, f"{hud['ms']:.1f} ms", (px, top + 178), (90, 170, 250))
+        self.text(self.small, "per decision (Core ML, GPU)", (px + 90, top + 180), grey)
+        self.text(self.mono, f"{PYTORCH_CPU_MS:.0f} ms", (px, top + 204), grey)
+        self.text(self.small, "same model, PyTorch CPU (1 thread)", (px + 90, top + 206), grey)
         if hud.get("banner"):
             b = self.big.render(hud["banner"], True, (255, 255, 255))
-            pg.draw.rect(s, (0, 0, 0), (x, y + h // 2 - 30, w, 60))
+            pg.draw.rect(s, (0, 0, 0), (x, y + h // 2 - 28, w, 56))
             s.blit(b, (x + (w - b.get_width()) // 2, y + h // 2 - b.get_height() // 2))
-        pg.display.flip()
+        self.present()
         if self.writer:
             self.writer.append_data(pg.surfarray.array3d(s).swapaxes(0, 1))
+
+    def present(self):
+        """Scale the layout into the current window size, keeping its aspect ratio."""
+        win = self.pg.display.get_surface()
+        ww, wh = win.get_size()
+        scale = min(ww / self.W, wh / self.H)
+        size = (max(1, int(self.W * scale)), max(1, int(self.H * scale)))
+        win.fill((16, 17, 20))
+        win.blit(self.pg.transform.smoothscale(self.screen, size), ((ww - size[0]) // 2, (wh - size[1]) // 2))
+        self.pg.display.flip()
+
+    def wait_for_start(self, frame, hud):
+        """Hold on the first frame until space (start) or q (quit)."""
+        while True:
+            self.draw(frame, hud)
+            for event in self.pg.event.get():
+                if event.type == self.pg.QUIT:
+                    return False
+                if event.type == self.pg.KEYDOWN:
+                    if event.key == self.pg.K_q:
+                        return False
+                    if event.key == self.pg.K_SPACE:
+                        return True
+            time.sleep(1 / 30)
 
     def events(self):
         for event in self.pg.event.get():
@@ -314,15 +345,25 @@ def play(policy, args):
     viewer = Viewer(args.record, args.headless)
     game = make_game()
     realtime = not (args.record and args.headless)
+    args.autostart = args.autostart or args.headless
     ms_window = []
     seed = args.seed
     try:
         for _ in range(args.episodes):
             game.set_seed(seed)
             game.new_episode()
-            log.episode(seed)
             state = game.get_state()
             paused, quit_requested = False, False
+            if not args.autostart:
+                idle = {
+                    "bins": np.full((ROWS, COLS), DEPTH_BINS - 1), "probs": np.full(4, 0.25), "action": "—",
+                    "ms": 0.0, "kills": 0, "health": 100, "ammo": 26, "elapsed": 0.0, "seed": seed,
+                    "banner": "Press space to start",
+                }
+                if not viewer.wait_for_start(state.screen_buffer, idle):
+                    break
+            log.episode(seed)
+            bins, probs = np.full((ROWS, COLS), DEPTH_BINS - 1), np.full(4, 0.25)
             while not game.is_episode_finished():
                 command = viewer.events()
                 if command == "quit":
@@ -369,7 +410,7 @@ def play(policy, args):
                 viewer.draw(
                     last.screen_buffer if last is not None else np.zeros((480, 640, 3), np.uint8),
                     {
-                        "bins": bins, "probs": probs, "action": "—", "ms": statistics.median(ms_window),
+                        "bins": bins, "probs": probs, "action": "—", "ms": statistics.median(ms_window) if ms_window else 0.0,
                         "kills": kills, "health": 0 if game.is_player_dead() else "—", "ammo": "—",
                         "elapsed": survived, "seed": seed,
                         "banner": f"{kills} kills · {outcome} {survived:.1f} s",
@@ -393,6 +434,7 @@ def main():
     parser.add_argument("--episodes", type=int, default=100)
     parser.add_argument("--record", default=None, help="write an mp4 of the window")
     parser.add_argument("--headless", action="store_true", help="no window; with --record, renders as fast as possible")
+    parser.add_argument("--autostart", action="store_true", help="start each episode without waiting for space")
     parser.add_argument("--no-terminals", action="store_true", help="don't open the asitop and log Terminal windows")
     parser.add_argument("--check", type=int, default=0, help="headless score check over N seeds, no rendering")
     args = parser.parse_args()

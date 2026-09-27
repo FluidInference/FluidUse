@@ -11,7 +11,8 @@ Tools/doom/sauerkraut/demo.sh --record doom.mp4 --episodes 1   # also writes an 
 
 `demo.sh` also opens one Ghostty window split into two rows with tmux: `sudo asitop` on top (type
 your password there) and `tail -f /tmp/doom-demo.log` below, one colored line per decision with the
-action, the four probabilities, and the Core ML call time. Without Ghostty or tmux it opens two Terminal.app windows. Keys in the game window: space pause, n next episode, q quit.
+action, the four probabilities, and the Core ML call time. Without Ghostty or tmux it opens two Terminal.app windows. The game window is resizable and waits on each episode's first frame until you press space
+(`--autostart` skips that). Keys: space start / pause, n next episode, q quit.
 
 ## What the model reads
 
