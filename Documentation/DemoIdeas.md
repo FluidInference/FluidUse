@@ -100,8 +100,8 @@ models at [FluidInference/sauerkrautlm-doom-coreml](https://huggingface.co/Fluid
 
 | Player | Input | Kills | Survived | ms per decision |
 | --- | --- | ---: | ---: | ---: |
-| [SauerkrautLM-Doom-MultiVec 1.3M](https://huggingface.co/VAGOsolutions/SauerkrautLM-Doom-MultiVec-1.3M), Core ML fp16, GPU | 40×25 depth grid | 20.54 | 50.6 s | 1.5–3.4 |
-| Same model, PyTorch | same | 20.42 | 50.5 s | 57.7 (1 thread), 19.0 (MPS) |
+| [SauerkrautLM-Doom-MultiVec 1.3M](https://huggingface.co/VAGOsolutions/SauerkrautLM-Doom-MultiVec-1.3M), Core ML fp16, GPU | 40×25 depth grid | 20.54 | 50.6 s | 1.2 |
+| Same model, PyTorch | same | 20.42 | 50.5 s | 8.4 (GPU/MPS fp16), 57.7 (CPU) |
 | Hand-coded aimer | exact monster bearings | 13.05 | 24.8 s | — |
 | GLiClass LUT8, consequence labels | text state + labels | 11.98 | 23.1 s | 4.5 |
 | GLiClass LUT8, bare labels ("attack", "turn left") | text state | 0.00 | 8.3 s | 3.6 |
@@ -116,8 +116,8 @@ identical with, the Sauerkraut setup.
   but the labels do most of the deciding. Same lesson as Connect Four and
   Snake: stock models don't play games where one miss is fatal.
 - SauerkrautLM-Doom (Apache 2.0) converts cleanly: Core ML fp32 matches
-  PyTorch kill for kill on 100 of 100 seeds, and fp16 on the GPU is 17–38×
-  faster than one-thread PyTorch. The Neural Engine is slower than the GPU for
+  PyTorch kill for kill on 100 of 100 seeds. On the GPU it is about 7× faster
+  than PyTorch MPS at fp16 (1.2 vs 8.4 ms) and about 4× at fp32. The Neural Engine is slower than the GPU for
   this model (about 8 ms). An independent 1,000-episode evaluation of the
   PyTorch model reports 20.38
   ([tiny-doom-defender](https://huggingface.co/spaces/anakin87/tiny-doom-defender)).
