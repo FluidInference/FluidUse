@@ -175,6 +175,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--policies", default="aimer,random,gliclass,gliclass-described")
     parser.add_argument("--seeds", type=int, default=20)
+    parser.add_argument("--first-seed", type=int, default=1)
     parser.add_argument("--tics", type=int, default=3, help="tics each decision is held (35 tics = 1 s)")
     parser.add_argument("--precision", default="lut8")
     parser.add_argument("--binary", default=".build/release/GLiClassServe")
@@ -191,7 +192,7 @@ def main():
         rng = random.Random(0)
         episodes = []
         started = time.time()
-        for seed in range(1, args.seeds + 1):
+        for seed in range(args.first_seed, args.first_seed + args.seeds):
             episodes.append(run_episode(game, seed, policy, args.tics, model, rng))
         results[policy] = episodes
         kills = [e["kills"] for e in episodes]

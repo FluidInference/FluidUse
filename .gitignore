@@ -3,3 +3,8 @@
 DerivedData/
 *.xcodeproj
 .DS_Store
+.venv/
+Tools/doom/sauerkraut/models/
+__pycache__/
+_vizdoom.ini
+*.mp4
