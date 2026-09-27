@@ -28,9 +28,12 @@ demo panel draws those bins. It is not reading pixels or game state.
 
 | Model | Mean kills | Mean survival | Full 60 s | ms per decision |
 | --- | ---: | ---: | ---: | ---: |
-| PyTorch (upstream) | 20.42 (sd 5.32) | 50.5 s | 31 / 100 | 57.7 (1 thread), 26.6 (8), 19.0 (MPS) |
-| Core ML fp32, GPU | 20.42 (sd 5.32), identical on 100/100 seeds | 50.5 s | 31 / 100 | 3.3–4.9 |
-| Core ML fp16, 1026 tokens, GPU (demo default) | 20.54 (sd 5.27) | 50.6 s | 35 / 100 | 1.5–3.4 |
+| PyTorch (upstream) | 20.42 (sd 5.32) | 50.5 s | 31 / 100 | GPU (MPS) 10.5 fp32, 8.4 fp16; CPU 57.7 (1 thread) |
+| Core ML fp32, GPU | 20.42 (sd 5.32), identical on 100/100 seeds | 50.5 s | 31 / 100 | 2.5 |
+| Core ML fp16, 1026 tokens, GPU (demo default) | 20.54 (sd 5.27) | 50.6 s | 35 / 100 | 1.2 |
+
+Speeds are median ms per decision on the same frame, idle machine, called from Python. On the GPU,
+Core ML is about 4× faster than PyTorch MPS at fp32 and about 7× at fp16.
 
 For reference on the same seeds: our hand-coded aimer 13.05 kills and GLiClass with consequence
 labels 11.98 (both in `Tools/doom/defend_the_center.py`, three buttons, 320×240), random 1.26. An

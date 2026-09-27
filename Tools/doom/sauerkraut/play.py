@@ -46,7 +46,7 @@ FRAME_SKIP, TIMEOUT = 4, 2100
 NAMES = ["shoot", "move_forward", "turn_left", "turn_right"]
 BUTTONS = {"shoot": [1, 0, 0, 0], "move_forward": [0, 1, 0, 0], "turn_left": [0, 0, 1, 0], "turn_right": [0, 0, 0, 1]}
 LOG_PATH = os.environ.get("DOOM_DEMO_LOG", "/tmp/doom-demo.log")
-PYTORCH_CPU_MS = 57.7  # one-thread PyTorch on the same M5 Pro, measured on the same frame
+PYTORCH_GPU_MS = 8.4  # same model in PyTorch on the GPU (MPS, fp16), same M5 Pro and frame
 
 
 # ---- observation: the upstream AsciiConverter.convert_with_depth + character tokenizer ----
@@ -294,8 +294,8 @@ class Viewer:
         self.text(self.small, f"pressing: {hud['action']}", (px, top + 142), (250, 200, 90))
         self.text(self.mono, f"{hud['ms']:.1f} ms", (px, top + 178), (90, 170, 250))
         self.text(self.small, "per decision (Core ML, GPU)", (px + 90, top + 180), grey)
-        self.text(self.mono, f"{PYTORCH_CPU_MS:.0f} ms", (px, top + 204), grey)
-        self.text(self.small, "same model, PyTorch CPU (1 thread)", (px + 90, top + 206), grey)
+        self.text(self.mono, f"{PYTORCH_GPU_MS:.1f} ms", (px, top + 204), grey)
+        self.text(self.small, "same model, PyTorch GPU (MPS)", (px + 90, top + 206), grey)
         if hud.get("banner"):
             b = self.big.render(hud["banner"], True, (255, 255, 255))
             pg.draw.rect(s, (0, 0, 0), (x, y + h // 2 - 28, w, 56))
