@@ -184,7 +184,8 @@ A second snapshot, `InternDecisionModelStore.ensure(.showdown)`, is the same mod
 battle actions ([FluidInference/intern-decision-0.8b-showdown-coreml](https://huggingface.co/FluidInference/intern-decision-0.8b-showdown-coreml)),
 distilled from Intern-Decision-4B on a MacBook. It answers the same typed questions; given a battle state and the legal
 moves and switches as `choice` options it matches its 4B teacher (24-6 vs poke-env's max-power player, 9-21 vs its
-heuristic player over 30 battles). Buckets are 512, 640 and 1,024 tokens.
+heuristic player over 30 battles). Buckets are 512, 640 and 1,024 tokens with int8 weights: about 0.85 GB in memory
+with one bucket in use, 1.9 GB to download, the same 90 ms per decision as fp16.
 
 ## Demo
 
