@@ -153,6 +153,33 @@ On an M5 Pro a short ticket with two questions takes 18 ms and a Wikipedia bio w
 `swift run -c release KevGuessWhoDemo` plays Guess Who over 80 Wikipedia people with it
 ([Sources/KevGuessWhoDemo](Sources/KevGuessWhoDemo/README.md)).
 
+## Intern-Decision
+
+`InternDecisionManager` runs [Intern-Decision-0.8B](https://huggingface.co/internlm/Intern-Decision-0.8B) (Shanghai AI
+Laboratory, Qwen3.5 backbone, Apache-2.0) on the GPU through Core ML. A request is a JSON state and up to 16 named
+questions (multiple choice, yes/no, or a score); every question is answered in one call from the logits before its
+`<decision>` marker, with the checkpoint's calibration temperature. The prompt is byte for byte the checkpoint's own
+compiler and chat template, so answers match its reference engine (0 of 60 differ on its published suites, max
+probability delta 0.004). The pinned snapshot downloads from
+[FluidInference/intern-decision-0.8b-coreml](https://huggingface.co/FluidInference/intern-decision-0.8b-coreml) on first
+use (~3.4 GB, macOS 14 / iOS 17). Text only; images are not exported.
+
+```swift
+let model = try await InternDecisionManager.load(from: try await InternDecisionModelStore.ensure())
+let result = try await model.decide(
+    state: ["channel": "email", "message": "Charged twice for my annual renewal. Refund the duplicate before Friday."],
+    questions: [
+        ("team", .choice("Which team should handle this?", options: [("billing", "Refunds."), ("technical", "Bugs.")])),
+        ("frustrated", .noul("Is the customer frustrated?")),
+        ("urgency", .score("How urgent is this?", levels: ["Low", "Medium", "High"])),
+    ])
+print(result.answers.map { "\($0.field): \($0.decision) \($0.confidence)" })
+```
+
+On an M5 Pro that request (319 tokens, three fields) takes 61 ms in the 320-token bucket; the checkpoint's own PyTorch
+path on the same Mac takes 150 ms (bf16). Buckets are 320, 512 and 1,024 tokens and the pass costs the bucket, not the
+request. `swift run -c release InternDecisionCheck bench <model directory>` reproduces the number.
+
 ## Demo
 
 ```bash
