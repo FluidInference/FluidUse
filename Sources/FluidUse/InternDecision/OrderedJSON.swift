@@ -2,16 +2,16 @@ import Foundation
 
 /// A JSON value that keeps object key order. Intern-Decision renders the state with Python's `json.dumps`, where key
 /// order is the caller's, and its prompt must be reproduced byte for byte; `JSONSerialization` cannot do that.
-public indirect enum JSONValue: Sendable, Equatable {
-    case object([(key: String, value: JSONValue)])
-    case array([JSONValue])
+public indirect enum OrderedJSON: Sendable, Equatable {
+    case object([(key: String, value: OrderedJSON)])
+    case array([OrderedJSON])
     case string(String)
     case integer(Int)
     case number(Double)
     case bool(Bool)
     case null
 
-    public static func == (lhs: JSONValue, rhs: JSONValue) -> Bool {
+    public static func == (lhs: OrderedJSON, rhs: OrderedJSON) -> Bool {
         switch (lhs, rhs) {
         case (.object(let a), .object(let b)):
             a.count == b.count && zip(a, b).allSatisfy { $0.key == $1.key && $0.value == $1.value }
@@ -43,7 +43,7 @@ public indirect enum JSONValue: Sendable, Equatable {
             out += "{\n"
             for (index, member) in members.enumerated() {
                 out += String(repeating: " ", count: indent * (depth + 1))
-                out += JSONValue.pythonString(member.key) + ": "
+                out += OrderedJSON.pythonString(member.key) + ": "
                 member.value.dump(into: &out, indent: indent, depth: depth + 1)
                 out += index + 1 < members.count ? ",\n" : "\n"
             }
@@ -60,9 +60,9 @@ public indirect enum JSONValue: Sendable, Equatable {
                 out += index + 1 < items.count ? ",\n" : "\n"
             }
             out += String(repeating: " ", count: indent * depth) + "]"
-        case .string(let text): out += JSONValue.pythonString(text)
+        case .string(let text): out += OrderedJSON.pythonString(text)
         case .integer(let value): out += String(value)
-        case .number(let value): out += JSONValue.pythonFloat(value)
+        case .number(let value): out += OrderedJSON.pythonFloat(value)
         case .bool(let value): out += value ? "true" : "false"
         case .null: out += "null"
         }
@@ -85,6 +85,48 @@ public indirect enum JSONValue: Sendable, Equatable {
             }
         }
         return out + "\""
+    }
+
+    /// Python `str(value)`: strings verbatim, `True` / `False` / `None`, and `repr` for containers.
+    public var pythonStr: String {
+        if case .string(let text) = self { return text }
+        return pythonRepr
+    }
+
+    /// Python `repr(value)` as `json.loads` would have produced it: single-quoted strings, `True` / `False` / `None`,
+    /// `[a, b]` and `{'k': v}`.
+    public var pythonRepr: String {
+        switch self {
+        case .string(let text): return OrderedJSON.pythonStringRepr(text)
+        case .integer(let value): return String(value)
+        case .number(let value): return OrderedJSON.pythonFloat(value)
+        case .bool(let value): return value ? "True" : "False"
+        case .null: return "None"
+        case .array(let items): return "[" + items.map(\.pythonRepr).joined(separator: ", ") + "]"
+        case .object(let members):
+            return "{"
+                + members.map { OrderedJSON.pythonStringRepr($0.key) + ": " + $0.value.pythonRepr }
+                .joined(separator: ", ") + "}"
+        }
+    }
+
+    /// Python `str.__repr__`: single quotes unless the text has a single quote and no double quote; `\\`, `\n`,
+    /// `\r`, `\t` and other control characters escaped; printable non-ASCII kept.
+    static func pythonStringRepr(_ text: String) -> String {
+        let quote: Character = text.contains("'") && !text.contains("\"") ? "\"" : "'"
+        var out = String(quote)
+        for scalar in text.unicodeScalars {
+            switch scalar {
+            case "\\": out += "\\\\"
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            case _ where Character(scalar) == quote: out += "\\" + String(quote)
+            case _ where scalar.value < 0x20 || scalar.value == 0x7F: out += String(format: "\\x%02x", scalar.value)
+            default: out.unicodeScalars.append(scalar)
+            }
+        }
+        return out + String(quote)
     }
 
     /// Python `float.__repr__`: shortest round-trip digits, `.0` on integral values, exponent form below 1e-4 and
@@ -122,7 +164,7 @@ public indirect enum JSONValue: Sendable, Equatable {
 
     /// Parses JSON text keeping object key order (duplicate keys are kept in order, as Python's `object_pairs_hook`
     /// would see them). Integers without a fraction or exponent become `.integer`.
-    public static func parse(_ text: String) throws -> JSONValue {
+    public static func parse(_ text: String) throws -> OrderedJSON {
         var parser = Parser(scalars: Array(text.unicodeScalars))
         let value = try parser.value()
         parser.skipWhitespace()
@@ -140,13 +182,13 @@ public indirect enum JSONValue: Sendable, Equatable {
             while index < scalars.count, " \t\n\r".unicodeScalars.contains(scalars[index]) { index += 1 }
         }
 
-        mutating func value() throws -> JSONValue {
+        mutating func value() throws -> OrderedJSON {
             skipWhitespace()
             guard index < scalars.count else { throw ParseError.invalid("unexpected end") }
             switch scalars[index] {
             case "{":
                 index += 1
-                var members: [(key: String, value: JSONValue)] = []
+                var members: [(key: String, value: OrderedJSON)] = []
                 skipWhitespace()
                 if peek() == "}" {
                     index += 1
@@ -171,7 +213,7 @@ public indirect enum JSONValue: Sendable, Equatable {
                 }
             case "[":
                 index += 1
-                var items: [JSONValue] = []
+                var items: [OrderedJSON] = []
                 skipWhitespace()
                 if peek() == "]" {
                     index += 1
@@ -211,7 +253,7 @@ public indirect enum JSONValue: Sendable, Equatable {
             }
         }
 
-        mutating func number() throws -> JSONValue {
+        mutating func number() throws -> OrderedJSON {
             let start = index
             var isFloat = false
             while let scalar = peek(), "+-0123456789.eE".unicodeScalars.contains(scalar) {
@@ -251,6 +293,9 @@ public indirect enum JSONValue: Sendable, Equatable {
                         {
                             index += 2
                             let low = try hex4()
+                            guard (0xDC00...0xDFFF).contains(low) else {
+                                throw ParseError.invalid("bad surrogate pair")
+                            }
                             code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00)
                         }
                         guard let unicode = Unicode.Scalar(code) else { throw ParseError.invalid("bad \\u escape") }
@@ -274,15 +319,15 @@ public indirect enum JSONValue: Sendable, Equatable {
     }
 }
 
-extension JSONValue: ExpressibleByStringLiteral, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral,
+extension OrderedJSON: ExpressibleByStringLiteral, ExpressibleByIntegerLiteral, ExpressibleByFloatLiteral,
     ExpressibleByBooleanLiteral, ExpressibleByArrayLiteral, ExpressibleByDictionaryLiteral, ExpressibleByNilLiteral
 {
     public init(stringLiteral value: String) { self = .string(value) }
     public init(integerLiteral value: Int) { self = .integer(value) }
     public init(floatLiteral value: Double) { self = .number(value) }
     public init(booleanLiteral value: Bool) { self = .bool(value) }
-    public init(arrayLiteral elements: JSONValue...) { self = .array(elements) }
-    public init(dictionaryLiteral elements: (String, JSONValue)...) {
+    public init(arrayLiteral elements: OrderedJSON...) { self = .array(elements) }
+    public init(dictionaryLiteral elements: (String, OrderedJSON)...) {
         self = .object(elements.map { (key: $0.0, value: $0.1) })
     }
     public init(nilLiteral: ()) { self = .null }

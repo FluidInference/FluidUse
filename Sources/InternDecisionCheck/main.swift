@@ -25,7 +25,9 @@ struct InternDecisionCheck {
         }
     }
 
-    static func request(_ value: JSONValue) throws -> (JSONValue, [(name: String, question: InternDecisionQuestion)]) {
+    static func request(
+        _ value: OrderedJSON
+    ) throws -> (OrderedJSON, [(name: String, question: InternDecisionQuestion)]) {
         guard case .object(let members) = value, let state = members.first(where: { $0.key == "state" })?.value,
             case .object(let questions)? = members.first(where: { $0.key == "questions" })?.value
         else { throw InternDecisionError.invalidRequest("record needs state and questions") }
@@ -34,7 +36,7 @@ struct InternDecisionCheck {
 
     static func parity(directory: URL, records: URL) async throws {
         let manager = try await InternDecisionManager.load(from: directory)
-        guard case .array(let items) = try JSONValue.parse(String(contentsOf: records, encoding: .utf8)) else {
+        guard case .array(let items) = try OrderedJSON.parse(String(contentsOf: records, encoding: .utf8)) else {
             throw InternDecisionError.invalidRequest("parity file must be a list")
         }
         var fields = 0
@@ -45,7 +47,11 @@ struct InternDecisionCheck {
         let start = Date()
         for item in items {
             guard case .object(let members) = item else { continue }
-            let (state, questions) = try request(members.first { $0.key == "request" }!.value)
+            guard let record = members.first(where: { $0.key == "request" })?.value else {
+                print("record without request, skipped")
+                continue
+            }
+            let (state, questions) = try request(record)
             let (ids, _) = try manager.encode(state: state, questions: questions)
             if case .array(let expectedIDs)? = members.first(where: { $0.key == "ids" })?.value {
                 let expected = expectedIDs.compactMap { if case .integer(let n) = $0 { n } else { nil } }
@@ -99,7 +105,7 @@ struct InternDecisionCheck {
     /// The model card's request shape: about 320 tokens, one choice, one yes/no, one score question.
     static func bench(directory: URL, iterations: Int) async throws {
         let manager = try await InternDecisionManager.load(from: directory)
-        let state: JSONValue = [
+        let state: OrderedJSON = [
             "channel": "email",
             "message":
                 "Charged twice for my annual renewal ($240 each). Emailed last week, no reply. Refund the duplicate before Friday.",
@@ -122,7 +128,10 @@ struct InternDecisionCheck {
             if i >= 5 { times.append(Date().timeIntervalSince(start) * 1000) }
         }
         times.sort()
-        guard let result = last else { return }
+        guard let result = last, !times.isEmpty else {
+            fputs("iterations must be at least 1\n", stderr)
+            exit(2)
+        }
         print("tokens \(result.inputTokens), bucket \(result.bucketLength)")
         for answer in result.answers {
             print("  \(answer.field): \(answer.decision) (\(String(format: "%.3f", answer.confidence)))")

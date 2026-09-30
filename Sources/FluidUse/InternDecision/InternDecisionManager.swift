@@ -105,6 +105,7 @@ public final class InternDecisionManager: Sendable {
     public static let decisionToken = "<decision>"
     public static let maxQuestions = 16
     static let userPreamble = "Return one answer for every field using the supplied answer symbols.\n\n## State\n"
+    static let controlTokens = ["<|im_start|>", "<|im_end|>", "<|endoftext|>", "<think>", "</think>"]
 
     struct Bucket: Sendable {
         let length: Int
@@ -114,18 +115,28 @@ public final class InternDecisionManager: Sendable {
 
     actor Models {
         private let computeUnits: MLComputeUnits
-        private var models: [Int: MLModel] = [:]
+        /// One load per bucket even when several callers miss the cache at once.
+        private var loads: [Int: Task<MLModel, Error>] = [:]
 
         init(computeUnits: MLComputeUnits) { self.computeUnits = computeUnits }
 
         func model(for bucket: Bucket) async throws -> MLModel {
-            if let model = models[bucket.length] { return model }
-            let url = bucket.url.pathExtension == "mlpackage" ? try await KevManager.compiled(bucket.url) : bucket.url
-            let configuration = MLModelConfiguration()
-            configuration.computeUnits = computeUnits
-            let model = try await MLModel.load(contentsOf: url, configuration: configuration)
-            models[bucket.length] = model
-            return model
+            if let load = loads[bucket.length] { return try await load.value }
+            let units = computeUnits
+            let load = Task<MLModel, Error> {
+                let url =
+                    bucket.url.pathExtension == "mlpackage" ? try await KevManager.compiled(bucket.url) : bucket.url
+                let configuration = MLModelConfiguration()
+                configuration.computeUnits = units
+                return try await MLModel.load(contentsOf: url, configuration: configuration)
+            }
+            loads[bucket.length] = load
+            do {
+                return try await load.value
+            } catch {
+                loads[bucket.length] = nil
+                throw error
+            }
         }
     }
 
@@ -141,6 +152,9 @@ public final class InternDecisionManager: Sendable {
     private let ropeTheta: Double
     private let padID: Int
     private let markerID: Int
+    /// RoPE tables per bucket length; they depend only on the length, theta and rotary dim. Core ML never mutates
+    /// its inputs, so one pair is shared by every call.
+    private let rope: [Int: (cos: MLMultiArray, sin: MLMultiArray)]
 
     /// `directory` holds `tokenizer.json`, `embeddings.f16` and one `L<length>_F<fields>/` folder per bucket with
     /// `config.json` and a `DecisionRow_*.mlpackage` (or compiled `.mlmodelc`); the layout of
@@ -193,7 +207,7 @@ public final class InternDecisionManager: Sendable {
         if eager {
             for bucket in buckets { _ = try await models.model(for: bucket) }
         }
-        return InternDecisionManager(
+        return try InternDecisionManager(
             tokenizer: tokenizer, systemPrompt: system, temperature: temperature, symbols: Array(symbols),
             buckets: buckets.sorted { $0.length < $1.length }, models: models, embeddings: embeddings,
             hiddenSize: hidden, rotaryDim: rotary, ropeTheta: theta, padID: pad, markerID: marker)
@@ -203,7 +217,7 @@ public final class InternDecisionManager: Sendable {
         tokenizer: QwenBPETokenizer, systemPrompt: String, temperature: Float, symbols: [Character],
         buckets: [Bucket], models: Models, embeddings: Data, hiddenSize: Int, rotaryDim: Int, ropeTheta: Double,
         padID: Int, markerID: Int
-    ) {
+    ) throws {
         self.tokenizer = tokenizer
         self.systemPrompt = systemPrompt
         self.temperature = temperature
@@ -216,14 +230,41 @@ public final class InternDecisionManager: Sendable {
         self.ropeTheta = ropeTheta
         self.padID = padID
         self.markerID = markerID
+        var rope: [Int: (cos: MLMultiArray, sin: MLMultiArray)] = [:]
+        for bucket in buckets {
+            rope[bucket.length] = try Self.ropeTables(length: bucket.length, rotaryDim: rotaryDim, theta: ropeTheta)
+        }
+        self.rope = rope
+    }
+
+    static func ropeTables(length: Int, rotaryDim: Int, theta: Double) throws -> (cos: MLMultiArray, sin: MLMultiArray)
+    {
+        let half = rotaryDim / 2
+        let cos = try MLMultiArray(shape: [NSNumber(value: length), NSNumber(value: rotaryDim)], dataType: .float32)
+        let sin = try MLMultiArray(shape: [NSNumber(value: length), NSNumber(value: rotaryDim)], dataType: .float32)
+        let cosPointer = cos.dataPointer.assumingMemoryBound(to: Float.self)
+        let sinPointer = sin.dataPointer.assumingMemoryBound(to: Float.self)
+        for position in 0..<length {
+            for i in 0..<half {
+                let frequency = Double(position) / pow(theta, Double(2 * i) / Double(rotaryDim))
+                let c = Float(Foundation.cos(frequency))
+                let s = Float(Foundation.sin(frequency))
+                cosPointer[position * rotaryDim + i] = c
+                cosPointer[position * rotaryDim + i + half] = c
+                sinPointer[position * rotaryDim + i] = s
+                sinPointer[position * rotaryDim + i + half] = s
+            }
+        }
+        return (cos, sin)
     }
 
     /// Largest request any bucket accepts.
     public var maxTokens: Int { buckets.last?.length ?? 0 }
 
     /// The checkpoint's `compile_row` + chat template (`enable_thinking=False`), as one string.
-    public func prompt(state: JSONValue, questions: [(name: String, question: InternDecisionQuestion)]) throws -> String
-    {
+    public func prompt(
+        state: OrderedJSON, questions: [(name: String, question: InternDecisionQuestion)]
+    ) throws -> String {
         let fields = try Self.validated(questions, symbolCount: symbols.count)
         var schema: [String] = []
         for (name, question) in fields {
@@ -237,7 +278,12 @@ public final class InternDecisionManager: Sendable {
         guard !user.contains(Self.decisionToken) else {
             throw InternDecisionError.invalidRequest("Reserved decision marker appears in input evidence")
         }
-        let skeleton = JSONValue.object(fields.map { (key: $0.name, value: .string(Self.decisionToken)) })
+        // The tokenizer matches added tokens literally, as the reference does; refusing them keeps caller data from
+        // closing the user turn (the reference compiler only checks the decision marker).
+        if let token = Self.controlTokens.first(where: { user.contains($0) }) {
+            throw InternDecisionError.invalidRequest("Control token \(token) appears in input evidence")
+        }
+        let skeleton = OrderedJSON.object(fields.map { (key: $0.name, value: .string(Self.decisionToken)) })
             .pythonDump(indent: 4)
         return "<|im_start|>system\n\(systemPrompt)<|im_end|>\n<|im_start|>user\n\(user)<|im_end|>\n"
             + "<|im_start|>assistant\n<think>\n\n</think>\n\n\(skeleton)<|im_end|>\n"
@@ -271,7 +317,7 @@ public final class InternDecisionManager: Sendable {
 
     /// Token ids of the rendered prompt and, per field, the index of the token before its `<decision>` marker.
     public func encode(
-        state: JSONValue, questions: [(name: String, question: InternDecisionQuestion)]
+        state: OrderedJSON, questions: [(name: String, question: InternDecisionQuestion)]
     ) throws
         -> (ids: [Int], positions: [Int])
     {
@@ -285,7 +331,7 @@ public final class InternDecisionManager: Sendable {
 
     /// Answers every question about `state` in one Core ML call.
     public func decide(
-        state: JSONValue, questions: [(name: String, question: InternDecisionQuestion)]
+        state: OrderedJSON, questions: [(name: String, question: InternDecisionQuestion)]
     ) async throws
         -> InternDecisionResult
     {
@@ -336,21 +382,8 @@ public final class InternDecisionManager: Sendable {
                 }
             }
         }
-        let half = rotaryDim / 2
-        let cos = try MLMultiArray(shape: [NSNumber(value: length), NSNumber(value: rotaryDim)], dataType: .float32)
-        let sin = try MLMultiArray(shape: [NSNumber(value: length), NSNumber(value: rotaryDim)], dataType: .float32)
-        let cosPointer = cos.dataPointer.assumingMemoryBound(to: Float.self)
-        let sinPointer = sin.dataPointer.assumingMemoryBound(to: Float.self)
-        for position in 0..<length {
-            for i in 0..<half {
-                let frequency = Double(position) / pow(ropeTheta, Double(2 * i) / Double(rotaryDim))
-                let c = Float(Foundation.cos(frequency))
-                let s = Float(Foundation.sin(frequency))
-                cosPointer[position * rotaryDim + i] = c
-                cosPointer[position * rotaryDim + i + half] = c
-                sinPointer[position * rotaryDim + i] = s
-                sinPointer[position * rotaryDim + i + half] = s
-            }
+        guard let (cos, sin) = rope[length] else {
+            throw InternDecisionError.invalidAsset("no RoPE table for \(length)")
         }
         let fieldOneHot = try MLMultiArray(
             shape: [NSNumber(value: bucket.maxFields), NSNumber(value: length)], dataType: .float32)
@@ -369,11 +402,11 @@ public final class InternDecisionManager: Sendable {
 extension InternDecisionQuestion {
     /// A question from its JSON form (`type`, `instructions`, `criteria`), as the HTTP interface and the benchmark
     /// records write it.
-    public init(json: JSONValue) throws {
+    public init(json: OrderedJSON) throws {
         guard case .object(let members) = json else {
             throw InternDecisionError.invalidRequest("question must be an object")
         }
-        func member(_ key: String) -> JSONValue? { members.first { $0.key == key }?.value }
+        func member(_ key: String) -> OrderedJSON? { members.first { $0.key == key }?.value }
         let instructions: String
         if case .string(let text)? = member("instructions") { instructions = text } else { instructions = "" }
         guard case .string(let type)? = member("type") else {
@@ -414,14 +447,5 @@ extension InternDecisionQuestion {
     }
 
     /// Python `str(value)` for the JSON values that appear as option descriptions.
-    static func text(_ value: JSONValue) -> String {
-        switch value {
-        case .string(let text): text
-        case .integer(let n): String(n)
-        case .number(let x): JSONValue.pythonFloat(x)
-        case .bool(let b): b ? "True" : "False"
-        case .null: "None"
-        default: value.pythonDump(indent: 2)
-        }
-    }
+    static func text(_ value: OrderedJSON) -> String { value.pythonStr }
 }

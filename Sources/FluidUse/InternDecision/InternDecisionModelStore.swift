@@ -133,6 +133,11 @@ public enum InternDecisionModelStore {
             }
             let size = (try manager.attributesOfItem(atPath: temporary.path)[.size] as? NSNumber)?.int64Value ?? 0
             try LayaModelStore.installDownloadedFile(temporary, at: destination)
+            // A package file changed: the .mlmodelc compiled from the old package beside it must not outlive it.
+            if let range = asset.path.range(of: ".mlpackage/") {
+                let compiled = directory.appendingPathComponent(String(asset.path[..<range.lowerBound]) + ".mlmodelc")
+                try? manager.removeItem(at: compiled)
+            }
             progress?(asset.path, size)
         }
         try Data().write(to: verified)
