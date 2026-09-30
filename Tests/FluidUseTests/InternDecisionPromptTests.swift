@@ -40,7 +40,7 @@ final class InternDecisionPromptTests: XCTestCase {
         let tokenizerURL = FileManager.default.temporaryDirectory.appendingPathComponent("empty-tokenizer.json")
         try #"{"model":{"type":"BPE","vocab":{},"merges":[]},"added_tokens":[]}"#.write(
             to: tokenizerURL, atomically: true, encoding: .utf8)
-        return InternDecisionManager(
+        return try InternDecisionManager(
             tokenizer: try QwenBPETokenizer(tokenizerJsonURL: tokenizerURL), systemPrompt: system, temperature: 2.7478,
             symbols: Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"), buckets: [],
             models: InternDecisionManager.Models(computeUnits: .cpuOnly), embeddings: Data(), hiddenSize: 1024,
