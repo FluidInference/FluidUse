@@ -180,6 +180,12 @@ On an M5 Pro that request (319 tokens, three fields) takes 61 ms in the 320-toke
 path on the same Mac takes 150 ms (bf16). Buckets are 320, 512 and 1,024 tokens and the pass costs the bucket, not the
 request. `swift run -c release InternDecisionCheck bench <model directory>` reproduces the number.
 
+A second snapshot, `InternDecisionModelStore.ensure(.showdown)`, is the same model fine-tuned to pick Pokémon Showdown
+battle actions ([FluidInference/intern-decision-0.8b-showdown-coreml](https://huggingface.co/FluidInference/intern-decision-0.8b-showdown-coreml)),
+distilled from Intern-Decision-4B on a MacBook. It answers the same typed questions; given a battle state and the legal
+moves and switches as `choice` options it matches its 4B teacher (24-6 vs poke-env's max-power player, 9-21 vs its
+heuristic player over 30 battles). Buckets are 512, 640 and 1,024 tokens.
+
 ## Demo
 
 ```bash
