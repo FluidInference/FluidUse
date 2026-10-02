@@ -39,7 +39,9 @@ enum ClefRecordEncoder {
             schema += try tokens("\nALLOWED OPTIONS:\n")
             var optionSpans: [Range<Int>] = []
             var optionIDs: [String] = []
-            for (optionIndex, option) in question.options().enumerated() {
+            let options = question.options()
+            guard !options.isEmpty else { throw ClefVisionError.invalidInput("question \(id) has no options") }
+            for (optionIndex, option) in options.enumerated() {
                 schema += try tokens("OPTION \(optionIndex + 1): ")
                 let optionStart = schema.count
                 var semantics: [String: Any] = ["option_id": option.id]
@@ -77,7 +79,14 @@ enum ClefRecordEncoder {
                 id: q.id, typeIndex: q.typeIndex, span: (q.span.lowerBound + offset)..<(q.span.upperBound + offset),
                 optionSpans: q.optionSpans.map { ($0.lowerBound + offset)..<($0.upperBound + offset) }, optionIDs: q.optionIDs)
         }
-        return ClefEncodedRecord(inputIDs: prefix + stateIDs + schema + suffix, questions: shifted, imageTokenRanges: imageRanges)
+        let inputIDs = prefix + stateIDs + schema + suffix
+        // The tokenizer maps literal special-token text (e.g. "<|image_pad|>" inside the state) to the special id,
+        // which would desynchronise the vision splice and the M-RoPE grid walk. Refuse such records.
+        let imagePads = inputIDs.reduce(0) { $0 + ($1 == config.imageTokenID ? 1 : 0) }
+        guard imagePads == imageTokenCounts.reduce(0, +) else {
+            throw ClefVisionError.invalidInput("state or schema text contains image placeholder tokens")
+        }
+        return ClefEncodedRecord(inputIDs: inputIDs, questions: shifted, imageTokenRanges: imageRanges)
     }
 }
 
@@ -92,18 +101,12 @@ enum ClefJSON {
         switch value {
         case let string as String:
             return quote(string)
-        case let bool as Bool:
-            return bool ? "true" : "false"
-        case let int as Int:
-            return String(int)
-        case let double as Double:
-            return pythonFloat(double)
-        case let float as Float:
-            return pythonFloat(Double(float))
         case let number as NSNumber:
+            // Foundation bridges Swift Bool/Int/Double and every JSONSerialization number to NSNumber; dispatch on
+            // the stored type (a `case as Bool` first would turn JSON 0/1 into false/true and 1250.0 into 1250).
             if CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue ? "true" : "false" }
-            // a Double-typed NSNumber (e.g. 1250.0 from JSONSerialization) must keep Python's "1250.0"
             if CFNumberIsFloatType(number) { return pythonFloat(number.doubleValue) }
+            if String(cString: number.objCType) == "Q" { return "\(number.uint64Value)" }
             return "\(number.int64Value)"
         case let array as [Any]:
             return "[" + array.map(dump).joined(separator: ",") + "]"

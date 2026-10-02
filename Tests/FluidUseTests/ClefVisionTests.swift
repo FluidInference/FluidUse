@@ -48,12 +48,24 @@ final class ClefVisionTests: XCTestCase {
         var string: String? { if case .string(let s) = self { return s }; return nil }
     }
 
-    func testClefJSONMatchesPythonDumps() {
+    func testClefJSONMatchesPythonDumps() throws {
         // json.dumps(..., ensure_ascii=False, separators=(",", ":"), sort_keys=True); strings render bare
         XCTAssertEqual(ClefJSON.render("plain text"), "plain text")
         XCTAssertEqual(ClefJSON.render(["task": "x", "a": 1]), #"{"a":1,"task":"x"}"#)
         XCTAssertEqual(ClefJSON.render(["total": 1250.0, "ok": true, "n": NSNull()]), #"{"n":null,"ok":true,"total":1250.0}"#)
         XCTAssertEqual(ClefJSON.render(["list": ["é", "a\"b", "x\ny"]]), "{\"list\":[\"é\",\"a\\\"b\",\"x\\ny\"]}")
+        // values parsed by JSONSerialization arrive as NSNumber: 0/1 must stay integers, 1250.0 a float, bools bools
+        let parsed = try JSONSerialization.jsonObject(
+            with: Data(#"{"zero":0,"one":1,"total":1250.0,"flag":true,"neg":-0.0,"mixed":[1,2.0],"big":12345678901234567890,"tiny":1e-05}"#.utf8))
+        XCTAssertEqual(
+            ClefJSON.render(parsed),
+            #"{"big":12345678901234567890,"flag":true,"mixed":[1,2.0],"neg":-0.0,"one":1,"tiny":1e-05,"total":1250.0,"zero":0}"#)
+    }
+
+    func testEmptyOptionsAreRejected() throws {
+        XCTAssertTrue(ClefQuestion.choice(instructions: nil, criteria: [:]).options().isEmpty)
+        XCTAssertEqual(ClefQuestion.noul(instructions: nil).options().map(\.id), ["true", "false"])
+        XCTAssertEqual(ClefQuestion.score(instructions: nil, criteria: ["a", "b", "c"]).options().map(\.id), ["0", "1", "2"])
     }
 
     func testSmartResizeKeepsBudgetAndFactor() {
@@ -89,12 +101,12 @@ final class ClefVisionTests: XCTestCase {
         }
     }
 
-    /// Record encoding against Clef's own `encode_record` output. Needs the pinned tokenizer (downloaded once).
+    /// Record encoding against Clef's own `encode_record` output. Fetches only the tokenizer and manifest (a few MB).
     func testRecordEncoderMatchesClef() async throws {
         guard #available(macOS 15.0, *) else { throw XCTSkip("needs macOS 15") }
         let directory: URL
-        do { directory = try await ClefVisionModelStore.ensure(buckets: []) } catch { throw XCTSkip("model bundle unavailable: \(error)") }
-        let manager = try await ClefVisionManager.load(from: directory, buckets: [])
+        do { directory = try await ClefVisionModelStore.ensureEncoderAssets() } catch { throw XCTSkip("tokenizer unavailable: \(error)") }
+        let manager = try ClefVisionManager.encoder(from: directory)
         let fixtures = try JSONDecoder().decode(Fixtures.self, from: Data(contentsOf: Self.fixturesURL.appendingPathComponent("fixtures.json")))
         for record in fixtures.records {
             let questions: [(id: String, question: ClefQuestion)] = record.questions.map { q in
@@ -113,7 +125,7 @@ final class ClefVisionTests: XCTestCase {
                     return (q.id, .score(instructions: instructions, criteria: c.compactMap(\.string)))
                 }
             }
-            let encoded = try await manager.encode(
+            let encoded = try manager.encode(
                 state: record.state.any, questions: questions, imageTokenCounts: record.image_grid_thw.map { $0[1] * $0[2] / 4 })
             XCTAssertEqual(encoded.inputIDs, record.input_ids, "\(record.task) token ids")
             for (q, ref) in zip(encoded.questions, record.questions) {

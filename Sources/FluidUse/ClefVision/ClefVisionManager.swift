@@ -82,13 +82,22 @@ public actor ClefVisionManager {
     }
 
     /// Token ids and spans for a request (exposed for tests and the parity CLI). `imageTokenCounts` are the merged
-    /// vision tokens per image (grid_h · grid_w / 4).
+    /// vision tokens per image (grid_h · grid_w / 4). The state is trimmed to the largest *loaded* bucket.
     public func encode(state: Any, questions: [(id: String, question: ClefQuestion)], imageTokenCounts: [Int]) throws
         -> ClefEncodedRecord
     {
         try ClefRecordEncoder.encode(
             state: state, questions: questions, imageTokenCounts: imageTokenCounts, tokenizer: tokenizer, config: config,
-            maxLength: config.lmBuckets.max() ?? 0)
+            maxLength: limits.buckets.max() ?? config.lmBuckets.max() ?? 0)
+    }
+
+    /// Tokenizer + manifest only (no Core ML packages): enough to encode records, for tests and tooling.
+    public static func encoder(from directory: URL) throws -> ClefVisionEncoder {
+        let manifest = try JSONSerialization.jsonObject(with: Data(contentsOf: directory.appendingPathComponent("config.json")))
+        guard let json = manifest as? [String: Any] else { throw ClefVisionError.invalidAsset("config.json") }
+        return ClefVisionEncoder(
+            config: try ClefVisionConfig(json: json),
+            tokenizer: try QwenBPETokenizer(tokenizerJsonURL: directory.appendingPathComponent("tokenizer.json")))
     }
 
     /// Debug: the preprocessed patches, the patch grid and the vision tower's merged tokens for one image.
@@ -190,4 +199,20 @@ public actor ClefVisionManager {
             answers: answers, inputTokens: record.inputIDs.count, imageTokens: visionTokens.reduce(0) { $0 + $1.count / hidden },
             visionMilliseconds: visionMs, languageMilliseconds: lmMs, headMilliseconds: headMs)
     }
+}
+
+/// Record encoding without any Core ML package loaded (see `ClefVisionManager.encoder(from:)`).
+public struct ClefVisionEncoder: Sendable {
+    let config: ClefVisionConfig
+    let tokenizer: QwenBPETokenizer
+
+    public func encode(state: Any, questions: [(id: String, question: ClefQuestion)], imageTokenCounts: [Int],
+                       maxLength: Int? = nil) throws -> ClefEncodedRecord {
+        try ClefRecordEncoder.encode(
+            state: state, questions: questions, imageTokenCounts: imageTokenCounts, tokenizer: tokenizer, config: config,
+            maxLength: maxLength ?? config.lmBuckets.max() ?? 0)
+    }
+
+    public var imageTokenID: Int { config.imageTokenID }
+    public var mergeSize: Int { config.vision.mergeSize }
 }

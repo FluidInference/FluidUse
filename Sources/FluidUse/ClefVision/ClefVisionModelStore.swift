@@ -52,16 +52,20 @@ public enum ClefVisionModelStore {
 
     /// Ensure the bundle exists in the FluidUse cache and return its directory. Files are checksummed once per
     /// pinned revision; later launches only check that they are present. `buckets` limits the LM/head buckets fetched.
-    public static func ensure(cacheDirectory: URL? = nil, buckets: [Int]? = nil, progress: Progress? = nil) async throws -> URL {
+    public static func ensure(
+        cacheDirectory: URL? = nil, buckets: [Int]? = nil, progress: Progress? = nil, only: Set<String>? = nil
+    ) async throws -> URL {
         let root = cacheDirectory ?? LayaModelStore.defaultCacheDirectory()
         let directory = root.appendingPathComponent("clef-vision-0.8b-coreml", isDirectory: true)
         let manager = FileManager.default
         let wanted = assets.filter { asset in
+            if let only { return only.contains(asset.path) }
             guard let buckets else { return true }
             guard let bucket = bucketOf(asset.path) else { return true }
             return buckets.contains(bucket)
         }
-        let verified = directory.appendingPathComponent(".verified-\(revision)-\((buckets ?? []).map(String.init).joined(separator: "-"))")
+        let selection = only.map { $0.sorted().joined(separator: "+") } ?? (buckets ?? []).map(String.init).joined(separator: "-")
+        let verified = directory.appendingPathComponent(".verified-\(revision)-\(selection)")
         if manager.fileExists(atPath: verified.path),
             wanted.allSatisfy({ manager.fileExists(atPath: directory.appendingPathComponent($0.path).path) })
         {
@@ -90,6 +94,12 @@ public enum ClefVisionModelStore {
         }
         manager.createFile(atPath: verified.path, contents: nil)
         return directory
+    }
+
+    /// Only `config.json` and `tokenizer.json` (a few MB): enough for `ClefVisionManager.encoder(from:)`.
+    public static func ensureEncoderAssets(cacheDirectory: URL? = nil, progress: Progress? = nil) async throws -> URL {
+        try await ensure(cacheDirectory: cacheDirectory, buckets: nil, progress: progress,
+                         only: ["config.json", "tokenizer.json"])
     }
 
     /// Bucket length of an `LM_L*` / `Head_L*` asset path, nil for shared files.

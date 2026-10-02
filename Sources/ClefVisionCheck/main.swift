@@ -125,12 +125,11 @@ struct ClefVisionCheck {
     @available(macOS 15.0, *)
     static func encode(fixtures directory: URL) async throws {
         let fixtures = try load(directory)
-        let model = try await ClefVisionModelStore.ensure(buckets: [])  // shared files only (tokenizer, config, tables)
-        let manager = try await ClefVisionManager.load(from: model, buckets: [])
+        let encoder = try ClefVisionManager.encoder(from: try await ClefVisionModelStore.ensureEncoderAssets())
         var failures = 0
         for record in fixtures.records {
             let counts = record.image_grid_thw.map { $0[1] * $0[2] / 4 }
-            let encoded = try await manager.encode(
+            let encoded = try encoder.encode(
                 state: record.state.any, questions: questions(record.questions_request, order: record.questions.map(\.id)),
                 imageTokenCounts: counts)
             let idsMatch = encoded.inputIDs == record.input_ids

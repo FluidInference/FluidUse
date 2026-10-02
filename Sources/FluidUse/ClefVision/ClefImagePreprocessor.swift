@@ -1,3 +1,4 @@
+import Accelerate
 import CoreGraphics
 import Foundation
 
@@ -83,15 +84,7 @@ enum ClefImagePreprocessor {
     /// profile: PIL / torchvision read the raw channel values, and a managed decode shifted them by ~5/255.
     static func resizedPlanar(_ image: CGImage, height: Int, width: Int) throws -> [Float] {
         let srcW = image.width, srcH = image.height
-        var rgba = [UInt8](repeating: 0, count: srcW * srcH * 4)
-        guard
-            let context = CGContext(
-                data: &rgba, width: srcW, height: srcH, bitsPerComponent: 8, bytesPerRow: srcW * 4,
-                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-        else { throw ClefVisionError.invalidInput("could not decode a \(srcW)×\(srcH) image") }
-        let raw = image.copy(colorSpace: CGColorSpaceCreateDeviceRGB()) ?? image  // reinterpret, do not convert
-        context.interpolationQuality = .none
-        context.draw(raw, in: CGRect(x: 0, y: 0, width: srcW, height: srcH))
+        let rgba = try rawRGBA(image)  // non-premultiplied, no colour management: PIL's convert("RGB") drops alpha as is
         var planar = [Float](repeating: 0, count: 3 * srcH * srcW)
         for y in 0..<srcH {
             for x in 0..<srcW {
@@ -103,6 +96,29 @@ enum ClefImagePreprocessor {
         let horizontal = resample(planar, channels: 3, lines: srcH, inLength: srcW, outLength: width, alongWidth: true).map(toUInt8)
         let vertical = resample(horizontal, channels: 3, lines: width, inLength: srcH, outLength: height, alongWidth: false)
         return vertical.map(toUInt8)
+    }
+
+    /// Interleaved RGBA8, straight (non-premultiplied) alpha, device RGB (no colour matching of embedded profiles).
+    static func rawRGBA(_ image: CGImage) throws -> [UInt8] {
+        var format = vImage_CGImageFormat(
+            bitsPerComponent: 8, bitsPerPixel: 32, colorSpace: Unmanaged.passRetained(CGColorSpaceCreateDeviceRGB()),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue), version: 0, decode: nil,
+            renderingIntent: .defaultIntent)
+        defer { format.colorSpace.release() }
+        var buffer = vImage_Buffer()
+        let source = image.copy(colorSpace: CGColorSpaceCreateDeviceRGB()) ?? image  // reinterpret, do not convert
+        let status = vImageBuffer_InitWithCGImage(&buffer, &format, nil, source, vImage_Flags(kvImageNoFlags))
+        guard status == kvImageNoError else {
+            throw ClefVisionError.invalidInput("could not decode a \(image.width)×\(image.height) image (vImage \(status))")
+        }
+        defer { free(buffer.data) }
+        var rgba = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let rowBytes = image.width * 4
+        for y in 0..<image.height {
+            let src = buffer.data.advanced(by: y * buffer.rowBytes).assumingMemoryBound(to: UInt8.self)
+            rgba.withUnsafeMutableBufferPointer { ($0.baseAddress! + y * rowBytes).update(from: src, count: rowBytes) }
+        }
+        return rgba
     }
 
     /// One separable bicubic pass. `alongWidth`: input is [c][lines][inLength] → output [c][lines][outLength];

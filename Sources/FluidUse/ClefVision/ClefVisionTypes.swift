@@ -58,8 +58,11 @@ public struct ClefAnswer: Sendable, Equatable {
     public let logits: [Float]
     public let probabilities: [Float]
 
-    /// Highest-probability option id.
-    public var choice: String { optionIDs[probabilities.indices.max { probabilities[$0] < probabilities[$1] } ?? 0] }
+    /// Highest-probability option id (questions always have at least one option; the encoder rejects empty ones).
+    public var choice: String {
+        guard let best = probabilities.indices.max(by: { probabilities[$0] < probabilities[$1] }) else { return "" }
+        return optionIDs[best]
+    }
     /// For `noul` questions: probability of `true`.
     public var noul: Float? { optionIDs.firstIndex(of: "true").map { probabilities[$0] } }
     /// For `score` questions: expected index.
