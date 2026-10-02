@@ -54,6 +54,7 @@ let package = Package(
         .executableTarget(name: "ImageSortCheck", dependencies: ["ImageSort", "FluidUse"]),
         .executableTarget(name: "ImageSortDemo", dependencies: ["ImageSort"], exclude: ["README.md"]),
         .executableTarget(name: "KevCheck", dependencies: ["FluidUse"]),
+        .executableTarget(name: "ClefVisionCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "InternDecisionCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "ShortReplyCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "ShortReplyDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "mock-feed"]),
