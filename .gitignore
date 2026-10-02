@@ -4,6 +4,7 @@ DerivedData/
 *.xcodeproj
 .DS_Store
 .venv/
+.mobius/
 Tools/doom/sauerkraut/models/
 __pycache__/
 _vizdoom.ini

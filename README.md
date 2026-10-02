@@ -187,6 +187,24 @@ moves and switches as `choice` options it matches its 4B teacher (24-6 vs poke-e
 heuristic player over 30 battles). Buckets are 512, 640 and 1,024 tokens with int8 weights: about 0.85 GB in memory
 with one bucket in use, 1.9 GB to download, the same 90 ms per decision as fp16.
 
+## Short replies
+
+`ShortReplyManager` drafts one short reply to a social post with a sub-1B model:
+[short-reply-0.6b-coreml](https://huggingface.co/FluidInference/short-reply-0.6b-coreml), a Qwen3-0.6B fine-tune
+(Apache-2.0) in one 724 MB package whose prefill runs on the Neural Engine and whose decode runs on the GPU. About
+190 ms per reply on an M5 Pro; drafts are for a person to review, nothing is posted automatically.
+
+```swift
+let replies = try await ShortReplyManager.load(from: modelDirectory)   // config.json, tokenizer.json, .mlpackage
+let draft = try await replies.draft(for: "Finally passed my driving test on the third try.")
+print(draft.reply, draft.timing.totalSeconds)                           // "Congrats on passing!" 0.19
+```
+
+`ShortReplyDemo` is a menu-bar app: open a post's reply box in any app (X in Chrome or Safari, Slack, Mail), press
+**9**, and the draft is pasted into the box; **0** regenerates it.
+`Sources/ShortReplyDemo/demo.sh --x` launches it with a macmon + log terminal
+([Sources/ShortReplyDemo](Sources/ShortReplyDemo/README.md)).
+
 ## Demo
 
 ```bash

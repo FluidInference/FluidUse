@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home / Feed (mock)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Layout modeled on a typical social timeline: left rail, 600 px column, right column. No product branding. */
+  :root { --bg: #000; --fg: #e7e9ea; --muted: #71767b; --line: #2f3336; --accent: #1d9bf0; --hover: #181818; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/20px -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  .page { display: grid; grid-template-columns: 275px 600px 350px; justify-content: center; min-height: 100vh; }
+  nav { padding: 8px 12px; position: sticky; top: 0; height: 100vh; }
+  nav .mark { width: 50px; height: 50px; display: grid; place-items: center; font-size: 26px; font-weight: 800; border-radius: 50%; }
+  nav a { display: flex; align-items: center; gap: 20px; padding: 12px; margin: 4px 0; border-radius: 9999px; color: var(--fg); text-decoration: none; font-size: 20px; width: fit-content; }
+  nav a:hover { background: var(--hover); }
+  nav a svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; }
+  nav .post { background: var(--fg); color: #000; font-weight: 700; font-size: 17px; width: 90%; justify-content: center; padding: 16px; margin-top: 16px; }
+  nav .me { position: absolute; bottom: 20px; display: flex; align-items: center; gap: 12px; padding: 12px; }
+  main { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .tabs { position: sticky; top: 0; display: flex; background: rgba(0,0,0,.65); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); z-index: 2; }
+  .tabs div { flex: 1; text-align: center; padding: 16px 0 12px; color: var(--muted); font-weight: 500; cursor: pointer; }
+  .tabs div.on { color: var(--fg); font-weight: 700; position: relative; }
+  .tabs div.on::after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); bottom: 0; width: 56px; height: 4px; background: var(--accent); border-radius: 2px; }
+  .composer { display: flex; gap: 12px; padding: 12px 16px 8px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 20px; }
+  article { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  article:hover { background: #080808; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; flex: none; }
+  .body { flex: 1; min-width: 0; }
+  .who { display: flex; gap: 4px; align-items: baseline; white-space: nowrap; overflow: hidden; }
+  .name { font-weight: 700; } .handle, .time { color: var(--muted); }
+  .verified { width: 16px; height: 16px; fill: var(--accent); vertical-align: -2px; }
+  .text { font-size: 15px; white-space: pre-wrap; margin-top: 2px; }
+  .actions { display: flex; justify-content: space-between; max-width: 425px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+  .actions span { display: flex; align-items: center; gap: 6px; }
+  .actions svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+  .reply { display: none; gap: 12px; margin-top: 12px; align-items: flex-end; }
+  article.open .reply { display: flex; }
+  .reply .avatar { width: 32px; height: 32px; font-size: 13px; }
+  .reply textarea { flex: 1; resize: none; min-height: 40px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; font-size: 17px; padding: 8px 0; outline: none; }
+  .reply button { border: 0; border-radius: 9999px; padding: 8px 16px; background: var(--accent); color: #fff; font-weight: 700; font-size: 15px; opacity: .5; }
+  .reply button.ready { opacity: 1; cursor: pointer; }
+  .sent { margin-top: 10px; padding-left: 12px; border-left: 2px solid var(--line); }
+  .sent .who { margin-bottom: 2px; }
+  .flash textarea { border-bottom-color: var(--accent); }
+  aside { padding: 8px 24px; }
+  .search { background: #202327; border-radius: 9999px; padding: 12px 16px; color: var(--muted); margin-bottom: 16px; }
+  .box { border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px; margin-bottom: 16px; }
+  .box h3 { margin: 0 0 8px; font-size: 20px; }
+  .box .row { padding: 8px 0; } .box .row small { color: var(--muted); display: block; }
+  .box .row b { display: block; }
+  .mock { color: var(--muted); font-size: 12px; padding: 8px 16px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <nav>
+    <div class="mark">✦</div>
+    <a href="#"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>Home</a>
+    <a href="#"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Explore</a>
+    <a href="#"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0v5l2 3H4l2-3z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>Notifications</a>
+    <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>Messages</a>
+    <a href="#"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg>Bookmarks</a>
+    <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profile</a>
+    <a href="#" class="post">Post</a>
+    <div class="me"><div class="avatar" style="background:#4a5568">Y</div><div><b>You</b><br><span class="handle">@you</span></div></div>
+  </nav>
+  <main>
+    <div class="tabs"><div class="on">For you</div><div>Following</div></div>
+    <div class="composer"><div class="avatar" style="background:#4a5568">Y</div><div>What is happening?!</div></div>
+    <div id="feed"></div>
+    <div class="mock">Mock page for a demo. Every post is fictional; “Reply” only appends text on this page. Nothing is sent anywhere.</div>
+  </main>
+  <aside>
+    <div class="search">Search</div>
+    <div class="box"><h3>What’s happening</h3>
+      <div class="row"><small>Trending · Technology</small><b>on-device models</b><small>12.4K posts</small></div>
+      <div class="row"><small>Sports · Trending</small><b>marathon season</b><small>8,102 posts</small></div>
+      <div class="row"><small>Trending</small><b>sourdough</b><small>3,377 posts</small></div>
+    </div>
+    <div class="box"><h3>Who to follow</h3>
+      <div class="row"><b>Fictional Account</b><small>@fictional</small></div>
+      <div class="row"><b>Another Person</b><small>@another_person</small></div>
+    </div>
+  </aside>
+</div>
+<script>
+// Fictional posts (from the project's hand-written training data). Names are made up.
+const posts = [
+  ["Maya R.", "@maya_runs", "2h", "My best friend moved across the country and I don't know what to do with my weekends anymore."],
+  ["Devon K.", "@devonk", "3h", "Honestly, the sequel was better than the original and nobody wants to admit it."],
+  ["Priya S.", "@priya_s", "4h", "So my dad and I haven't talked in five years, and today he called me out of nowhere. We talked for an hour. I don't know how to feel but it was nice."],
+  ["Tomás L.", "@tomasl", "5h", "Can we talk about how self checkout machines yell at you for everything? Unexpected item my foot."],
+  ["Jess W.", "@jessw", "6h", "What's a hobby you picked up recently? I started birdwatching and I'm weirdly obsessed."],
+  ["Omar B.", "@omar_b", "7h", "Just finished finals and my brain is mush. Someone talk to me about something that isn't school."],
+  ["Lena F.", "@lenaf", "9h", "Snowed in with no power except my phone battery. Keep me company while it lasts?"],
+  ["Sam P.", "@samp", "11h", "The new phone everyone is upgrading to looks exactly like my old one. I'm not buying it."],
+  ["Ari N.", "@arin", "13h", "After failing my driving test twice, I passed today. The examiner even said I did great on parallel parking, my old nemesis."],
+  ["Chris D.", "@chrisd", "15h", "Oh great, my flight got delayed again. Love spending my birthday at gate B12."],
+];
+const colors = ["#e0663d", "#3d8be0", "#43a047", "#8e5bd6", "#d63d7a", "#0e9aa7", "#c28b1f", "#5c6bc0", "#00897b", "#6d4c41"];
+const icons = {
+  reply: '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 8-8h0a8 8 0 0 1 8 8v0a8 8 0 0 1-8 8H8l-4 3z"/></svg>',
+  repost: '<svg viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+  like: '<svg viewBox="0 0 24 24"><path d="M12 21s-7-4.6-9-9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c-2 4.4-9 9-9 9z"/></svg>',
+  views: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>',
+};
+const check = '<svg class="verified" viewBox="0 0 24 24"><path d="M12 2l2.4 2.2 3.2-.5 1 3.1 2.9 1.5-1.3 3 1.3 3-2.9 1.5-1 3.1-3.2-.5L12 22l-2.4-2.2-3.2.5-1-3.1-2.9-1.5 1.3-3-1.3-3 2.9-1.5 1-3.1 3.2.5z"/><path d="M8.5 12.5l2.5 2.5 4.5-5" fill="none" stroke="#000" stroke-width="2"/></svg>';
+const feed = document.getElementById("feed");
+posts.forEach(([name, handle, time, text], index) => {
+  const article = document.createElement("article");
+  const n = index + 1;
+  article.innerHTML = `
+    <div class="avatar" style="background:${colors[index]}">${name[0]}</div>
+    <div class="body">
+      <div class="who"><span class="name">${name}</span>${index % 3 === 0 ? check : ""}<span class="handle">${handle}</span><span class="time">· ${time}</span></div>
+      <div class="text">${text}</div>
+      <div class="actions">
+        <span class="open-reply">${icons.reply} ${(n * 7) % 23 + 3}</span><span>${icons.repost} ${(n * 5) % 17}</span>
+        <span>${icons.like} ${(n * 13) % 90 + 12}</span><span>${icons.views} ${(n * 911) % 9000 + 1200}</span>
+      </div>
+      <div class="reply"><div class="avatar" style="background:#4a5568">Y</div><textarea placeholder="Post your reply" rows="1"></textarea><button>Reply</button></div>
+    </div>`;
+  const textarea = article.querySelector("textarea");
+  const button = article.querySelector("button");
+  article.querySelector(".open-reply").addEventListener("click", () => { article.classList.add("open"); textarea.focus(); });
+  textarea.addEventListener("input", () => button.classList.toggle("ready", textarea.value.trim().length > 0));
+  button.addEventListener("click", () => {
+    const reply = textarea.value.trim();
+    if (!reply) return;
+    const sent = document.createElement("div");
+    sent.className = "sent";
+    sent.innerHTML = `<div class="who"><span class="name">You</span><span class="handle">@you</span><span class="time">· now</span></div><div class="text"></div>`;
+    sent.querySelector(".text").textContent = reply;
+    article.querySelector(".body").appendChild(sent);
+    textarea.value = "";
+    button.classList.remove("ready");
+  });
+  feed.appendChild(article);
+});
+
+// Remember which post the user last selected text in, so a paste lands in that post's reply box even though the
+// selection (not the textarea) had focus when the hotkey was pressed.
+let lastArticle = null;
+document.addEventListener("selectionchange", () => {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) return;
+  const node = selection.anchorNode;
+  const article = (node.nodeType === 1 ? node : node.parentElement).closest("article");
+  if (article) lastArticle = article;
+});
+document.addEventListener("paste", (event) => {
+  if (document.activeElement && document.activeElement.tagName === "TEXTAREA") return;
+  const text = (event.clipboardData || window.clipboardData).getData("text");
+  if (!text || !lastArticle) return;
+  event.preventDefault();
+  lastArticle.classList.add("open", "flash");
+  const textarea = lastArticle.querySelector("textarea");
+  textarea.value = text;
+  textarea.dispatchEvent(new Event("input"));
+  textarea.focus();
+  setTimeout(() => lastArticle.classList.remove("flash"), 900);
+});
+</script>
+</body>
+</html>
