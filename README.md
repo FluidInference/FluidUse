@@ -153,6 +153,29 @@ On an M5 Pro a short ticket with two questions takes 18 ms and a Wikipedia bio w
 `swift run -c release KevGuessWhoDemo` plays Guess Who over 80 Wikipedia people with it
 ([Sources/KevGuessWhoDemo](Sources/KevGuessWhoDemo/README.md)).
 
+## Clef-vision image decisions
+
+`ClefVisionManager` runs [clef-vision-0.8b](https://huggingface.co/FluidInference/clef-vision-0.8b-coreml), a 0.92B
+image decision model distilled from Cloudflare's Clef-flash (Qwen3.5-0.8B backbone + Clef's joint schema head,
+Apache-2.0), on the GPU through Core ML. One call reads a state, any number of images and typed questions (yes/no,
+choice, score) and returns a probability for every option, like Clef / Jev. The pinned, checksummed bundle downloads
+from the Hub on first use (vision tower 377 MB, one ~960 MB language-model bucket per sequence length you load,
+264 MB head per bucket, 508 MB embeddings; macOS 15 / iOS 18).
+
+```swift
+let clef = try await ClefVisionManager.load(from: try await ClefVisionModelStore.ensure(buckets: [1024]), buckets: [1024])
+let result = try await clef.answer(
+    state: ["task": "select every image that contains a cat"],
+    images: [tile],  // CGImage
+    questions: [("tile_1", .noul(instructions: "Is there a cat in image 1?"))])
+print(result.answers[0].noul!)  // probability of "true"
+```
+
+Held-out test accuracy 92.2% (teacher 94.1%); a 3×3 "select all images with cats / dogs" grid scored one tile per
+record solves 90% of grids. On an M5 Pro one image and ~500 tokens take about 260 ms (vision 50 ms, language model
+190 ms, head 14 ms). `swift run -c release ClefVisionCheck parity Tests/FluidUseTests/Fixtures/clef-vision`
+checks the Swift host against the Python reference.
+
 ## Intern-Decision
 
 `InternDecisionManager` runs [Intern-Decision-0.8B](https://huggingface.co/internlm/Intern-Decision-0.8B) (Shanghai AI
