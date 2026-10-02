@@ -67,7 +67,7 @@ func run() async throws {
     }
     func median(_ values: [Double]) -> Double {
         let sorted = values.sorted()
-        return sorted[sorted.count / 2]
+        return sorted.isEmpty ? 0 : sorted[sorted.count / 2]
     }
     print("exact reply match: \(matches)/\(rows.count)")
     print(

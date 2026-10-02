@@ -56,7 +56,7 @@ public actor ShortReplyManager {
             Config.self, from: Data(contentsOf: directory.appendingPathComponent("config.json")))
         var package = directory.appendingPathComponent(config.package)
         if package.pathExtension == "mlpackage" {
-            package = try await MLModel.compileModel(at: package)
+            package = try await KevManager.compiled(package)  // compile once, keep the .mlmodelc beside the package
         }
         return try ShortReplyManager(
             config: config, compiled: package, tokenizer: directory.appendingPathComponent("tokenizer.json"),
@@ -94,18 +94,41 @@ public actor ShortReplyManager {
         return try tokenizer.encode(text)
     }
 
-    /// Whitespace-normalized, links dropped, and cut (by tokens, from the end) so the prompt fits the prefill length.
+    /// Whitespace-normalized, links dropped, and cut (by tokens, from the end) until the full prompt fits the prefill
+    /// length. The fit is checked on the re-tokenized prompt, since a cut can land mid-word or mid-merge.
     func preparePost(_ rawPost: String) throws -> (post: String, trimmed: Bool) {
         var post = Self.stripLinks(rawPost).split(whereSeparator: \.isWhitespace).joined(separator: " ")
         guard !post.isEmpty else { throw ShortReplyError.emptyPost }
-        if post.count > config.maxPostCharacters { post = String(post.prefix(config.maxPostCharacters)) }
-        let overhead = try promptTokens(for: "").count
-        let budget = config.prefillLength - overhead
-        guard budget > 8 else { throw ShortReplyError.invalidAsset("prefill length too short for the system prompt") }
-        let postTokens = try tokenizer.encode(post)
-        guard postTokens.count > budget else { return (post, false) }
-        let cut = tokenizer.decode(Array(postTokens.prefix(budget - 1))).trimmingCharacters(in: .whitespaces)
-        return (cut + "…", true)
+        var trimmed = false
+        if post.count > config.maxPostCharacters {
+            post = String(post.prefix(config.maxPostCharacters))
+            trimmed = true
+        }
+        let length = config.prefillLength
+        if try promptTokens(for: post).count <= length { return (post, trimmed) }
+        var keep = max(1, try tokenizer.encode(post).count - (try promptTokens(for: post).count - length) - 1)
+        while keep > 0 {
+            let cut =
+                tokenizer.decode(Array(try tokenizer.encode(post).prefix(keep)))
+                .trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "\u{FFFD}", with: "") + "…"
+            if try promptTokens(for: cut).count <= length { return (cut, true) }
+            keep -= 2
+        }
+        throw ShortReplyError.invalidAsset("prefill length too short for the system prompt")
+    }
+
+    /// True when the reply repeats a run of five or more consecutive words from the post (mirrors `reply.py`).
+    static func echoes(_ post: String, _ reply: String, run: Int = 5) -> Bool {
+        let postWords = post.lowercased().split { !$0.isLetter && !$0.isNumber && $0 != "'" }.map(String.init)
+        let replyWords = reply.lowercased().split { !$0.isLetter && !$0.isNumber && $0 != "'" }.map(String.init)
+        guard replyWords.count >= run, postWords.count >= run else { return false }
+        for start in 0...(replyWords.count - run) {
+            let window = Array(replyWords[start..<start + run])
+            for index in 0...(postWords.count - run) where Array(postWords[index..<index + run]) == window {
+                return true
+            }
+        }
+        return false
     }
 
     static func stripLinks(_ text: String) -> String {
@@ -116,15 +139,27 @@ public actor ShortReplyManager {
 
     /// `variation` 0 decodes greedily (the benchmarked behavior); higher values sample (temperature 0.7, top-p 0.9)
     /// with a seed derived from the value, so "regenerate" gives a different, repeatable reply. `avoiding` rejects
-    /// replies equal to earlier drafts (up to a few attempts).
+    /// replies equal to earlier drafts (up to a few attempts). A greedy reply that parrots the post is replaced by the
+    /// first seeded sample that does not, as `reply.py` does.
     public func draft(
         for rawPost: String, variation: Int = 0, avoiding previous: Set<String> = []
     ) async throws -> Draft {
-        for attempt in 0..<(variation == 0 ? 1 : 4) {
-            let draft = try await decodeDraft(for: rawPost, variation: variation == 0 ? 0 : variation + attempt * 1000)
-            if variation == 0 || !previous.contains(draft.reply) { return draft }
+        if variation == 0 {
+            let greedy = try await decodeDraft(for: rawPost, variation: 0)
+            guard Self.echoes(greedy.post, greedy.reply) else { return greedy }
+            for attempt in 1...6 {
+                let sampled = try await decodeDraft(for: rawPost, variation: attempt)
+                if !Self.echoes(sampled.post, sampled.reply) { return sampled }
+            }
+            return greedy
         }
-        return try await decodeDraft(for: rawPost, variation: variation)
+        var last: Draft?
+        for attempt in 0..<4 {
+            let draft = try await decodeDraft(for: rawPost, variation: variation + attempt * 1000)
+            if !previous.contains(draft.reply) { return draft }
+            last = draft
+        }
+        return last!
     }
 
     private func decodeDraft(for rawPost: String, variation: Int) async throws -> Draft {
@@ -158,6 +193,7 @@ public actor ShortReplyManager {
         }
         let decodeSeconds = seconds(since: decodeStarted)
         let reply = ShortReplyManager.cleanReply(tokenizer.decode(generated))
+        guard !reply.isEmpty else { throw ShortReplyError.emptyReply }
         let timing = Timing(
             prefillSeconds: prefillSeconds, decodeSeconds: decodeSeconds, generatedTokens: generated.count)
         logger.info(
@@ -220,25 +256,43 @@ public actor ShortReplyManager {
         else { throw ShortReplyError.invalidAsset("prefill output has no keys/values") }
         let headDim = config.headDim
         let kvHeads = config.kvHeads
-        let layerElements = kvHeads * promptLength * headDim
-        for layer in 0..<config.layers {
-            for (name, source) in [("k", keys), ("v", values)] {
-                // [kvHeads, prompt, headDim] fp16 for this layer, as a plain (Sendable) buffer
+        let rowElements = promptLength * headDim
+        for (name, source) in [("k", keys), ("v", values)] {
+            // Prefill outputs are fp16 and may carry padded strides; copy head by head using the array's own strides.
+            guard source.dataType == .float16, source.shape.count == 4,
+                source.shape[1].intValue == kvHeads, source.shape[2].intValue == promptLength,
+                source.shape[3].intValue == headDim, source.strides[3].intValue == 1,
+                source.strides[2].intValue == headDim
+            else {
+                throw ShortReplyError.invalidAsset(
+                    "unexpected prefill \(name) layout \(source.shape) / \(source.strides)")
+            }
+            let layerStride = source.strides[0].intValue
+            let headStride = source.strides[1].intValue
+            for layer in 0..<config.layers {
+                // One layer's [kvHeads, prompt, headDim] as a plain (Sendable) buffer, each head's rows contiguous.
                 let block: [UInt16] = source.withUnsafeBytes { origin in
-                    let base = origin.baseAddress!.assumingMemoryBound(to: UInt16.self).advanced(
-                        by: layer * layerElements)
-                    return Array(UnsafeBufferPointer(start: base, count: layerElements))
+                    let base = origin.baseAddress!.assumingMemoryBound(to: UInt16.self)
+                    var block = [UInt16](repeating: 0, count: kvHeads * rowElements)
+                    for head in 0..<kvHeads {
+                        let start = layer * layerStride + head * headStride
+                        for element in 0..<rowElements { block[head * rowElements + element] = base[start + element] }
+                    }
+                    return block
                 }
-                state.withMultiArray(for: "\(name)_cache_\(layer)") { cache in
-                    cache.withUnsafeMutableBytes { destination, strides in
+                try state.withMultiArray(for: "\(name)_cache_\(layer)") { cache in
+                    guard cache.dataType == .float16, cache.strides[3].intValue == 1,
+                        cache.strides[2].intValue == headDim
+                    else { throw ShortReplyError.invalidAsset("unexpected \(name) cache layout \(cache.strides)") }
+                    let headStride = cache.strides[1].intValue
+                    cache.withUnsafeMutableBytes { destination, _ in
                         let dst = destination.baseAddress!.assumingMemoryBound(to: UInt16.self)
                         block.withUnsafeBufferPointer { src in
                             for head in 0..<kvHeads {
-                                // cache rows are contiguous within a head: [1, kvHeads, cache, headDim]
                                 memcpy(
-                                    dst.advanced(by: head * strides[1]),
-                                    src.baseAddress!.advanced(by: head * promptLength * headDim),
-                                    promptLength * headDim * MemoryLayout<UInt16>.size)
+                                    dst.advanced(by: head * headStride),
+                                    src.baseAddress!.advanced(by: head * rowElements),
+                                    rowElements * MemoryLayout<UInt16>.size)
                             }
                         }
                     }
@@ -301,6 +355,7 @@ public actor ShortReplyManager {
             mass += probabilities[index]
             if mass >= topP { break }
         }
+        guard mass.isFinite, mass > 0 else { return argmax(logits) }
         var draw = Float.random(in: 0..<mass, using: &rng)
         for (index, probability) in kept {
             draw -= probability
@@ -344,12 +399,14 @@ struct SeededGenerator: RandomNumberGenerator {
 
 public enum ShortReplyError: Error, LocalizedError, Sendable {
     case emptyPost
+    case emptyReply
     case postTooLong(Int)
     case invalidAsset(String)
 
     public var errorDescription: String? {
         switch self {
         case .emptyPost: return "Select a post first."
+        case .emptyReply: return "The model did not produce a reply."
         case .postTooLong(let limit): return "The post is too long (\(limit) character limit)."
         case .invalidAsset(let detail): return "Short-reply model asset problem: \(detail)"
         }

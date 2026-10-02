@@ -20,8 +20,14 @@ The model directory holds `short_reply_0_6b.mlpackage` (functions `prefill` and 
 ```bash
 hf download FluidInference/short-reply-0.6b-coreml --local-dir ~/Models/short-reply-0.6b-coreml
 Sources/ShortReplyDemo/demo.sh --x ~/Models/short-reply-0.6b-coreml      # or set SHORT_REPLY_MODEL_DIR
-``` First launch compiles
-the package (a few seconds) and runs one warm-up prompt; the log prints `model ready`.
+```
+
+The first launch compiles the package once (kept as `.mlmodelc` beside it) and runs one warm-up prompt; the log
+prints `model ready`.
+
+**Keys.** The bare **9** and **0** keys are observed system-wide while the app runs (a global monitor can't swallow
+them, so a 9 typed into a focused field is deleted again by the app). That is convenient for a demo and wrong for
+daily use: turn off "Bare 9 / 0 keys (demo mode)" in the menu-bar item and use ⌃⌥R instead.
 
 **Mock feed for recording.** `mock-feed/index.html` is a local feed of fictional posts with a reply box under each;
 nothing on it is posted anywhere. Select a post, press 9, then **Insert**: the page routes the paste into that post's reply box, and "Reply" only

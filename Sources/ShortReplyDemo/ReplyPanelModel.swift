@@ -20,8 +20,8 @@ final class ReplyPanelModel: ObservableObject {
     @Published var timing: ShortReplyManager.Timing?
     @Published var drafts = 0
     @Published var trimmed = false
-    /// Same post again → sample a new reply instead of repeating the greedy one.
-    private var lastPost = ""
+    /// The post text as read from the app; drafts of the same raw text sample a new reply instead of repeating.
+    private(set) var rawPost = ""
     private var variation = 0
     private var previousReplies: Set<String> = []
     var sourceApplication: NSRunningApplication?
@@ -57,10 +57,10 @@ final class ReplyPanelModel: ObservableObject {
             show(error: "Model is still loading.")
             return
         }
-        if text == lastPost {
+        if text == rawPost {
             variation += 1
         } else {
-            lastPost = text
+            rawPost = text
             variation = 0
             previousReplies = []
         }

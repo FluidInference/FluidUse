@@ -14,36 +14,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// With a reply box focused, 9 drafts and pastes without showing the panel.
     private var autoInsert = true
     private var autoInsertItem: NSMenuItem?
+    /// Bare 9 / 0 keys are observed system-wide; switch them off outside a demo (⌃⌥R always works).
+    private var bareKeys = true
+    private var bareKeysItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.title = "↩︎"
         item.button?.toolTip = "Short Reply — 9 drafts a reply into the focused reply box, 0 regenerates it"
         let menu = NSMenu()
-        menu.addItem(
-            withTitle: "Draft reply for selection  9 / ⌃⌥R", action: #selector(draftFromMenu), keyEquivalent: "")
-        menu.addItem(withTitle: "Draft reply from clipboard", action: #selector(draftFromClipboard), keyEquivalent: "")
+        for (title, action) in [
+            ("Draft reply for selection  9 / ⌃⌥R", #selector(draftFromMenu)),
+            ("Draft reply from clipboard", #selector(draftFromClipboard)),
+        ] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
         menu.addItem(.separator())
         let auto = NSMenuItem(
             title: "Auto-insert into the focused reply box (no panel)", action: #selector(toggleAutoInsert),
             keyEquivalent: "")
+        auto.target = self
         auto.state = .on
         menu.addItem(auto)
         autoInsertItem = auto
+        let bare = NSMenuItem(
+            title: "Bare 9 / 0 keys (demo mode)", action: #selector(toggleBareKeys), keyEquivalent: "")
+        bare.target = self
+        bare.state = .on
+        menu.addItem(bare)
+        bareKeysItem = bare
         menu.addItem(.separator())
+        // Quit keeps a nil target so the responder chain reaches NSApplication.
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        menu.items.forEach { $0.target = self }
         item.menu = menu
         statusItem = item
 
         panel = ReplyPanel(model: model)
         hotkey = HotkeyMonitor { [weak self] action in
             Task { @MainActor in
+                guard let self else { return }
                 switch action {
-                case .draft(let typed): self?.draftFromSelection(typedTrigger: typed)
+                case .draft(let typed):
+                    if typed && !self.bareKeys { return }
+                    self.draftFromSelection(typedTrigger: typed)
                 case .regenerate(let typed):
+                    if typed && !self.bareKeys { return }
                     if typed { SelectionReader.deleteTypedTriggerIfEditing() }
-                    self?.regenerate()
+                    self.regenerate()
                 }
             }
         }
@@ -58,10 +77,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 0: a new sampled reply for the last post, replacing the box contents (or a first draft if there is none yet).
     func regenerate() {
-        guard !model.post.isEmpty, model.phase != .drafting else { return draftFromSelection(typedTrigger: false) }
+        if model.phase == .drafting { return }  // a draft is in flight; ignore the key
+        guard !model.rawPost.isEmpty else { return draftFromSelection(typedTrigger: false) }
         let previous = model.sourceApplication
         Task { @MainActor in
-            await model.draft(post: model.post)
+            await model.draft(post: model.rawPost)
             guard case .done = model.phase else { return panel?.present() ?? () }
             if autoInsert, previous != nil {
                 model.sourceApplication = previous
@@ -77,7 +97,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         autoInsertItem?.state = autoInsert ? .on : .off
     }
 
+    @objc func toggleBareKeys() {
+        bareKeys.toggle()
+        bareKeysItem?.state = bareKeys ? .on : .off
+    }
+
     func draftFromSelection(typedTrigger: Bool) {
+        if model.phase == .drafting { return }
         let previous = NSWorkspace.shared.frontmostApplication
         Task { @MainActor in
             let context = await SelectionReader.context(typedTrigger: typedTrigger)

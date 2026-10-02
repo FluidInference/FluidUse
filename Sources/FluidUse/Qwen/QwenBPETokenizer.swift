@@ -2,8 +2,8 @@ import Foundation
 import os
 
 /// Byte-level BPE tokenizer for Qwen `tokenizer.json` files (Qwen2 through Qwen3.5): NFC normalization, added tokens
-/// matched literally, Qwen's split regex, GPT-2 byte-to-unicode mapping, then merges by rank. Encoding only; no special
-/// tokens are added.
+/// matched literally, Qwen's split regex, GPT-2 byte-to-unicode mapping, then merges by rank. `encode` adds no
+/// special tokens; `decode` drops them.
 public final class QwenBPETokenizer: Sendable {
     private let vocabulary: [String: Int]
     private let mergeRanks: [String: Int]
@@ -13,6 +13,7 @@ public final class QwenBPETokenizer: Sendable {
     /// Reverse tables for `decode`.
     private let tokenForID: [Int: String]
     private let byteForCharacter: [Character: UInt8]
+    private let specialIDs: Set<Int>
     /// Encoded pieces; ordinary text repeats the same words, so this saves most of the merge loops.
     private let cache = OSAllocatedUnfairLock<[String: [Int]]>(initialState: [:])
 
@@ -53,6 +54,7 @@ public final class QwenBPETokenizer: Sendable {
         var byteForCharacter = [Character: UInt8](minimumCapacity: 256)
         for (byte, character) in byteToCharacter.enumerated() { byteForCharacter[character] = UInt8(byte) }
         self.byteForCharacter = byteForCharacter
+        specialIDs = Set(addedTokens.map(\.id))
         _ = try Self.splitter()
     }
 
@@ -83,9 +85,8 @@ public final class QwenBPETokenizer: Sendable {
 
     /// Text for `ids`, dropping added (special) tokens; invalid byte sequences decode lossily.
     public func decode(_ ids: [Int]) -> String {
-        let special = Set(addedTokens.map(\.id))
         var bytes: [UInt8] = []
-        for id in ids where !special.contains(id) {
+        for id in ids where !specialIDs.contains(id) {
             guard let token = tokenForID[id] else { continue }
             for character in token {
                 if let byte = byteForCharacter[character] { bytes.append(byte) }

@@ -40,12 +40,23 @@ enum SelectionReader {
     private static func focusedElement() -> AXUIElement? {
         guard let application = NSWorkspace.shared.frontmostApplication else { return nil }
         let element = AXUIElementCreateApplication(application.processIdentifier)
-        AXUIElementSetAttributeValue(element, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+        if Self.isChromium(application) {
+            // Chromium browsers expose web-content accessibility only once an assistive client asks for it.
+            AXUIElementSetAttributeValue(element, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+        }
         var focused: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
             let focused, CFGetTypeID(focused) == AXUIElementGetTypeID()
         else { return nil }
         return unsafeBitCast(focused, to: AXUIElement.self)
+    }
+
+    private static func isChromium(_ application: NSRunningApplication) -> Bool {
+        let id = application.bundleIdentifier?.lowercased() ?? ""
+        return [
+            "com.google.chrome", "org.chromium", "com.brave.browser", "com.microsoft.edgemac", "company.thebrowser",
+        ]
+        .contains { id.hasPrefix($0) }
     }
 
     private static func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
@@ -62,18 +73,23 @@ enum SelectionReader {
     }
 
     /// Static text above the focused field within the nearest enclosing container that holds a real paragraph:
-    /// on a reply dialog that is the post being answered. Short fragments (names, times, "Replying to …") are dropped.
+    /// on a reply dialog that is the post being answered. Walks up one level at a time, scanning only the siblings
+    /// that precede the path to the field, so every element is visited once.
     private static func postAbove(_ focused: AXUIElement) -> String? {
         var node = focused
+        var paragraphs: [String] = []  // document order, everything before the field so far
+        var budget = 4000
         for _ in 0..<48 {  // X nests the reply box dozens of AXGroups deep
-            guard let parentValue = attribute(node, kAXParentAttribute),
+            guard budget > 0, let parentValue = attribute(node, kAXParentAttribute),
                 CFGetTypeID(parentValue) == AXUIElementGetTypeID()
             else { return nil }
             let parent = unsafeBitCast(parentValue, to: AXUIElement.self)
-            var paragraphs: [String] = []
-            var budget = 2500
-            var reachedFocus = false
-            collectText(parent, focused: focused, into: &paragraphs, budget: &budget, reachedFocus: &reachedFocus)
+            var before: [String] = []
+            for child in attribute(parent, kAXChildrenAttribute) as? [AXUIElement] ?? [] {
+                if CFEqual(child, node) { break }
+                collectText(child, into: &before, budget: &budget)
+            }
+            paragraphs = before + paragraphs
             let kept = Self.postParagraphs(paragraphs)
             if !kept.isEmpty { return kept.joined(separator: " ") }
             node = parent
@@ -102,16 +118,9 @@ enum SelectionReader {
         text.range(of: #"^(\d+[smhd]|[A-Z][a-z]{2} \d{1,2}(, \d{4})?|·)$"#, options: .regularExpression) != nil
     }
 
-    private static func collectText(
-        _ element: AXUIElement, focused: AXUIElement, into paragraphs: inout [String], budget: inout Int,
-        reachedFocus: inout Bool
-    ) {
-        guard budget > 0, !reachedFocus else { return }
+    private static func collectText(_ element: AXUIElement, into paragraphs: inout [String], budget: inout Int) {
+        guard budget > 0 else { return }
         budget -= 1
-        if CFEqual(element, focused) {
-            reachedFocus = true
-            return
-        }
         if attribute(element, kAXRoleAttribute) as? String == kAXStaticTextRole,
             let text = attribute(element, kAXValueAttribute) as? String
         {
@@ -120,10 +129,7 @@ enum SelectionReader {
             return
         }
         guard let children = attribute(element, kAXChildrenAttribute) as? [AXUIElement] else { return }
-        for child in children {
-            collectText(child, focused: focused, into: &paragraphs, budget: &budget, reachedFocus: &reachedFocus)
-            if reachedFocus { return }
-        }
+        for child in children { collectText(child, into: &paragraphs, budget: &budget) }
     }
 
     /// `AXSelectedText` of the focused element, which Safari, Slack and native text views all expose.
