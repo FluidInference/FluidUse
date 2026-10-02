@@ -10,6 +10,9 @@ public final class QwenBPETokenizer: Sendable {
     /// Added tokens, longest first, so a longer token wins over one it contains.
     private let addedTokens: [(content: String, id: Int)]
     private let byteToCharacter: [Character]
+    /// Reverse tables for `decode`.
+    private let tokenForID: [Int: String]
+    private let byteForCharacter: [Character: UInt8]
     /// Encoded pieces; ordinary text repeats the same words, so this saves most of the merge loops.
     private let cache = OSAllocatedUnfairLock<[String: [Int]]>(initialState: [:])
 
@@ -44,6 +47,12 @@ public final class QwenBPETokenizer: Sendable {
             return (content, id)
         }.sorted { $0.content.count > $1.content.count }
         byteToCharacter = Self.bytesToUnicode()
+        var tokenForID = [Int: String](minimumCapacity: vocab.count)
+        for (token, id) in vocab { tokenForID[id] = token }
+        self.tokenForID = tokenForID
+        var byteForCharacter = [Character: UInt8](minimumCapacity: 256)
+        for (byte, character) in byteToCharacter.enumerated() { byteForCharacter[character] = UInt8(byte) }
+        self.byteForCharacter = byteForCharacter
         _ = try Self.splitter()
     }
 
@@ -70,6 +79,19 @@ public final class QwenBPETokenizer: Sendable {
             }
         }
         return ids
+    }
+
+    /// Text for `ids`, dropping added (special) tokens; invalid byte sequences decode lossily.
+    public func decode(_ ids: [Int]) -> String {
+        let special = Set(addedTokens.map(\.id))
+        var bytes: [UInt8] = []
+        for id in ids where !special.contains(id) {
+            guard let token = tokenForID[id] else { continue }
+            for character in token {
+                if let byte = byteForCharacter[character] { bytes.append(byte) }
+            }
+        }
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     public func id(for token: String) -> Int? {
