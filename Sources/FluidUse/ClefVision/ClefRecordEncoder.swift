@@ -94,14 +94,17 @@ enum ClefJSON {
             return quote(string)
         case let bool as Bool:
             return bool ? "true" : "false"
-        case let number as NSNumber:
-            if CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue ? "true" : "false" }
-            if number.doubleValue.rounded() == number.doubleValue, !"\(number)".contains(".") { return "\(number.int64Value)" }
-            return pythonFloat(number.doubleValue)
         case let int as Int:
             return String(int)
         case let double as Double:
             return pythonFloat(double)
+        case let float as Float:
+            return pythonFloat(Double(float))
+        case let number as NSNumber:
+            if CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue ? "true" : "false" }
+            // a Double-typed NSNumber (e.g. 1250.0 from JSONSerialization) must keep Python's "1250.0"
+            if CFNumberIsFloatType(number) { return pythonFloat(number.doubleValue) }
+            return "\(number.int64Value)"
         case let array as [Any]:
             return "[" + array.map(dump).joined(separator: ",") + "]"
         case let dict as [String: Any]:
