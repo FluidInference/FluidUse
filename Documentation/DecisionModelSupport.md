@@ -7,6 +7,7 @@ FluidUse serves the weighted sub-1B models on the [Jev Decision Index](https://h
 | Laya | `LayaManager` | [laya-coreml](https://huggingface.co/FluidInference/laya-coreml) | Native Swift |
 | GLiNER 2.5 small / base / multilingual | `GLiNER2Manager` (`.small`, `.base`, `.multilingual`) | [small](https://huggingface.co/FluidInference/gliner2-5-small-coreml), [base](https://huggingface.co/FluidInference/gliner2-5-base-coreml), [multi](https://huggingface.co/FluidInference/gliner2-5-multi-coreml) | Native Swift |
 | Verdict | `VerdictManager` | [verdict-coreml](https://huggingface.co/FluidInference/verdict-coreml) | Native Swift, calibrated, with trained abstention |
+| Cua-S1-4B-0.2 (text / multimodal) | `CuaS1FourBManager` | [cua-s1-4b-coreml](https://huggingface.co/FluidInference/cua-s1-4b-coreml) | Native Swift, GPU, fp16 / w8 / gptq |
 | GLiClass Edge Apps v2 | `GLiClassManager` | [gliclass-edge-apps-coreml](https://huggingface.co/FluidInference/gliclass-edge-apps-coreml) | Native Swift |
 | Kev 0.5B / 0.6B | `PublishedCoreMLManager` + `evaluate(SystemOneRequest)` | [0.5B](https://huggingface.co/FluidInference/kev-0-5b-coreml), [0.6B](https://huggingface.co/FluidInference/kev-0.6b-coreml) | Bridge |
 | Decision 1.0 Kai / Lex | `PublishedCoreMLManager` + `evaluate(SystemOneRequest)` | [Kai](https://huggingface.co/FluidInference/decision-1.0-kai-coreml), [Lex](https://huggingface.co/FluidInference/decision-1.0-lex-coreml) | Bridge |
