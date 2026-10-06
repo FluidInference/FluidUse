@@ -210,6 +210,41 @@ moves and switches as `choice` options it matches its 4B teacher (24-6 vs poke-e
 heuristic player over 30 battles). Buckets are 512, 640 and 1,024 tokens with int8 weights: about 0.85 GB in memory
 with one bucket in use, 1.9 GB to download, the same 90 ms per decision as fp16.
 
+## Decision 2.0
+
+`Decision2Manager` runs vLLM Semantic Router's [Decision 2.0](https://huggingface.co/collections/vllm-sr/decision-20-6ab7cf7bdfb506bf8269cb00)
+models (Apache-2.0) on the GPU through Core ML: Kai 0.6B (Qwen3) and Eos 0.8B (Qwen3.5 hybrid). A request is a state
+(text or JSON) and any number of named questions (choice, yes/no, score); every question is answered in one call. The
+text the questions share is read once and each question continues from it exactly as in its own upstream row, so the
+answers are upstream's (typed-decisions TEST, 2,000 decisions: 0 token mismatches, 5 / 4 near-tie flips vs the
+upstream PyTorch runtime, all with a top-2 margin under 0.01). Long requests are split into chunks that each repeat the
+shared text. The pinned snapshots download from
+[FluidInference/decision-2.0-kai-coreml](https://huggingface.co/FluidInference/decision-2.0-kai-coreml) (1.1 GB) and
+[FluidInference/decision-2.0-eos-coreml](https://huggingface.co/FluidInference/decision-2.0-eos-coreml) (1.4 GB) on
+first use (macOS 15 / iOS 18).
+
+```swift
+let model = try await Decision2Manager.load(from: try await Decision2ModelStore.ensure(.kai))
+try await model.warm()
+let result = try await model.answer(
+    state: "The order arrived damaged yesterday. The customer has a receipt and asks for a replacement today.",
+    questions: [
+        ("route", .choice("Which team should handle this request?", [
+            "returns": "Refunds, replacements and damaged deliveries",
+            "billing": "Payments, invoices and charges",
+        ])),
+        ("receipt", .yesNo("Does the customer have a receipt?")),
+        ("urgency", .score("How urgent is this request?", ["Routine", "Soon", "Today"])),
+    ])
+print(result["route"]!.choice, result["receipt"]!.yes!, result["urgency"]!.score!)
+```
+
+On an M5 Pro that request takes 17 ms with Kai and 36 ms with Eos; a five-question typed-decisions request (~1,000
+packed tokens) 63 / 113 ms. The upstream PyTorch runtime on the same Mac (MPS, fp32) takes 89 / 306 ms for the first and
+418 / 1,595 ms for the second. `swift run -c release Decision2Check parity <model directory> <fixtures.json>` checks
+the Swift host against the Python reference. [Sources/IssueTriageDemo](Sources/IssueTriageDemo/README.md) labels 1,000
+GitHub issues live with Kai (type, owning team, priority, flags: five decisions per issue in one call).
+
 ## Short replies
 
 `ShortReplyManager` drafts one short reply to a social post with a sub-1B model:
