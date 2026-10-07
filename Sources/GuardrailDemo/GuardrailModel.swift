@@ -100,28 +100,32 @@ final class GuardrailModel: ObservableObject {
         input = scenario.suggest[scenario.suggest.count - 1]
     }
 
-    /// `--demo [scenario id]`: hands-free run of ONE scenario (refund by default): types each suggestion word by word
-    /// (the live lane fires as it goes), sends it and checks the reply, then stops with everything left on screen.
+    /// `--demo [scenario id]`: hands-free run. Plays every scenario once (or only the given one): types each message
+    /// word by word (the live lane fires as it goes), sends it, checks its reply, then stops with the last scenario
+    /// left on screen.
     private func demo() async {
         let args = CommandLine.arguments
-        var s = Scenario.all[0]
+        var list = Scenario.all
         if let i = args.firstIndex(of: "--demo"), i + 1 < args.count, let pick = Scenario.all.first(where: { $0.id == args[i + 1] }) {
-            s = pick
+            list = [pick]
         }
-        print("demo: \(s.name)")
-        setScenario(s)
-        try? await Task.sleep(for: .milliseconds(1500))
-        for msg in s.suggest {
-            input = ""
-            var typed = ""
-            for word in msg.split(separator: " ", omittingEmptySubsequences: false) {
-                typed += (typed.isEmpty ? "" : " ") + word
-                input = typed
-                try? await Task.sleep(for: .milliseconds(170))
+        for (k, s) in list.enumerated() {
+            print("demo: \(s.name)")
+            setScenario(s)
+            try? await Task.sleep(for: .milliseconds(1500))
+            for msg in s.suggest {
+                input = ""
+                var typed = ""
+                for word in msg.split(separator: " ", omittingEmptySubsequences: false) {
+                    typed += (typed.isEmpty ? "" : " ") + word
+                    input = typed
+                    try? await Task.sleep(for: .milliseconds(170))
+                }
+                try? await Task.sleep(for: .milliseconds(900))
+                send()
+                try? await Task.sleep(for: .milliseconds(3200))
             }
-            try? await Task.sleep(for: .milliseconds(900))
-            send()
-            try? await Task.sleep(for: .milliseconds(3200))
+            if k + 1 < list.count { try? await Task.sleep(for: .milliseconds(3000)) }
         }
         print("demo: done (\(checks) checks, \(onANE) on the Neural Engine)")
     }
@@ -229,8 +233,8 @@ final class GuardrailModel: ObservableObject {
             try? await Task.sleep(for: .milliseconds(700))
             guard self.scenario == sc, let i = self.messages.firstIndex(where: { $0.id == id }) else { return }
             self.messages[i].typing = false
-            self.messages[i].text = sc.reply
-            self.checkReply(id)
+            self.messages[i].text = sc.reply(to: text)
+            if !sc.unchecked.contains(text) { self.checkReply(id) }
         }
     }
 
