@@ -56,6 +56,9 @@ let package = Package(
         .executableTarget(name: "KevCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "ClefVisionCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "InternDecisionCheck", dependencies: ["FluidUse"]),
+        .executableTarget(name: "Decision2Check", dependencies: ["FluidUse"]),
+        .executableTarget(
+            name: "IssueTriageDemo", dependencies: ["FluidUse"], exclude: ["README.md", "fetch-issues.sh"]),
         .executableTarget(name: "Vela2Check", dependencies: ["FluidUse"]),
         .executableTarget(name: "GuardrailDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
         .executableTarget(name: "FrontDoorDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
