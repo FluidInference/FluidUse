@@ -76,7 +76,7 @@ final class GuardrailModel: ObservableObject {
             status = "\(m.modelName) ready · ANE ≤ \(m.aneMaxLength) tokens, GPU above"
             print("ready: \(m.modelName) (Core ML: ANE <= \(m.aneMaxLength) tokens, GPU above)")
             scheduleLive()
-            if CommandLine.arguments.contains("--loop") { await loop() }
+            if CommandLine.arguments.contains("--demo") { await demo() }
             if CommandLine.arguments.contains("--autoplay") { await autoplay() }
         } catch {
             status = "Failed to load model: \(error.localizedDescription)"
@@ -100,29 +100,30 @@ final class GuardrailModel: ObservableObject {
         input = scenario.suggest[scenario.suggest.count - 1]
     }
 
-    /// `--loop`: hands-free demo. Cycles every scenario forever: types each suggestion word by word (the live lane
-    /// fires as it goes), sends it, waits for the reply check, then moves on.
-    private func loop() async {
-        print("loop: hands-free demo running")
-        while !Task.isCancelled {
-            for s in Scenario.all {
-                setScenario(s)
-                try? await Task.sleep(for: .milliseconds(1200))
-                for msg in s.suggest {
-                    input = ""
-                    var typed = ""
-                    for word in msg.split(separator: " ", omittingEmptySubsequences: false) {
-                        typed += (typed.isEmpty ? "" : " ") + word
-                        input = typed
-                        try? await Task.sleep(for: .milliseconds(170))
-                    }
-                    try? await Task.sleep(for: .milliseconds(900))
-                    send()
-                    try? await Task.sleep(for: .milliseconds(3200))
-                }
-                try? await Task.sleep(for: .milliseconds(1500))
-            }
+    /// `--demo [scenario id]`: hands-free run of ONE scenario (refund by default): types each suggestion word by word
+    /// (the live lane fires as it goes), sends it and checks the reply, then stops with everything left on screen.
+    private func demo() async {
+        let args = CommandLine.arguments
+        var s = Scenario.all[0]
+        if let i = args.firstIndex(of: "--demo"), i + 1 < args.count, let pick = Scenario.all.first(where: { $0.id == args[i + 1] }) {
+            s = pick
         }
+        print("demo: \(s.name)")
+        setScenario(s)
+        try? await Task.sleep(for: .milliseconds(1500))
+        for msg in s.suggest {
+            input = ""
+            var typed = ""
+            for word in msg.split(separator: " ", omittingEmptySubsequences: false) {
+                typed += (typed.isEmpty ? "" : " ") + word
+                input = typed
+                try? await Task.sleep(for: .milliseconds(170))
+            }
+            try? await Task.sleep(for: .milliseconds(900))
+            send()
+            try? await Task.sleep(for: .milliseconds(3200))
+        }
+        print("demo: done (\(checks) checks, \(onANE) on the Neural Engine)")
     }
 
     private func count(_ t: Timing) {
