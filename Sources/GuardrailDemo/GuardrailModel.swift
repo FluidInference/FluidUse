@@ -58,9 +58,9 @@ final class GuardrailModel: ObservableObject {
 
     func start() async {
         guard manager == nil else { return }
-        let dir = Launch.modelDirectory
-        print("loading \(dir.path)")
         do {
+            let dir = try await Launch.resolveModel()
+            print("loading \(dir.path)")
             let m = try await Task.detached { () async throws -> Vela2Manager in
                 let m = try await Vela2Manager.load(from: dir)
                 try await m.warm()

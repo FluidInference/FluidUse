@@ -14,12 +14,20 @@ setvbuf(stdout, nil, _IOLBF, 0)
 UserDefaults.standard.register(defaults: ["NSTreatUnknownArgumentsAsOpen": "NO"])
 
 enum Launch {
-    static let modelDirectory: URL = {
+    /// `--model <dir>` or `VELA_DIR`; otherwise the pinned snapshot from the Hub (`Vela2ModelStore`).
+    static let modelDirectory: URL? = {
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--model"), i + 1 < args.count { return URL(fileURLWithPath: args[i + 1]) }
         if let env = ProcessInfo.processInfo.environment["VELA_DIR"], !env.isEmpty { return URL(fileURLWithPath: env) }
-        return URL(fileURLWithPath: "/Users/hanweng/Documents/vela2/release03")
+        return nil
     }()
+
+    static func resolveModel() async throws -> URL {
+        if let dir = modelDirectory { return dir }
+        return try await Vela2ModelStore.ensure { file, bytes in
+            if bytes > 0 { print("downloaded \(file) (\(bytes / 1_000_000) MB)") }
+        }
+    }
     static let selftest = CommandLine.arguments.contains("--selftest")
     static let demo = CommandLine.arguments.contains("--demo")
 }
@@ -28,7 +36,7 @@ if #available(macOS 15.0, *) {
     if Launch.selftest {
         Task.detached {
             do {
-                try await SelfTest.run(directory: Launch.modelDirectory)
+                try await SelfTest.run(directory: Launch.resolveModel())
                 exit(0)
             } catch {
                 fputs("selftest failed: \(error)\n", stderr)

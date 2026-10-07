@@ -16,7 +16,7 @@ keeps a running tally `checks: N · on ANE: M`.
 ## Run
 
 ```bash
-swift run -c release GuardrailDemo [--model <dir>]     # or VELA_DIR=<dir>; default /Users/hanweng/Documents/vela2/release03
+swift run -c release GuardrailDemo [--model <dir>]     # or VELA_DIR=<dir>; default: the pinned FluidInference/vela-2.0-0.3b-coreml snapshot (Vela2ModelStore)
 swift run -c release GuardrailDemo --selftest           # no window: all scenarios through all lanes, prints, exits
 ```
 
