@@ -135,6 +135,8 @@ public final class Decision2Manager: Sendable {
     public func answer(state: OrderedJSON, questions: [(id: String, question: Decision2Question)]) async throws
         -> Decision2Result
     {
+        try Self.validate(questions)
+        guard !questions.isEmpty else { return Decision2Result(answers: [], inputTokens: 0, calls: 0) }
         let rows = try questions.map { try encode(state: state, question: $0.question) }
         var logits = [[Double]](repeating: [], count: rows.count)
         let calls = try plan(rows)
@@ -157,9 +159,25 @@ public final class Decision2Manager: Sendable {
         return Decision2Result(answers: answers, inputTokens: rows.reduce(0) { $0 + $1.ids.count }, calls: calls.count)
     }
 
+    /// Upstream's question rules: unique ids, 2…255 choice options, 2…10 score levels (yes/no always has 2).
+    static func validate(_ questions: [(id: String, question: Decision2Question)]) throws {
+        var seen = Set<String>()
+        for (id, q) in questions {
+            guard seen.insert(id).inserted else { throw Decision2Error.invalidQuestion("duplicate question id \(id)") }
+            switch q {
+            case .choice(_, let options) where !(2...maxOptions).contains(options.count):
+                throw Decision2Error.invalidQuestion("choice \(id) needs 2 to \(maxOptions) options, got \(options.count)")
+            case .score(_, let levels) where !(2...10).contains(levels.count):
+                throw Decision2Error.invalidQuestion("score \(id) needs 2 to 10 levels, got \(levels.count)")
+            default: break
+            }
+        }
+    }
+
     /// The token ids of one question's upstream row (for parity checks).
     public func tokens(state: OrderedJSON, question: Decision2Question) throws -> [Int] {
-        try encode(state: state, question: question).ids
+        try Self.validate([("q", question)])
+        return try encode(state: state, question: question).ids
     }
 
     // MARK: Prompt (upstream decision_model.segments / encode)
