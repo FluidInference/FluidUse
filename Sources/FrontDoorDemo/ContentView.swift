@@ -202,6 +202,12 @@ struct ContentView: View {
         .background(Theme.bg)
         .foregroundStyle(Theme.ink)
         .preferredColorScheme(.dark)
+        .overlayPreferenceValue(FlightSpotKey.self) { anchors in
+            GeometryReader { g in
+                FlightLayer(rects: anchors.mapValues { g[$0] })
+            }
+            .allowsHitTesting(false)
+        }
         .sheet(item: $model.selected) { p in DetailSheet(p: p) }
     }
 
@@ -243,13 +249,23 @@ struct ContentView: View {
             Text(model.status).font(.system(size: 11.5)).foregroundStyle(Theme.bad).lineLimit(2)
         case .idle:
             Button { model.run() } label: { Text("▶  Start").font(.system(size: 12.5, weight: .semibold)).padding(.horizontal, 6) }
-                .buttonStyle(.borderedProminent).tint(Theme.accent)
+                .buttonStyle(.borderedProminent).tint(Theme.accent).focusable(false)
         case .running:
-            ProgressView().controlSize(.small)
-            Text("screening…").font(.system(size: 11.5)).foregroundStyle(Theme.dim)
+            if model.paused {
+                Text("paused").font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Theme.warn)
+            } else {
+                ProgressView().controlSize(.small)
+                Text("screening…").font(.system(size: 11.5)).foregroundStyle(Theme.dim)
+            }
+            Button { model.togglePause() } label: {
+                Text(model.paused ? "▶  Resume" : "❚❚  Pause").font(.system(size: 12.5, weight: .semibold)).padding(.horizontal, 6)
+            }
+            .buttonStyle(.bordered).focusable(false)
+            .keyboardShortcut(.space, modifiers: [])
+            .help("Pause / resume (Space)")
         case .done:
             Button { model.run() } label: { Text("↻  Replay").font(.system(size: 12.5, weight: .semibold)).padding(.horizontal, 6) }
-                .buttonStyle(.borderedProminent).tint(Theme.accent)
+                .buttonStyle(.borderedProminent).tint(Theme.accent).focusable(false)
         }
     }
 }
@@ -318,6 +334,7 @@ struct InboxColumn: View {
             Spacer()
             Text("waiting · next on top").font(.system(size: 10)).foregroundStyle(Theme.dim)
         } content: {
+            Group {
             if waiting.isEmpty, model.phase == .done {
                 FinalSummary()
             } else if waiting.isEmpty {
@@ -338,6 +355,8 @@ struct InboxColumn: View {
                 .defaultScrollAnchor(.top)
                 .scrollIndicators(.never)
             }
+            }
+            .overlay(alignment: .top) { Color.clear.frame(height: 24).flightSpot(.inboxHead) }
         }
     }
 
@@ -399,10 +418,10 @@ struct AnsweredLane: View {
             LaneTitle(text: "✅ Answered", count: t.answered, color: Theme.ok)
             Spacer(minLength: 4)
             ForEach(Questions.teams, id: \.name) { team in
-                TeamTag(team: team.name, count: t.byTeam[team.name] ?? 0)
+                TeamTag(team: team.name, count: t.byTeam[team.name] ?? 0).flightSpot(.team(team.name))
             }
         } content: {
-            LaneList(rows: model.answeredRecent, total: t.answered, empty: "Allowed messages land here, routed to a team · 🔒 personal info redacted")
+            LaneList(rows: model.answeredRows, empty: "Allowed messages land here, routed to a team · 🔒 personal info redacted")
         }
     }
 }
@@ -420,34 +439,63 @@ struct BlockedLane: View {
             LaneTitle(text: kind == .jailbreak ? "⛔ Blocked · jailbreak / injection" : "⛔ Blocked · harmful", count: total, color: Theme.bad)
             Spacer(minLength: 0)
         } content: {
-            LaneList(rows: kind == .jailbreak ? model.jailbreakRecent : model.harmfulRecent, total: total, empty: "Never reaches the bot")
+            LaneList(rows: kind == .jailbreak ? model.jailbreakRows : model.harmfulRows, empty: "Never reaches the bot")
+                .overlay(alignment: .top) { Color.clear.frame(height: 22).flightSpot(kind == .jailbreak ? .jailbreak : .harmful) }
         }
     }
 }
 
-/// The most recent rows of a lane (newest on top); the rest is only counted.
+/// Every row of a lane, newest on top, scrollable all the way down. Stays pinned to the top (showing new rows) only
+/// while the user is at the top; once they scroll down, their position holds while rows keep arriving above.
 @available(macOS 15.0, *)
 struct LaneList: View {
     @EnvironmentObject var model: FrontDoorModel
-    let rows: [Processed]
-    let total: Int
+    let rows: [Processed]  // oldest first
     let empty: String
+    @State private var position = ScrollPosition(edge: .top)
+    @State private var atTop = true
+    @State private var follow = true
+    @State private var offsetY: CGFloat = 0
+    private static let scrollTest = ProcessInfo.processInfo.environment["FRONTDOOR_SCROLLTEST"] == "1"
 
     var body: some View {
         if rows.isEmpty {
             Text(empty).font(.system(size: 11.5)).foregroundStyle(Theme.dim).frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onAppear { follow = true; position = ScrollPosition(edge: .top) }
         } else {
             ScrollView {
                 LazyVStack(spacing: 3) {
-                    ForEach(rows) { p in
+                    ForEach(rows.reversed()) { p in
                         LaneRow(p: p).onTapGesture { model.selected = p }
                     }
-                    if total > rows.count {
-                        Text("+ \(total - rows.count) earlier").font(.system(size: 10.5)).foregroundStyle(Theme.dim).padding(.top, 3)
-                    }
                 }
+                .scrollTargetLayout()
             }
-            .scrollIndicators(.never)
+            .scrollPosition($position, anchor: .top)
+            .scrollIndicators(.automatic)
+            .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { _, y in
+                offsetY = y
+                atTop = y <= 4
+            }
+            .onScrollPhaseChange { _, phase in
+                // decided by the user's own scrolling only, not by rows arriving
+                if phase == .interacting || phase == .tracking { follow = false }
+                if phase == .idle { follow = atTop }
+            }
+            .onChange(of: rows.count) {
+                if follow { position.scrollTo(edge: .top) }
+            }
+            .onAppear { scrollTestHook() }
+        }
+    }
+
+    /// Hidden `FRONTDOOR_SCROLLTEST=1`: after 2 s, park the lane mid-list as a user would, to check it holds still.
+    private func scrollTestHook() {
+        guard Self.scrollTest, empty.hasPrefix("Allowed") else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            follow = false
+            if rows.count > 12 { position.scrollTo(id: rows[rows.count - 12].id, anchor: .top) }
         }
     }
 }
@@ -523,7 +571,7 @@ struct FinalSummary: View {
             Button { model.run() } label: {
                 Text("↻  Replay").font(.system(size: 12.5, weight: .semibold)).frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent).tint(Theme.accent)
+            .buttonStyle(.borderedProminent).tint(Theme.accent).focusable(false)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
