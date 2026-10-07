@@ -18,10 +18,10 @@ struct FrontDoorApp: App {
         WindowGroup("Chatbot Front Door — Vela-2.0-0.3B on Core ML") {
             ContentView()
                 .environmentObject(model)
-                .frame(minWidth: 1280, minHeight: 760)
+                .frame(minWidth: 980, minHeight: 680)
                 .task { await model.start() }
         }
-        .defaultSize(width: 1500, height: 900)
+        .defaultSize(width: 1100, height: 800)
         .windowResizability(.contentMinSize)
     }
 }

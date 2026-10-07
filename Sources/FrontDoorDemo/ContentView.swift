@@ -181,24 +181,23 @@ func clock(_ d: Date) -> String { d.formatted(date: .omitted, time: .standard) }
 @available(macOS 15.0, *)
 struct ContentView: View {
     @EnvironmentObject var model: FrontDoorModel
-    @Namespace private var flight
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider().overlay(Theme.line)
-            HStack(alignment: .top, spacing: 14) {
-                InboxColumn(flight: flight).frame(width: 340)
-                VStack(spacing: 14) {
-                    AnsweredLane(flight: flight).frame(maxHeight: .infinity)
-                    HStack(alignment: .top, spacing: 14) {
-                        BlockedLane(kind: .jailbreak, flight: flight)
-                        BlockedLane(kind: .harmful, flight: flight)
+            HStack(alignment: .top, spacing: 10) {
+                InboxColumn().frame(width: 280)
+                VStack(spacing: 10) {
+                    AnsweredLane().frame(maxHeight: .infinity)
+                    HStack(alignment: .top, spacing: 10) {
+                        BlockedLane(kind: .jailbreak)
+                        BlockedLane(kind: .harmful)
                     }
-                    .frame(height: 268)
+                    .frame(height: 230)
                 }
             }
-            .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 18)
+            .padding(12)
         }
         .background(Theme.bg)
         .foregroundStyle(Theme.ink)
@@ -210,68 +209,68 @@ struct ContentView: View {
 
     var header: some View {
         let t = model.tally
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 14) {
-                Text("🚪 Chatbot Front Door").font(.system(size: 19, weight: .bold)).kerning(0.3)
-                (Text("Every message screened on this Mac by ") + Text("Vela-2.0-0.3B").bold().foregroundColor(Theme.ink)
-                    + Text(" (Core ML) · nothing sent anywhere"))
-                    .font(.system(size: 13)).foregroundStyle(Theme.dim).lineLimit(1)
-                Spacer(minLength: 8)
+        let has = t.processed > 0
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Text("🚪 Chatbot Front Door").font(.system(size: 16, weight: .bold))
+                Text("screened on this Mac by Vela-2.0-0.3B (Core ML) · nothing sent anywhere")
+                    .font(.system(size: 11.5)).foregroundStyle(Theme.dim).lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 6)
                 controls
             }
-            HStack(spacing: 10) {
-                Stat(value: "\(t.processed)", unit: "/ \(Traffic.all.count)", label: "processed", color: Theme.ink)
-                Stat(value: "\(t.answered)", label: "answered", color: Theme.ok)
-                Stat(value: "\(t.blocked)", label: "blocked", color: Theme.bad)
-                Stat(value: "\(t.withPII)", label: "with personal info 🔒", color: Theme.pii)
-                Stat(value: t.processed > 0 ? String(format: "%.1f", t.avgMs) : "–", unit: "ms", label: "avg per message (both checks)", color: Theme.ink)
-                Stat(value: t.processed > 0 ? String(format: "%.0f", t.perSecond) : "–", unit: "msg/s", label: "on-device throughput", color: Theme.ink)
-                    .help("1000 ÷ average milliseconds per message: what this Mac sustains screening messages one after another")
-                Stat(value: "\(t.onANE)", unit: "of \(t.checks)", label: "checks on Neural Engine ⚡", color: Theme.ane)
+            HStack(spacing: 6) {
+                MiniStat(value: "\(t.processed)", unit: "/\(Traffic.all.count)", label: "processed", color: Theme.ink)
+                MiniStat(value: "\(t.answered)", label: "answered", color: Theme.ok)
+                MiniStat(value: "\(t.blocked)", label: "blocked", color: Theme.bad)
+                MiniStat(value: "\(t.withPII)", label: "PII 🔒", color: Theme.pii)
+                MiniStat(value: has ? String(format: "%.1f", t.avgMs) : "–", unit: "ms", label: "avg / msg", color: Theme.ink)
+                    .help("Average model time per message (guard + route calls, incl. tokenize and heads)")
+                MiniStat(value: has ? String(format: "%.0f", model.wallPerSecond) : "–", unit: "msg/s", label: "end to end", color: Theme.ink)
+                    .help("Messages fully screened per wall-clock second since the run started")
+                MiniStat(value: has ? String(format: "%.0f%%", t.aneShare * 100) : "–", label: "checks on ANE ⚡", color: Theme.ane)
+                    .help("\(t.onANE) of \(t.checks) model calls ran on the Neural Engine")
             }
         }
-        .padding(.horizontal, 22).padding(.vertical, 14)
+        .padding(.horizontal, 14).padding(.vertical, 10)
     }
 
     @ViewBuilder var controls: some View {
         switch model.phase {
         case .loading:
             ProgressView().controlSize(.small)
-            Text(model.status).font(.system(size: 12)).foregroundStyle(Theme.dim)
+            Text(model.status).font(.system(size: 11.5)).foregroundStyle(Theme.dim).lineLimit(1)
         case .failed:
-            Text(model.status).font(.system(size: 12)).foregroundStyle(Theme.bad).lineLimit(2)
+            Text(model.status).font(.system(size: 11.5)).foregroundStyle(Theme.bad).lineLimit(2)
         case .idle:
-            Text(model.status).font(.system(size: 12)).foregroundStyle(Theme.dim).lineLimit(1)
-            Button { model.run() } label: { Text("▶  Start").font(.system(size: 13, weight: .semibold)).padding(.horizontal, 10) }
-                .buttonStyle(.borderedProminent).tint(Theme.accent).controlSize(.large)
+            Button { model.run() } label: { Text("▶  Start").font(.system(size: 12.5, weight: .semibold)).padding(.horizontal, 6) }
+                .buttonStyle(.borderedProminent).tint(Theme.accent)
         case .running:
             ProgressView().controlSize(.small)
-            Text("Screening live traffic…").font(.system(size: 12)).foregroundStyle(Theme.dim)
+            Text("screening…").font(.system(size: 11.5)).foregroundStyle(Theme.dim)
         case .done:
-            Button { model.run() } label: { Text("↻  Replay").font(.system(size: 13, weight: .semibold)).padding(.horizontal, 10) }
-                .buttonStyle(.borderedProminent).tint(Theme.accent).controlSize(.large)
+            Button { model.run() } label: { Text("↻  Replay").font(.system(size: 12.5, weight: .semibold)).padding(.horizontal, 6) }
+                .buttonStyle(.borderedProminent).tint(Theme.accent)
         }
     }
 }
 
-struct Stat: View {
+struct MiniStat: View {
     let value: String
     var unit: String? = nil
     let label: String
     let color: Color
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(value).font(.system(size: 22, weight: .bold).monospacedDigit()).foregroundStyle(color)
-                    .contentTransition(.numericText())
-                if let unit { Text(unit).font(.system(size: 12).monospacedDigit()).foregroundStyle(Theme.dim) }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value).font(.system(size: 16, weight: .bold).monospacedDigit()).foregroundStyle(color)
+                if let unit { Text(unit).font(.system(size: 10.5).monospacedDigit()).foregroundStyle(Theme.dim) }
             }
-            Text(label).font(.system(size: 11)).foregroundStyle(Theme.dim).lineLimit(1)
+            Text(label).font(.system(size: 10)).foregroundStyle(Theme.dim).lineLimit(1)
         }
-        .padding(.horizontal, 14).padding(.vertical, 8)
+        .padding(.horizontal, 9).padding(.vertical, 5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.line))
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(Theme.line))
     }
 }
 
@@ -281,14 +280,14 @@ struct Lane<Header: View, Content: View>: View {
     @ViewBuilder var header: Header
     @ViewBuilder var content: Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) { header }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) { header }
             content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .padding(.horizontal, 14).padding(.vertical, 12)
+        .padding(.horizontal, 10).padding(.vertical, 9)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(tint))
+        .background(Theme.panel, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(tint))
     }
 }
 
@@ -297,12 +296,11 @@ struct LaneTitle: View {
     var count: Int? = nil
     var color: Color = Theme.dim
     var body: some View {
-        Text(text.uppercased()).font(.system(size: 11.5, weight: .semibold)).kerning(1).foregroundStyle(color)
+        Text(text.uppercased()).font(.system(size: 10.5, weight: .semibold)).kerning(0.8).foregroundStyle(color).lineLimit(1)
         if let count {
-            Text("\(count)").font(.system(size: 11.5, weight: .bold).monospacedDigit())
-                .padding(.horizontal, 7).padding(.vertical, 1)
+            Text("\(count)").font(.system(size: 10.5, weight: .bold).monospacedDigit())
+                .padding(.horizontal, 6).padding(.vertical, 1)
                 .background(color.opacity(0.16), in: Capsule()).foregroundStyle(color)
-                .contentTransition(.numericText())
         }
     }
 }
@@ -312,36 +310,33 @@ struct LaneTitle: View {
 @available(macOS 15.0, *)
 struct InboxColumn: View {
     @EnvironmentObject var model: FrontDoorModel
-    let flight: Namespace.ID
 
     var body: some View {
+        let waiting = model.waiting
         Lane {
-            LaneTitle(text: "📥 Inbox", count: model.inbox.count, color: Theme.ink)
+            LaneTitle(text: "📥 Inbox", count: waiting.count, color: Theme.ink)
             Spacer()
-            Text("incoming · newest at the bottom").font(.system(size: 11)).foregroundStyle(Theme.dim)
+            Text("waiting · next on top").font(.system(size: 10)).foregroundStyle(Theme.dim)
         } content: {
-            if model.inbox.isEmpty, model.phase == .done {
-                FinalSummary().transition(.scale(scale: 0.95).combined(with: .opacity))
-            } else if model.inbox.isEmpty {
-                VStack(spacing: 8) {
-                    Spacer()
-                    Text(emptyText).font(.system(size: 13)).foregroundStyle(Theme.dim).multilineTextAlignment(.center)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
+            if waiting.isEmpty, model.phase == .done {
+                FinalSummary()
+            } else if waiting.isEmpty {
+                Text(emptyText).font(.system(size: 12)).foregroundStyle(Theme.dim).multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: 8) {
-                            ForEach(model.inbox) { item in
-                                InboxRow(item: item, scanning: model.scanning == item.id)
-                                    .id(item.id)
-                            }
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(waiting.prefix(FrontDoorModel.inboxRows)) { msg in
+                            InboxRow(message: msg, scanning: msg.id == waiting.first?.id)
+                        }
+                        if waiting.count > FrontDoorModel.inboxRows {
+                            Text("+ \(waiting.count - FrontDoorModel.inboxRows) more waiting")
+                                .font(.system(size: 11)).foregroundStyle(Theme.dim).padding(.top, 4)
                         }
                     }
-                    .defaultScrollAnchor(.top)
-                    .scrollIndicators(.never)
                 }
+                .defaultScrollAnchor(.top)
+                .scrollIndicators(.never)
             }
         }
     }
@@ -349,8 +344,8 @@ struct InboxColumn: View {
     var emptyText: String {
         switch model.phase {
         case .loading: "Loading the model…"
-        case .idle: "Press Start to open the front door.\n40 customers are waiting."
-        case .running: "Waiting for the next message…"
+        case .idle: "Press Start to open the front door.\n\(Traffic.all.count) messages are waiting."
+        case .running: "Waiting for traffic…"
         case .done: "All caught up ✓"
         case .failed: "Model failed to load."
         }
@@ -358,29 +353,20 @@ struct InboxColumn: View {
 }
 
 struct InboxRow: View {
-    let item: InboxItem
+    let message: InboundMessage
     let scanning: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Avatar(name: item.message.user, size: 30)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(item.message.user).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                    Spacer(minLength: 6)
-                    Text(clock(item.arrived)).font(.system(size: 11).monospacedDigit()).foregroundStyle(Theme.dim)
-                }
-                Text(item.message.text).font(.system(size: 12.5)).foregroundStyle(Theme.ink.opacity(0.78)).lineLimit(2)
-                if scanning {
-                    Text("🔍 screening on device…").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.accent)
-                }
-            }
+        HStack(spacing: 6) {
+            Avatar(name: message.user, size: 16)
+            Text(message.user).font(.system(size: 11.5, weight: .semibold)).lineLimit(1).frame(width: 78, alignment: .leading)
+            Text(message.text).font(.system(size: 11.5)).foregroundStyle(Theme.ink.opacity(0.75)).lineLimit(1)
+            Spacer(minLength: 0)
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(scanning ? Theme.accent.opacity(0.10) : Theme.panel2, in: RoundedRectangle(cornerRadius: 11))
-        .overlay { if scanning { Shimmer().clipShape(RoundedRectangle(cornerRadius: 11)).allowsHitTesting(false) } }
-        .overlay(RoundedRectangle(cornerRadius: 11).stroke(scanning ? Theme.accent.opacity(0.8) : Theme.line, lineWidth: scanning ? 1.5 : 1))
+        .padding(.horizontal, 7).padding(.vertical, 4)
+        .background(scanning ? Theme.accent.opacity(0.14) : Theme.panel2, in: RoundedRectangle(cornerRadius: 7))
+        .overlay { if scanning { Shimmer().clipShape(RoundedRectangle(cornerRadius: 7)).allowsHitTesting(false) } }
+        .overlay(RoundedRectangle(cornerRadius: 7).stroke(scanning ? Theme.accent.opacity(0.8) : .clear))
     }
 }
 
@@ -389,10 +375,10 @@ struct Shimmer: View {
     var body: some View {
         TimelineView(.animation) { ctx in
             GeometryReader { g in
-                let period = 1.1
+                let period = 0.9
                 let phase = ctx.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
-                let w = g.size.width * 0.45
-                LinearGradient(colors: [.clear, Theme.accent.opacity(0.30), .white.opacity(0.10), .clear],
+                let w = g.size.width * 0.4
+                LinearGradient(colors: [.clear, Theme.accent.opacity(0.30), .white.opacity(0.08), .clear],
                                startPoint: .leading, endPoint: .trailing)
                     .frame(width: w)
                     .offset(x: -w + phase * (g.size.width + w))
@@ -406,41 +392,17 @@ struct Shimmer: View {
 @available(macOS 15.0, *)
 struct AnsweredLane: View {
     @EnvironmentObject var model: FrontDoorModel
-    let flight: Namespace.ID
 
     var body: some View {
-        let answered = model.processed.filter { !$0.blocked }
+        let t = model.tally
         Lane(tint: Theme.ok.opacity(0.35)) {
-            LaneTitle(text: "✅ Answered · routed to a team", count: answered.count, color: Theme.ok)
-            Spacer()
-            Text("🔒 personal info is redacted before the bot sees it").font(.system(size: 11)).foregroundStyle(Theme.dim)
-        } content: {
-            HStack(alignment: .top, spacing: 10) {
-                ForEach(Questions.teams, id: \.name) { team in
-                    let cards = answered.filter { $0.route?.team == team.name }.reversed()
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
-                            Text(Theme.teamIcon(team.name)).font(.system(size: 12))
-                            Text(team.name.capitalized).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.team(team.name))
-                            Spacer(minLength: 2)
-                            Text("\(cards.count)").font(.system(size: 11.5, weight: .bold).monospacedDigit())
-                                .foregroundStyle(Theme.team(team.name)).contentTransition(.numericText())
-                        }
-                        .padding(.horizontal, 9).padding(.vertical, 5)
-                        .background(Theme.team(team.name).opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-                        ScrollView {
-                            VStack(spacing: 8) {
-                                ForEach(Array(cards)) { p in
-                                    LaneCard(p: p)
-                                        .onTapGesture { model.selected = p }
-                                }
-                            }
-                        }
-                        .scrollIndicators(.never)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
+            LaneTitle(text: "✅ Answered", count: t.answered, color: Theme.ok)
+            Spacer(minLength: 4)
+            ForEach(Questions.teams, id: \.name) { team in
+                TeamTag(team: team.name, count: t.byTeam[team.name] ?? 0)
             }
+        } content: {
+            LaneList(rows: model.answeredRecent, total: t.answered, empty: "Allowed messages land here, routed to a team · 🔒 personal info redacted")
         }
     }
 }
@@ -451,21 +413,37 @@ enum BlockKind { case jailbreak, harmful }
 struct BlockedLane: View {
     @EnvironmentObject var model: FrontDoorModel
     let kind: BlockKind
-    let flight: Namespace.ID
 
     var body: some View {
-        let cards = model.processed.filter { kind == .jailbreak ? $0.verdict == .jailbreak : $0.verdict == .harmful }.reversed()
+        let total = kind == .jailbreak ? model.tally.jailbreak : model.tally.harmful
         Lane(tint: Theme.bad.opacity(0.35)) {
-            LaneTitle(text: kind == .jailbreak ? "⛔ Blocked · jailbreak / prompt injection" : "⛔ Blocked · harmful",
-                      count: cards.count, color: Theme.bad)
-            Spacer()
-            Text("never reaches the bot").font(.system(size: 11)).foregroundStyle(Theme.dim)
+            LaneTitle(text: kind == .jailbreak ? "⛔ Blocked · jailbreak / injection" : "⛔ Blocked · harmful", count: total, color: Theme.bad)
+            Spacer(minLength: 0)
         } content: {
+            LaneList(rows: kind == .jailbreak ? model.jailbreakRecent : model.harmfulRecent, total: total, empty: "Never reaches the bot")
+        }
+    }
+}
+
+/// The most recent rows of a lane (newest on top); the rest is only counted.
+@available(macOS 15.0, *)
+struct LaneList: View {
+    @EnvironmentObject var model: FrontDoorModel
+    let rows: [Processed]
+    let total: Int
+    let empty: String
+
+    var body: some View {
+        if rows.isEmpty {
+            Text(empty).font(.system(size: 11.5)).foregroundStyle(Theme.dim).frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                    ForEach(Array(cards)) { p in
-                        LaneCard(p: p)
-                            .onTapGesture { model.selected = p }
+                LazyVStack(spacing: 3) {
+                    ForEach(rows) { p in
+                        LaneRow(p: p).onTapGesture { model.selected = p }
+                    }
+                    if total > rows.count {
+                        Text("+ \(total - rows.count) earlier").font(.system(size: 10.5)).foregroundStyle(Theme.dim).padding(.top, 3)
                     }
                 }
             }
@@ -474,46 +452,43 @@ struct BlockedLane: View {
     }
 }
 
-/// A processed message in its lane.
-struct LaneCard: View {
+struct TeamTag: View {
+    let team: String
+    var count: Int? = nil
+    var body: some View {
+        let c = Theme.team(team)
+        Text(count.map { "\(team) \($0)" } ?? team)
+            .font(.system(size: 10, weight: .semibold).monospacedDigit()).lineLimit(1).fixedSize()
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .foregroundStyle(c).background(c.opacity(0.14), in: Capsule())
+    }
+}
+
+/// One compact line: avatar, name, (team tag), 🔒, text (redacted when it carries personal info).
+struct LaneRow: View {
     let p: Processed
 
     var body: some View {
-        let tint: Color = p.route.map { Theme.team($0.team) } ?? Theme.bad
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Avatar(name: p.message.user, size: 18)
-                Text(p.message.user).font(.system(size: 11.5, weight: .semibold)).lineLimit(1)
-                Spacer(minLength: 2)
-                if !p.pii.isEmpty { Text("🔒").font(.system(size: 11)).help("\(p.pii.count) personal-info span(s) redacted") }
-                Text(p.arrived.formatted(date: .omitted, time: .shortened)).font(.system(size: 10).monospacedDigit()).foregroundStyle(Theme.dim)
-            }
+        HStack(spacing: 6) {
+            Avatar(name: p.message.user, size: 16)
+            Text(p.message.user).font(.system(size: 11.5, weight: .semibold)).lineLimit(1).frame(width: 84, alignment: .leading)
+            if let r = p.route { TeamTag(team: r.team).frame(width: 62, alignment: .leading) }
+            if !p.pii.isEmpty { Text("🔒").font(.system(size: 9.5)) }
             Group {
                 if p.blocked {
-                    Text(p.message.text).foregroundStyle(Theme.ink.opacity(0.6)).strikethrough(color: Theme.bad.opacity(0.5))
+                    Text(p.message.text).foregroundStyle(Theme.ink.opacity(0.55))
+                } else if p.pii.isEmpty {
+                    Text(p.message.text).foregroundStyle(Theme.ink.opacity(0.85))
                 } else {
-                    Text(maskedAttributed(p.masked, size: 12)).foregroundStyle(Theme.ink.opacity(0.88))
+                    Text(maskedAttributed(p.masked, size: 11.5)).foregroundStyle(Theme.ink.opacity(0.85))
                 }
             }
-            .font(.system(size: 12)).lineLimit(p.blocked ? 2 : 3).frame(maxWidth: .infinity, alignment: .leading)
-            FlowRow(spacing: 4) {
-                switch p.verdict {
-                case .jailbreak: Chip(text: String(format: "attack %.0f%%", p.guardCheck.attack * 100), style: .bad, size: 10.5)
-                case .harmful: Chip(text: String(format: "harm %.0f%%", p.guardCheck.harm * 100), style: .bad, size: 10.5)
-                case .answered: EmptyView()
-                }
-                UnitBadge(timing: p.guardCheck.timing)
-                if let r = p.route { UnitBadge(timing: r.timing) }
-            }
+            .font(.system(size: 11.5)).lineLimit(1)
+            Spacer(minLength: 0)
         }
-        .padding(.leading, 12).padding(.trailing, 9).padding(.vertical, 8)
-        .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(alignment: .leading) {
-            UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: 10).fill(tint).frame(width: 3)
-        }
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(tint.opacity(0.28)))
-        .contentShape(RoundedRectangle(cornerRadius: 10))
-        .help("Click for details")
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 6))
+        .contentShape(Rectangle())
     }
 }
 
@@ -525,49 +500,39 @@ struct FinalSummary: View {
 
     var body: some View {
         let t = model.tally
-        let share = t.checks > 0 ? Double(t.onANE) / Double(t.checks) * 100 : 0
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Text("✓").font(.system(size: 20, weight: .bold)).foregroundStyle(Theme.ok)
-                Text("Run complete").font(.system(size: 17, weight: .bold))
-            }
-            Text("\(t.processed) messages screened on this Mac — nothing sent anywhere.")
-                .font(.system(size: 13)).foregroundStyle(Theme.dim).fixedSize(horizontal: false, vertical: true)
-            VStack(spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("✓ Run complete").font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.ok)
+            Text(String(format: "%d messages in %.1f s · nothing sent anywhere", t.processed, model.elapsed))
+                .font(.system(size: 11.5)).foregroundStyle(Theme.dim)
+            VStack(spacing: 4) {
                 row("✅ Answered", "\(t.answered)", Theme.ok)
                 ForEach(Questions.teams, id: \.name) { team in
-                    row("     \(Theme.teamIcon(team.name)) \(team.name)", "\(t.byTeam[team.name] ?? 0)", Theme.team(team.name), small: true)
+                    row("    \(team.name)", "\(t.byTeam[team.name] ?? 0)", Theme.team(team.name), small: true)
                 }
-                row("⛔ Blocked · jailbreak", "\(t.jailbreak)", Theme.bad)
-                row("⛔ Blocked · harmful", "\(t.harmful)", Theme.bad)
-                row("🔒 Personal info redacted", "\(t.withPII)", Theme.pii)
+                row("⛔ Jailbreak / injection", "\(t.jailbreak)", Theme.bad)
+                row("⛔ Harmful", "\(t.harmful)", Theme.bad)
+                row("🔒 PII redacted", "\(t.withPII)", Theme.pii)
+                Divider().overlay(Theme.line).padding(.vertical, 2)
+                row("avg per message", String(format: "%.1f ms", t.avgMs), Theme.ink)
+                row("end to end", String(format: "%.0f msg/s", model.wallPerSecond), Theme.ink)
+                row("checks on ANE ⚡", String(format: "%.0f%% (%d/%d)", t.aneShare * 100, t.onANE, t.checks), Theme.ane)
             }
-            .padding(12)
-            .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 11))
-            HStack(spacing: 8) {
-                Stat(value: String(format: "%.1f", t.avgMs), unit: "ms", label: "avg per message", color: Theme.ink)
-                Stat(value: String(format: "%.0f%%", share), unit: "\(t.onANE)/\(t.checks)", label: "checks on ANE ⚡", color: Theme.ane)
-            }
-            Text("Guard checks run on the Neural Engine; route + personal-info checks (larger schema) on the GPU.")
-                .font(.system(size: 11.5)).foregroundStyle(Theme.dim).fixedSize(horizontal: false, vertical: true)
+            .padding(9)
+            .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 9))
             Spacer(minLength: 0)
             Button { model.run() } label: {
-                Text("↻  Replay").font(.system(size: 13, weight: .semibold)).frame(maxWidth: .infinity)
+                Text("↻  Replay").font(.system(size: 12.5, weight: .semibold)).frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent).tint(Theme.accent).controlSize(.large)
+            .buttonStyle(.borderedProminent).tint(Theme.accent)
         }
-        .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.ok.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.ok.opacity(0.4)))
     }
 
     func row(_ label: String, _ value: String, _ color: Color, small: Bool = false) -> some View {
         HStack {
-            Text(label).font(.system(size: small ? 12 : 13, weight: small ? .regular : .medium))
-                .foregroundStyle(small ? Theme.dim : Theme.ink)
+            Text(label).font(.system(size: small ? 11 : 12)).foregroundStyle(small ? Theme.dim : Theme.ink)
             Spacer()
-            Text(value).font(.system(size: small ? 12.5 : 14, weight: .bold).monospacedDigit()).foregroundStyle(color)
+            Text(value).font(.system(size: small ? 11 : 12, weight: .bold).monospacedDigit()).foregroundStyle(color)
         }
     }
 }

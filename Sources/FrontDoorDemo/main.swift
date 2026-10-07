@@ -6,7 +6,7 @@ import Foundation
 //
 //     swift run -c release FrontDoorDemo [--model <dir>]     (or VELA_DIR=<dir>)
 //     swift run -c release FrontDoorDemo --demo               (starts the run by itself)
-//     swift run -c release FrontDoorDemo --selftest           (no window: all 40 messages + model-vs-expected)
+//     swift run -c release FrontDoorDemo --selftest           (no window: all 1,000 messages + model-vs-expected)
 
 setvbuf(stdout, nil, _IOLBF, 0)
 
@@ -56,6 +56,8 @@ enum SelfTest {
         var done: [Processed] = []
         var confusion: [String: Int] = [:]
         var topicHit = 0, topicN = 0
+        var debugMs = 0.0  // time spent on debug-only route calls for false-blocked benign messages (excluded from throughput)
+        let started = ContinuousClock.now
         for msg in Traffic.all {
             let p = try await Engine.process(m, msg, arrived: Date())
             done.append(p)
@@ -66,7 +68,14 @@ enum SelfTest {
             if msg.expect == "ok" {
                 // probe.py's metric: the topic answer for every benign message (a false-blocked one gets a debug-only route call)
                 let team: String
-                if let r = p.route { team = r.team } else { team = try await Engine.routeCheck(m, msg.text).team }
+                if let r = p.route {
+                    team = r.team
+                } else {
+                    let d0 = ContinuousClock.now
+                    team = try await Engine.routeCheck(m, msg.text).team
+                    let d = ContinuousClock.now - d0
+                    debugMs += Double(d.components.seconds) * 1000 + Double(d.components.attoseconds) / 1e15
+                }
                 topicN += 1
                 if team == msg.expectTopic { topicHit += 1 } else { ok = false }
                 if p.route == nil { topicNote = ", topic would be \(team)" }
@@ -75,8 +84,11 @@ enum SelfTest {
                                p.guardCheck.attack, p.guardCheck.harm, topicNote)
             print((ok ? "   " : "XX ") + Engine.log(p) + (ok ? "" : debug))
         }
+        let wall = ContinuousClock.now - started
+        let wallS = Double(wall.components.seconds) + Double(wall.components.attoseconds) / 1e18 - debugMs / 1000
         let t = Tally(done)
         print(t.summary)
+        print(String(format: "end-to-end: %d messages in %.2f s = %.1f msg/s (wall clock, no UI, incl. logging)", done.count, wallS, Double(done.count) / wallS))
         let order = ["ok", "jailbreak", "harmful"]
         print("model vs expected (rows = expected, cols = model: ok / jailbreak / harmful):")
         for e in order {

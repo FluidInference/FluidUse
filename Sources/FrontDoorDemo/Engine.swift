@@ -162,46 +162,52 @@ enum Engine {
             s += "  " + unit(p.route!.timing, "route") + "  → \(team)"
             if !p.pii.isEmpty { s += "  🔒[\(p.pii.map(\.label).joined(separator: ", "))]" }
         }
-        let preview = p.message.text.count > 48 ? String(p.message.text.prefix(47)) + "…" : p.message.text
+        let flat = p.message.text.replacingOccurrences(of: "\n", with: " ")
+        let preview = flat.count > 48 ? String(flat.prefix(47)) + "…" : flat
         return s + "  | " + preview
     }
 }
 
 /// Totals over processed messages (shared by the UI header, final banner and the selftest).
-struct Tally {
+struct Tally: Equatable {
     var processed = 0, answered = 0, jailbreak = 0, harmful = 0, withPII = 0
     var checks = 0, onANE = 0
     var totalMs = 0.0
     var byTeam: [String: Int] = [:]
 
+    init() {}
+
     init(_ ps: [Processed]) {
-        for p in ps {
-            processed += 1
-            switch p.verdict {
-            case .answered(let t):
-                answered += 1
-                byTeam[t, default: 0] += 1
-            case .jailbreak: jailbreak += 1
-            case .harmful: harmful += 1
-            }
-            if !p.pii.isEmpty { withPII += 1 }
-            for t in p.timings {
-                checks += 1
-                if t.onNeuralEngine { onANE += 1 }
-            }
-            totalMs += p.totalMs
+        for p in ps { add(p) }
+    }
+
+    mutating func add(_ p: Processed) {
+        processed += 1
+        switch p.verdict {
+        case .answered(let t):
+            answered += 1
+            byTeam[t, default: 0] += 1
+        case .jailbreak: jailbreak += 1
+        case .harmful: harmful += 1
         }
+        if !p.pii.isEmpty { withPII += 1 }
+        for t in p.timings {
+            checks += 1
+            if t.onNeuralEngine { onANE += 1 }
+        }
+        totalMs += p.totalMs
     }
 
     var blocked: Int { jailbreak + harmful }
     var avgMs: Double { processed > 0 ? totalMs / Double(processed) : 0 }
-    /// Sequential on-device throughput at that average.
+    /// Sequential on-device throughput at that average (model time only).
     var perSecond: Double { avgMs > 0 ? 1000 / avgMs : 0 }
+    var aneShare: Double { checks > 0 ? Double(onANE) / Double(checks) : 0 }
 
     var summary: String {
         let teams = Questions.teams.map { "\($0.name) \(byTeam[$0.name] ?? 0)" }.joined(separator: ", ")
         return String(
-            format: "summary: %d messages · answered %d (%@) · blocked %d (jailbreak %d, harmful %d) · with PII %d · avg %.1f ms/msg (≈%.0f msg/s) · checks on Neural Engine %d of %d",
+            format: "summary: %d messages · answered %d (%@) · blocked %d (jailbreak %d, harmful %d) · with PII %d · avg %.1f ms/msg model time (≈%.0f msg/s back to back) · checks on Neural Engine %d of %d",
             processed, answered, teams, blocked, jailbreak, harmful, withPII, avgMs, perSecond, onANE, checks)
     }
 }
