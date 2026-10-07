@@ -56,6 +56,8 @@ let package = Package(
         .executableTarget(name: "KevCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "ClefVisionCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "InternDecisionCheck", dependencies: ["FluidUse"]),
+        .executableTarget(name: "Vela2Check", dependencies: ["FluidUse"]),
+        .executableTarget(name: "GuardrailDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
         .executableTarget(name: "ShortReplyCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "ShortReplyDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "mock-feed"]),
         .executableTarget(name: "GLiClassServe", dependencies: ["FluidUse"]),
