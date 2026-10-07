@@ -216,7 +216,9 @@ final class GuardrailModel: ObservableObject {
         input = ""
         let sc = scenario
         Task { [weak self] in
-            guard let c = try? await Task.detached(operation: { try await Guard.send(m, text) }).value, let self else { return }
+            guard let c = try? await Task.detached(operation: { try await Guard.send(m, text) }).value, let self,
+                self.scenario == sc  // the user switched scenario while this message was being checked
+            else { return }
             self.count(c.timing)
             print(Guard.log(c))
             self.showSend(c)

@@ -189,6 +189,7 @@ public final class Vela2Manager: Sendable {
 
     public func predict(parts: [Vela2Part], questions: [Vela2Question]) async throws -> Vela2Result {
         let started = Date()
+        try Self.validate(questions)
         let rows = Self.rows(questions)
         var choices: [Vela2ChoiceAnswer] = []
         var spans: [Vela2SpanAnswer] = []
@@ -231,7 +232,27 @@ public final class Vela2Manager: Sendable {
 
     /// The encoder input of each sequence a request runs as (for parity checks).
     public func sequences(parts: [Vela2Part], questions: [Vela2Question]) throws -> [[Int]] {
-        try Self.rows(questions).map { try assemble(parts: parts, questions: $0).ids }
+        try Self.validate(questions)
+        return try Self.rows(questions).map { try assemble(parts: parts, questions: $0).ids }
+    }
+
+    /// Upstream's request rules: unique ids, 2…255 choice options, 1…255 span labels.
+    static func validate(_ questions: [Vela2Question]) throws {
+        var seen = Set<String>()
+        for q in questions {
+            guard seen.insert(q.id).inserted else { throw Vela2Error.invalidRequest("duplicate question id \(q.id)") }
+            switch q {
+            case .choice(let id, _, let options, let over, _):
+                guard (2...255).contains(options.count) else {
+                    throw Vela2Error.invalidRequest("choice \(id) needs 2 to 255 options, got \(options.count)")
+                }
+                guard !over.isEmpty else { throw Vela2Error.invalidRequest("choice \(id) is over no part") }
+            case .span(let id, _, let labels, _):
+                guard (1...255).contains(labels.count) else {
+                    throw Vela2Error.invalidRequest("span \(id) needs 1 to 255 labels, got \(labels.count)")
+                }
+            }
+        }
     }
 
     /// Choice questions and the first span question share a sequence; each further span question gets its own.
