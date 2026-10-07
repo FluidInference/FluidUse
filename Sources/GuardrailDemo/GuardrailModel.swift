@@ -76,6 +76,7 @@ final class GuardrailModel: ObservableObject {
             status = "\(m.modelName) ready · ANE ≤ \(m.aneMaxLength) tokens, GPU above"
             print("ready: \(m.modelName) (Core ML: ANE <= \(m.aneMaxLength) tokens, GPU above)")
             scheduleLive()
+            if CommandLine.arguments.contains("--loop") { await loop() }
             if CommandLine.arguments.contains("--autoplay") { await autoplay() }
         } catch {
             status = "Failed to load model: \(error.localizedDescription)"
@@ -97,6 +98,31 @@ final class GuardrailModel: ObservableObject {
             try? await Task.sleep(for: .milliseconds(1500))
         }
         input = scenario.suggest[scenario.suggest.count - 1]
+    }
+
+    /// `--loop`: hands-free demo. Cycles every scenario forever: types each suggestion word by word (the live lane
+    /// fires as it goes), sends it, waits for the reply check, then moves on.
+    private func loop() async {
+        print("loop: hands-free demo running")
+        while !Task.isCancelled {
+            for s in Scenario.all {
+                setScenario(s)
+                try? await Task.sleep(for: .milliseconds(1200))
+                for msg in s.suggest {
+                    input = ""
+                    var typed = ""
+                    for word in msg.split(separator: " ", omittingEmptySubsequences: false) {
+                        typed += (typed.isEmpty ? "" : " ") + word
+                        input = typed
+                        try? await Task.sleep(for: .milliseconds(170))
+                    }
+                    try? await Task.sleep(for: .milliseconds(900))
+                    send()
+                    try? await Task.sleep(for: .milliseconds(3200))
+                }
+                try? await Task.sleep(for: .milliseconds(1500))
+            }
+        }
     }
 
     private func count(_ t: Timing) {
