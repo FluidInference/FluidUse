@@ -99,8 +99,10 @@ public final class EmbeddingGemma2Audio: Sendable {
 
     /// Windows of several recordings, embedded together so short files still keep the GPU and the Neural Engine
     /// busy (one file at a time leaves a single window in flight). Result: one window list per recording, in order.
+    /// `onWindow` receives each window as soon as it is embedded (completion order), for indexes that grow live.
     public func embed(
-        recordings: [[Float]], progress: (@Sendable (_ done: Int, _ total: Int) -> Void)? = nil
+        recordings: [[Float]], progress: (@Sendable (_ done: Int, _ total: Int) -> Void)? = nil,
+        onWindow: (@Sendable (_ recording: Int, _ window: Window) -> Void)? = nil
     ) async throws -> [[Window]] {
         var jobs: [(recording: Int, start: Int)] = []
         for (recording, samples) in recordings.enumerated() {
@@ -135,6 +137,8 @@ public final class EmbeddingGemma2Audio: Sendable {
             for _ in 0..<min(Self.maxInFlight, jobs.count) { addJob() }
             for try await (index, window) in group {
                 windows[index] = window
+                onWindow?(jobs[index].recording, window)
+                try Task.checkCancellation()
                 done += 1
                 progress?(done, jobs.count)
                 addJob()

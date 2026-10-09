@@ -30,21 +30,21 @@ struct Header: View {
                     Label("Index", systemImage: "play.fill")
                 }
                 .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(model.phase != .ready)
+                .disabled(model.phase != .ready && !(model.phase == .done && !model.isIndexing))
                 Button {
                     model.toggleAutoPlay()
                 } label: {
                     Label(model.autoPlay ? "Stop" : "Auto", systemImage: model.autoPlay ? "pause.fill" : "sparkles")
                 }
                 .keyboardShortcut(.space, modifiers: [])
-                .disabled(model.phase != .done)
+                .disabled(model.indexedWindows == 0)
                 Button {
                     model.reset()
                 } label: {
                     Label("Reset", systemImage: "arrow.counterclockwise")
                 }
                 .keyboardShortcut("r", modifiers: [.command])
-                .disabled(model.phase != .done && model.phase != .indexing)
+                .disabled(model.indexedWindows == 0 && !model.isIndexing)
             }
             GeometryReader { proxy in
                 Capsule().fill(Color.primary.opacity(0.08))
@@ -57,12 +57,14 @@ struct Header: View {
             }
             .frame(height: 6)
             HStack(spacing: 10) {
-                Tile(value: AudioSearchModel.clock(model.audioSeconds), caption: "audio indexed")
+                Tile(
+                    value: AudioSearchModel.clock(model.audioSeconds),
+                    caption: model.pass > 1 ? "audio read, pass \(model.pass)" : "audio read")
                 Tile(value: String(format: "%.1f s", model.indexSeconds), caption: "indexing time")
                 Tile(
                     value: model.realTimeFactor == 0 ? "–" : String(format: "%.0f×", model.realTimeFactor),
                     caption: "faster than real time")
-                Tile(value: "\(model.windowsDone)", caption: "10 s windows")
+                Tile(value: "\(model.indexedWindows)", caption: "windows searchable")
             }
             HStack(spacing: 8) {
                 ForEach(model.collections) { collection in
@@ -83,12 +85,17 @@ struct Header: View {
     }
 
     private var status: String {
-        switch model.phase {
-        case .loading(let message): message
-        case .ready: "Ready · press Index (⌘↩)"
-        case .indexing: "Indexing \(model.windowsDone)/\(model.windowsTotal) windows…"
-        case .done: model.autoPlay ? "Hands-free · top 3 for each query" : "Indexed · search below"
-        case .failed(let message): message
+        switch (model.segment, model.phase) {
+        case (.speed, _):
+            model.pass > 1 && model.indexedWindows > 0
+                ? "⚡ Reading everything again, as fast as it can · \(model.segmentRemaining) s"
+                : "⚡ Reading everything for the first time · \(model.segmentRemaining) s"
+        case (.search, _): "🔎 Searching · \(model.segmentRemaining) s left"
+        case (nil, .loading(let message)): message
+        case (nil, .ready): "Ready · press Index (⌘↩)"
+        case (nil, .indexing): "Indexing \(model.windowsDone)/\(model.windowsTotal) windows…"
+        case (nil, .done): "Indexed · search below"
+        case (nil, .failed(let message)): message
         }
     }
 }
