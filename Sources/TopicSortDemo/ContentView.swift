@@ -99,7 +99,7 @@ struct Feed: View {
                 ForEach(model.feedSections, id: \.id) { section in
                     Section {
                         ForEach(section.items.prefix(300), id: \.self) { index in
-                            let path = model.paths[index] ?? []
+                            let path = model.path(index)
                             TweetCard(
                                 post: model.posts[index], path: path, color: path.first.map { model.color($0) })
                             Divider()
@@ -263,7 +263,7 @@ enum SnapshotRenderer {
                         .padding(.horizontal, 16).padding(.vertical, 8)
                     }
                     ForEach(section.items.prefix(sections.count > 1 ? 1 : 4), id: \.self) { index in
-                        let path = model.paths[index] ?? []
+                        let path = model.path(index)
                         TweetCard(post: model.posts[index], path: path, color: path.first.map { model.color($0) })
                         Divider()
                     }

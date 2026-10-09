@@ -48,6 +48,7 @@ final class BookmarkSortModel: ObservableObject {
     private var examples: [FiledBookmark] = []
     private var vectors: [String: [Float]] = [:]
     private var folderOfCategory: [String: String] = [:]
+    private var retrainGeneration = 0
 
     static let cacheDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("FluidUse/bookmark-sort", isDirectory: true)
@@ -62,7 +63,8 @@ final class BookmarkSortModel: ObservableObject {
     var filedCount: Int { items.filter { $0.status == .filed }.count }
     var pendingCount: Int { items.filter { $0.status == .suggested }.count }
     var medianMilliseconds: Double {
-        let values = items.suffix(max(items.count - 1, 0)).map(\.result.milliseconds).sorted()
+        // Newest first; drop the oldest (cold) sort.
+        let values = items.dropLast().map(\.result.milliseconds).sorted()
         return values.isEmpty ? 0 : values[values.count / 2]
     }
 
@@ -98,12 +100,16 @@ final class BookmarkSortModel: ObservableObject {
             embedder = try await GemmaBookmarkEmbedder.load()
         }
         self.embedder = embedder
-        examples = try FiledBookmark.load(jsonLines: URL(fileURLWithPath: path))
+        var loaded = try FiledBookmark.load(jsonLines: URL(fileURLWithPath: path))
         if let data = try? Data(contentsOf: Self.confirmedURL), let text = String(data: data, encoding: .utf8) {
-            examples += text.split(separator: "\n").compactMap {
+            loaded += text.split(separator: "\n").compactMap {
                 try? JSONDecoder().decode(FiledBookmark.self, from: Data($0.utf8))
             }
         }
+        // confirmed.jsonl is append-only: the last label for a post wins, over the examples file too.
+        var latest: [String: Int] = [:]
+        for (index, example) in loaded.enumerated() { latest[example.id] = index }
+        examples = loaded.enumerated().filter { latest[$0.element.id] == $0.offset }.map(\.element)
         if let data = try? Data(contentsOf: Self.vectorsURL(embedder)) {
             vectors = (try? JSONDecoder().decode([String: [Float]].self, from: data)) ?? [:]
         }
@@ -132,11 +138,16 @@ final class BookmarkSortModel: ObservableObject {
 
     private func retrain() async throws {
         guard let embedder else { return }
+        // Quick confirmations can overlap; only the newest retrain may replace the sorter.
+        retrainGeneration += 1
+        let generation = retrainGeneration
         let examples = examples
         let raw = examples.map { vectors[$0.id]! }
-        sorter = try await Task.detached(priority: .userInitiated) {
+        let trained = try await Task.detached(priority: .userInitiated) {
             try LearnedBookmarkSorter.train(on: examples, rawVectors: raw, embedder: embedder)
         }.value
+        guard generation == retrainGeneration else { return }
+        sorter = trained
         exampleCount = examples.count
         modeDescription =
             "Learned from \(examples.count) posts you filed · "

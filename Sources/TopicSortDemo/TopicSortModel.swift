@@ -24,8 +24,8 @@ final class TopicSortModel: ObservableObject {
     /// Posts that have arrived, in arrival order.
     @Published private(set) var posts: [Bookmark] = []
     @Published private(set) var topics: [TopicNode] = []
-    /// Post index → topic path, top-level first.
-    @Published private(set) var paths: [Int: [TopicNode]] = [:]
+    /// Post index → ids of its topic and subtopic (ids, not nodes: nodes would copy members and centroids).
+    @Published private(set) var paths: [Int: [String]] = [:]
     @Published private(set) var postsPerSecond: Double = 0
     @Published private(set) var lastEvent = ""
     @Published var selection: String? = TopicSortModel.allID
@@ -33,7 +33,7 @@ final class TopicSortModel: ObservableObject {
     static let allID = "all"
     static let palette: [Color] = [.blue, .orange, .green, .pink, .purple, .teal, .red, .indigo, .brown, .mint]
     /// Posts embedded concurrently per batch; the UI updates once per batch.
-    static let batchSize = value("batch").flatMap(Int.init) ?? 64
+    static let batchSize = max(1, value("batch").flatMap(Int.init) ?? 64)
     static let resortPoints = [40, 160, 400, 1000, 4000]
 
     private var source: [Bookmark] = []
@@ -45,10 +45,13 @@ final class TopicSortModel: ObservableObject {
     private var pauseRequested = false
     /// Streaming time so far, excluding pauses.
     private var activeSeconds: Double = 0
+    /// Bumped by Reset, so work that awaited across a Reset (a split) drops its result.
+    private var generation = 0
 
     var totalCount: Int { source.count }
     var subtopicCount: Int { topics.reduce(0) { $0 + $1.children.count } }
-    var canSplit: Bool { phase == .done || phase == .paused }
+    /// Splits only once the stream is finished: a re-sort replaces the broad topics and would drop subtopics.
+    var canSplit: Bool { phase == .done }
     var isRunning: Bool { phase == .streaming || phase == .resorting }
 
     func node(_ id: String) -> TopicNode? {
@@ -60,6 +63,9 @@ final class TopicSortModel: ObservableObject {
     }
 
     func color(_ node: TopicNode) -> Color { Self.palette[node.colorIndex % Self.palette.count] }
+
+    /// Topic, then subtopic, of post `index`.
+    func path(_ index: Int) -> [TopicNode] { (paths[index] ?? []).compactMap(node) }
 
     /// Feed for the selection: newest first (the latest 200 for all posts); a split topic is grouped by subtopic.
     var feedSections: [(id: String, title: String?, color: Color?, items: [Int])] {
@@ -88,7 +94,7 @@ final class TopicSortModel: ObservableObject {
                 try JSONDecoder().decode(Bookmark.self, from: Data($0.utf8))
             }
             if let limit = Self.value("limit").flatMap(Int.init) { source = Array(source.prefix(limit)) }
-            topicCount = Self.value("topics").flatMap(Int.init) ?? 6
+            topicCount = max(2, Self.value("topics").flatMap(Int.init) ?? 6)
             phase = .loading("Loading EmbeddingGemma 2 on the Neural Engine…")
             DemoLog.event("Sort by topic · \(source.count) posts · EmbeddingGemma 2 on the Neural Engine")
             let loadStart = DispatchTime.now().uptimeNanoseconds
@@ -147,6 +153,7 @@ final class TopicSortModel: ObservableObject {
     /// Clears every sorted post and topic; Start replays the stream from the first post.
     func reset() {
         DemoLog.event("↺ reset")
+        generation += 1
         runTask?.cancel()
         runTask = nil
         pauseRequested = false
@@ -182,12 +189,21 @@ final class TopicSortModel: ObservableObject {
                 let embedded = try await Self.embed(batch, manager: manager)
                 let embedMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - tick) / 1e6
                 try Task.checkCancellation()
+                // Work on copies and publish once per batch; mutating @Published storage per post copies it each time.
+                var newPosts = posts
+                var newTopics = topics
+                var newPaths = paths
                 for (post, vector) in zip(batch, embedded) {
-                    let index = posts.count
+                    let index = newPosts.count
                     vectors.append(vector)
-                    posts.append(post)
-                    if !topics.isEmpty { paths[index] = TopicDiscovery.assign(index, vector: vector, into: &topics) }
+                    newPosts.append(post)
+                    if !newTopics.isEmpty {
+                        newPaths[index] = TopicDiscovery.assign(index, vector: vector, into: &newTopics).map(\.id)
+                    }
                 }
+                posts = newPosts
+                topics = newTopics
+                paths = newPaths
                 activeSeconds += Double(DispatchTime.now().uptimeNanoseconds - tick) / 1e9
                 postsPerSecond = Double(posts.count) / max(activeSeconds, 1e-6)
                 logBatch(batch.count, milliseconds: embedMilliseconds)
@@ -217,8 +233,7 @@ final class TopicSortModel: ObservableObject {
             if let dump = Self.value("dump") {
                 // One line per post: id, broad topic, subtopic (if split), for scoring against labelled data.
                 let lines = posts.indices.map { index -> String in
-                    let path = paths[index] ?? []
-                    let fields = [posts[index].id] + path.map(\.name)
+                    let fields = [posts[index].id] + path(index).map(\.name)
                     return String(decoding: try! JSONSerialization.data(withJSONObject: fields), as: UTF8.self)
                 }
                 try lines.joined(separator: "\n").write(toFile: dump, atomically: true, encoding: .utf8)
@@ -268,6 +283,7 @@ final class TopicSortModel: ObservableObject {
         else { return }
         let topic = topics[index]
         let previous = phase
+        let started = generation
         phase = .splitting(topic.name)
         let start = DispatchTime.now().uptimeNanoseconds
         do {
@@ -275,8 +291,13 @@ final class TopicSortModel: ObservableObject {
                 topic, vectors: vectors, texts: posts.map(\.classificationText), phraseCache: cache
             ) { phrase in try await manager.embed(phrase) }
             let seconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
+            // Reset (or anything else) may have replaced the topics while this awaited.
+            guard generation == started, let current = topics.firstIndex(where: { $0.id == topic.id }) else {
+                if case .splitting = phase { phase = previous }
+                return
+            }
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
-                topics[index].children = children
+                topics[current].children = children
                 rebuildPaths()
             }
             lastEvent = String(
@@ -286,7 +307,7 @@ final class TopicSortModel: ObservableObject {
         } catch {
             lastEvent = "Split failed: \(error.localizedDescription)"
         }
-        phase = previous
+        if case .splitting = phase { phase = previous }
     }
 
     func merge(_ id: String) {
@@ -312,10 +333,10 @@ final class TopicSortModel: ObservableObject {
     }
 
     private func rebuildPaths() {
-        var result: [Int: [TopicNode]] = [:]
+        var result: [Int: [String]] = [:]
         for topic in topics {
-            for member in topic.members { result[member] = [topic] }
-            for child in topic.children { for member in child.members { result[member] = [topic, child] } }
+            for member in topic.members { result[member] = [topic.id] }
+            for child in topic.children { for member in child.members { result[member] = [topic.id, child.id] } }
         }
         paths = result
     }
@@ -338,7 +359,7 @@ final class TopicSortModel: ObservableObject {
         let text = posts[last].text.replacingOccurrences(of: "\n", with: " ")
         let snippet = text.count > 70 ? String(text.prefix(70)) + "…" : text
         let destination =
-            paths[last].map { $0.map(DemoLog.topic).joined(separator: " › ") } ?? "(topics after 64 posts)"
+            topics.isEmpty ? "(topics after the first batch)" : path(last).map(DemoLog.topic).joined(separator: " › ")
         DemoLog.line("      “\(snippet)” → \(destination)")
     }
 }
