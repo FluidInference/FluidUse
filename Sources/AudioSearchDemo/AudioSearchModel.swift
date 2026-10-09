@@ -6,14 +6,18 @@ import SwiftUI
 import os
 
 /// Indexes audio collections with EmbeddingGemma 2 (10 s windows: audio model on the GPU, text model on the Neural
-/// Engine) and searches every window with a text query.
+/// Engine) and searches every window with a text query. Play runs the show once: index everything, listen to the
+/// top three of a few queries, then run searches back to back as fast as they go. Pause holds it anywhere (timers
+/// included); Replay starts over from an empty index.
 @MainActor
 final class AudioSearchModel: ObservableObject {
-    enum Phase: Equatable {
+    enum Step: Equatable {
         case loading(String)
-        case ready
+        case idle
         case indexing
-        case done
+        case listening
+        case speed
+        case finished
         case failed(String)
     }
 
@@ -39,35 +43,22 @@ final class AudioSearchModel: ObservableObject {
         var id: String { "\(entry.file.path)#\(entry.start)" }
     }
 
-    @Published private(set) var phase: Phase = .loading("Starting…")
+    @Published private(set) var step: Step = .loading("Starting…")
+    @Published private(set) var paused = false
     @Published private(set) var collections: [Collection] = []
     @Published private(set) var windowsDone = 0
     @Published private(set) var windowsTotal = 0
     @Published private(set) var audioSeconds: Double = 0
     @Published private(set) var indexSeconds: Double = 0
+    @Published private(set) var indexedWindows = 0
     @Published private(set) var results: [Result] = []
     @Published private(set) var queryMilliseconds: Double = 0
     @Published private(set) var playing: String?
-    @Published var query = ""
-    /// Hands-free mode (default; `--manual` turns it off): index on launch, then type each suggested query and play
-    /// its top three windows, round and round. Typing or pressing play yourself switches it off.
-    @Published private(set) var autoPlay = !CommandLine.arguments.contains("--manual")
-    /// Indexing passes so far. The first grows the index live; later ones rebuild it in the background while the
-    /// current index keeps answering searches, to keep showing the indexing speed.
-    @Published private(set) var pass = 0
-    @Published private(set) var isIndexing = false
-    @Published private(set) var indexedWindows = 0
-    /// Hands-free show: read everything once (searchable as it grows), then alternate `--segment=` seconds (default
-    /// 30) of listening (type a query, play its top three) and of search speed (queries back to back, as fast as the
-    /// Neural Engine embeds them).
-    enum Segment { case listen, burst }
-    @Published private(set) var segment: Segment?
-    @Published private(set) var segmentRemaining = 0
-    /// Search-speed counters for the current burst.
+    @Published private(set) var stepRemaining = 0
     @Published private(set) var burstQueries = 0
     @Published private(set) var burstPerSecond: Double = 0
     @Published private(set) var burstMilliseconds: Double = 0
-    private var burstAverage: Double = 0
+    @Published var query = ""
 
     private var entries: [Entry] = []
     /// Every window's embedding, row after row, so a query is one matrix-vector product.
@@ -76,12 +67,14 @@ final class AudioSearchModel: ObservableObject {
     private var audio: EmbeddingGemma2Audio?
     private var player: AVAudioPlayer?
     private var searchTask: Task<Void, Never>?
-    private var runTask: Task<Void, Never>?
-    private var autoTask: Task<Void, Never>?
-    private var autoTyping = false
-    /// The last query text hands-free mode put in the field; the field's change callback echoing it is not typing.
-    private var autoQuery = ""
-    /// Seconds of each result to play in hands-free mode (`--clip=`).
+    private var showTask: Task<Void, Never>?
+    /// The last query the show put in the field; the field's change callback echoing it is not typing.
+    private var showQuery = ""
+    /// Paused time so far, so timers and speeds count only running time.
+    private var pausedNanoseconds: UInt64 = 0
+    private var pauseBegan: UInt64?
+    private let gate = PauseGate()
+    /// Seconds of each result to play (`--clip=`) and length of the listen and speed steps (`--segment=`).
     private let clipSeconds = max(
         1, CommandLine.arguments.first { $0.hasPrefix("--clip=") }.flatMap { Double($0.dropFirst(7)) } ?? 4)
     private let segmentSeconds = max(
@@ -89,6 +82,9 @@ final class AudioSearchModel: ObservableObject {
 
     var realTimeFactor: Double { indexSeconds > 0 ? audioSeconds / indexSeconds : 0 }
     var allSuggestions: [String] { collections.flatMap(\.suggestions) }
+    var isRunning: Bool { [.indexing, .listening, .speed].contains(step) }
+    var canPlay: Bool { step == .idle || (isRunning && paused) }
+    var canReplay: Bool { isRunning || step == .finished }
 
     func prepare() async {
         do {
@@ -104,8 +100,8 @@ final class AudioSearchModel: ObservableObject {
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(1))
                     seconds += 1
-                    guard let self, case .loading = self.phase else { continue }
-                    self.phase = .loading(
+                    guard let self, case .loading = self.step else { continue }
+                    self.step = .loading(
                         "Loading EmbeddingGemma 2… \(seconds) s"
                             + (seconds >= 8 ? " (first launch downloads and compiles the models once)" : ""))
                 }
@@ -115,7 +111,7 @@ final class AudioSearchModel: ObservableObject {
             let audio = try await EmbeddingGemma2Audio.load(text: text)
             _ = try await audio.embed(window: [Float](repeating: 0, count: 16_000))
             _ = try await text.embed("warm up", prompt: .searchQuery)
-            // The search-speed segment embeds queries eight per call (pack_256): load that path now too.
+            // The speed step embeds queries eight per call (pack_256): load that path now too.
             _ = try await text.embed(Array(repeating: "warm up", count: 64), prompt: .searchQuery)
             self.text = text
             self.audio = audio
@@ -123,60 +119,109 @@ final class AudioSearchModel: ObservableObject {
                 String(
                     format: "models loaded in %.1f s · audio encoder on the GPU, text model on the Neural Engine",
                     Double(DispatchTime.now().uptimeNanoseconds - loadStart) / 1e9))
-            phase = .ready
-            if autoPlay {
-                startAutoPlay()
-            } else if CommandLine.arguments.contains("--autostart") {
-                start()
-            }
+            step = .idle
+            if CommandLine.arguments.contains("--autostart") { play() }
         } catch {
-            phase = .failed(error.localizedDescription)
+            step = .failed(error.localizedDescription)
             DemoLog.line("failed: \(error.localizedDescription)", color: 196, bold: true)
         }
     }
 
-    func start() {
-        guard phase == .ready || phase == .done, !isIndexing else { return }
-        runTask = Task { await index() }
+    // MARK: Play / Pause / Replay
+
+    /// Starts the show, or resumes it after Pause.
+    func play() {
+        if isRunning, paused {
+            if let began = pauseBegan { pausedNanoseconds += DispatchTime.now().uptimeNanoseconds - began }
+            pauseBegan = nil
+            paused = false
+            gate.set(paused: false)
+            player?.play()
+            DemoLog.event("▶ resume")
+            return
+        }
+        guard step == .idle else { return }
+        showTask = Task { await show() }
     }
 
-    func reset() {
-        autoTask?.cancel()
-        autoTask = nil
-        runTask?.cancel()
-        runTask = nil
+    func pause() {
+        guard isRunning, !paused else { return }
+        paused = true
+        pauseBegan = DispatchTime.now().uptimeNanoseconds
+        gate.set(paused: true)
+        player?.pause()
+        DemoLog.event("❚❚ pause")
+    }
+
+    /// Clears the index and runs the show again from the start.
+    func replay() {
+        guard canReplay else { return }
+        showTask?.cancel()
+        showTask = nil
         stop()
+        paused = false
+        pauseBegan = nil
+        gate.set(paused: false)
         entries = []
         matrix = []
         indexedWindows = 0
-        pass = 0
-        isIndexing = false
         results = []
+        query = ""
+        showQuery = ""
         windowsDone = 0
         windowsTotal = 0
         audioSeconds = 0
         indexSeconds = 0
-        if audio != nil { phase = .ready }
-        DemoLog.event("↺ reset")
+        burstQueries = 0
+        burstPerSecond = 0
+        burstMilliseconds = 0
+        step = .idle
+        DemoLog.event("↺ replay")
+        showTask = Task { await show() }
     }
 
-    /// One indexing pass over every collection. Pass 1 adds windows to the live index as they finish (searchable at
-    /// once); later passes build a new index beside the current one and swap it in at the end.
+    /// Nanoseconds of running (unpaused) time on a monotonic clock.
+    private var activeNow: UInt64 {
+        let now = DispatchTime.now().uptimeNanoseconds
+        return now - pausedNanoseconds - (pauseBegan.map { now - $0 } ?? 0)
+    }
+
+    private func waitWhilePaused() async {
+        while paused, !Task.isCancelled { try? await Task.sleep(for: .milliseconds(50)) }
+    }
+
+    /// Index, listen, speed, done.
+    private func show() async {
+        DemoLog.event(
+            "▶ play: index everything, \(Int(segmentSeconds)) s of listening to the top 3, \(Int(segmentSeconds)) s of searches as fast as they go"
+        )
+        await index()
+        guard !Task.isCancelled, indexedWindows > 0 else { return }
+        await listen()
+        guard !Task.isCancelled else { return }
+        stop()
+        await speed()
+        guard !Task.isCancelled else { return }
+        step = .finished
+        DemoLog.event(
+            String(
+                format: "■ done: %@ of audio indexed in %.1f s (%.0fx real time); %d searches at %.0f/s",
+                Self.clock(audioSeconds), indexSeconds, realTimeFactor, burstQueries, burstPerSecond))
+    }
+
+    // MARK: Index
+
     private func index() async {
         guard let audio else { return }
-        pass += 1
-        isIndexing = true
-        phase = .indexing
-        let live = pass == 1
-        // Round-robin across collections, so a growing index covers every collection early.
+        step = .indexing
+        // Round-robin across collections.
         var queues = collections.map { collection in collection.files.map { (collection.id, $0) } }
         var ordered: [(Int, URL)] = []
         while queues.contains(where: { !$0.isEmpty }) {
             for index in queues.indices where !queues[index].isEmpty { ordered.append(queues[index].removeFirst()) }
         }
         let files = ordered
-        DemoLog.event(
-            "▶ pass \(pass): reading \(files.count) files" + (live ? "" : " (searches keep using pass \(pass - 1))"))
+        DemoLog.event("📥 indexing \(files.count) files")
         do {
             let decodeStart = DispatchTime.now().uptimeNanoseconds
             let recordings = try await Task.detached(priority: .userInitiated) {
@@ -186,21 +231,22 @@ final class AudioSearchModel: ObservableObject {
                 String(
                     format: "decoded %d files to 16 kHz in %.1f s", files.count,
                     Double(DispatchTime.now().uptimeNanoseconds - decodeStart) / 1e9), color: 245)
+            await waitWhilePaused()
             let total = recordings.reduce(0.0) { $0 + Double($1.count) } / Double(EmbeddingGemma2Audio.sampleRate)
-            let start = DispatchTime.now().uptimeNanoseconds
+            let start = activeNow
             let progress = IndexProgress()
             let inbox = WindowInbox()
-            var staged: [Entry] = []
+            let gate = gate
             // The embedding tasks report into `progress` and `inbox`; the UI drains them ten times a second.
             let watcher = Task { @MainActor [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .milliseconds(100))
                     guard let self else { return }
                     self.refresh(progress: progress, total: total, start: start)
-                    let fresh = inbox.drain()
-                    if live { self.add(fresh) } else { staged += fresh }
+                    self.add(inbox.drain())
                 }
             }
+            defer { watcher.cancel() }
             _ = try await audio.embed(
                 recordings: recordings, progress: { done, count in progress.update(done: done, total: count) },
                 onWindow: { recording, window in
@@ -208,39 +254,18 @@ final class AudioSearchModel: ObservableObject {
                         Entry(
                             collection: files[recording].0, file: files[recording].1, start: window.start,
                             duration: window.duration, embedding: window.embedding))
-                })
-            watcher.cancel()
+                },
+                beforeWindow: { await gate.wait() })
             try Task.checkCancellation()
             refresh(progress: progress, total: total, start: start)
-            if live {
-                add(inbox.drain())
-            } else {
-                staged += inbox.drain()
-                entries = staged
-                matrix = staged.flatMap(\.embedding)
-                indexedWindows = staged.count
-            }
-            isIndexing = false
-            phase = .done
+            add(inbox.drain())
             DemoLog.event(
                 String(
-                    format: "pass %d: indexed %@ of audio (%d windows) in %.1f s = %.0fx real time", pass,
-                    Self.clock(total), indexedWindows, indexSeconds, realTimeFactor))
-            if let preset = CommandLine.arguments.first(where: { $0.hasPrefix("--query=") }), pass == 1 {
-                query = String(preset.dropFirst(8))
-            }
-            if !autoPlay, !query.isEmpty, pass == 1 { search() }
+                    format: "📥 indexed %@ of audio (%d windows) in %.1f s = %.0fx real time", Self.clock(total),
+                    indexedWindows, indexSeconds, realTimeFactor))
         } catch is CancellationError {
-            // Cut short (a timed speed run, or Reset): the previous index stays in place.
-            isIndexing = false
-            if phase == .indexing { phase = indexedWindows > 0 ? .done : .ready }
-            DemoLog.event(
-                String(
-                    format: "pass %d: read %@ of audio in %.1f s = %.0fx real time (stopped there)", pass,
-                    Self.clock(audioSeconds), indexSeconds, realTimeFactor))
         } catch {
-            isIndexing = false
-            phase = .failed(error.localizedDescription)
+            step = .failed(error.localizedDescription)
             DemoLog.line("failed: \(error.localizedDescription)", color: 196, bold: true)
         }
     }
@@ -258,13 +283,174 @@ final class AudioSearchModel: ObservableObject {
         windowsDone = done
         windowsTotal = count
         audioSeconds = total * Double(done) / Double(count)
-        indexSeconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
+        indexSeconds = Double(activeNow - start) / 1e9
     }
 
-    /// Ranks every indexed window against the query (debounced while typing). Typing by hand ends hands-free mode.
+    // MARK: Listen
+
+    /// Types each suggested query, then plays its top three, for `segmentSeconds` of running time.
+    private func listen() async {
+        step = .listening
+        let queries = allSuggestions
+        guard !queries.isEmpty else { return }
+        let start = activeNow
+        let length = UInt64(segmentSeconds * 1e9)
+        let ticker = tick { [weak self] in
+            guard let self else { return }
+            self.stepRemaining = max(0, Int((Double(length) - Double(self.activeNow - start)) / 1e9))
+        }
+        defer { ticker.cancel() }
+        var next = 0
+        func left() -> Double { (Double(length) - Double(activeNow - start)) / 1e9 }
+        while !Task.isCancelled, left() > 0 {
+            let query = queries[next % queries.count]
+            next += 1
+            showQuery = ""
+            self.query = ""
+            for character in query {
+                await waitWhilePaused()
+                showQuery.append(character)
+                self.query.append(character)
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+            await waitWhilePaused()
+            guard !Task.isCancelled, let ranked = await rank(query) else { return }
+            results = ranked
+            for (rank, result) in ranked.prefix(3).enumerated() {
+                guard !Task.isCancelled, left() > 0.5 else { break }
+                DemoLog.line(
+                    String(
+                        format: "   ▶ #%d  %@  %@ @ %@", rank + 1, collections[result.entry.collection].name,
+                        result.entry.file.lastPathComponent, Self.clock(result.entry.start)), color: 120)
+                await playClip(result, seconds: min(clipSeconds, result.entry.duration, left()))
+            }
+            await waitWhilePaused()
+            try? await Task.sleep(for: .milliseconds(800))
+        }
+    }
+
+    /// Plays `seconds` of a result's window, holding while paused; returns when it ends or is stopped.
+    private func playClip(_ result: Result, seconds: TimeInterval) async {
+        stop()
+        guard let player = try? AVAudioPlayer(contentsOf: result.entry.file) else { return }
+        player.currentTime = result.entry.start
+        player.play()
+        self.player = player
+        playing = result.id
+        var played: UInt64 = 0
+        var last = DispatchTime.now().uptimeNanoseconds
+        while !Task.isCancelled, playing == result.id, Double(played) / 1e9 < seconds {
+            try? await Task.sleep(for: .milliseconds(50))
+            let now = DispatchTime.now().uptimeNanoseconds
+            if !paused { played += now - last }
+            last = now
+        }
+        if playing == result.id { stop() }
+    }
+
+    // MARK: Speed
+
+    /// Queries back to back for `segmentSeconds` of running time: 64 at a time, embedded eight per Neural Engine
+    /// call, ranked against every window in one matrix multiply. The field shows the latest query of each batch.
+    private func speed() async {
+        guard let text, !entries.isEmpty else { return }
+        step = .speed
+        let pool = queryPool
+        let dimension = EmbeddingGemma2Manager.dimension
+        let windows = entries.count
+        let batchSize = 64
+        burstQueries = 0
+        burstPerSecond = 0
+        burstMilliseconds = 0
+        DemoLog.event("⚡ search speed: \(pool.count) different queries, back to back, against \(windows) windows")
+        let start = activeNow
+        let length = UInt64(segmentSeconds * 1e9)
+        let ticker = tick { [weak self] in
+            guard let self else { return }
+            self.stepRemaining = max(0, Int((Double(length) - Double(self.activeNow - start)) / 1e9))
+        }
+        defer { ticker.cancel() }
+        var embedNanoseconds: UInt64 = 0
+        var rankNanoseconds: UInt64 = 0
+        var next = 0
+        var lastLog = start
+        var recent: [(time: UInt64, count: Int)] = [(start, 0)]
+        while !Task.isCancelled, activeNow - start < length {
+            if paused {
+                await waitWhilePaused()
+                recent = [(activeNow, 0)]
+                continue
+            }
+            let batch = (0..<batchSize).map { pool[(next + $0) % pool.count] }
+            next += batchSize
+            let embedStart = DispatchTime.now().uptimeNanoseconds
+            guard let vectors = try? await text.embed(batch, prompt: .searchQuery) else { return }
+            let rankStart = DispatchTime.now().uptimeNanoseconds
+            let queryMatrix = vectors.flatMap { $0 }
+            var scores = [Float](repeating: 0, count: batchSize * windows)
+            cblas_sgemm(
+                CblasRowMajor, CblasNoTrans, CblasTrans, Int32(batchSize), Int32(windows), Int32(dimension), 1,
+                queryMatrix, Int32(dimension), matrix, Int32(dimension), 0, &scores, Int32(windows))
+            // Every query gets its own top 10, as a real search would; only the last one is shown.
+            var shown: [Result] = []
+            for row in 0..<batchSize {
+                let top = Self.topIndices(scores, row: row, width: windows, count: 10)
+                if row == batchSize - 1 {
+                    shown = top.map { Result(entry: entries[$0], score: scores[row * windows + $0]) }
+                }
+            }
+            let end = DispatchTime.now().uptimeNanoseconds
+            embedNanoseconds += rankStart - embedStart
+            rankNanoseconds += end - rankStart
+            burstQueries += batchSize
+            // Rate over the last second of running time, so the tiles show the current speed.
+            let now = activeNow
+            recent.append((now, batchSize))
+            recent.removeAll { now - $0.time > 1_000_000_000 }
+            let span = Double(now - (recent.first?.time ?? start)) / 1e9
+            let recentQueries = recent.dropFirst().reduce(0) { $0 + $1.count }
+            if span > 0.2, recentQueries > 0 {
+                burstPerSecond = Double(recentQueries) / span
+                burstMilliseconds = 1000 / burstPerSecond
+            }
+            showQuery = batch[batchSize - 1]
+            query = showQuery
+            results = shown
+            queryMilliseconds = burstMilliseconds
+            if now - lastLog > 1_000_000_000 {
+                lastLog = now
+                DemoLog.line(
+                    String(
+                        format:
+                            "⚡ %d searches · %.0f/s · %.2f ms each (embed %.2f + rank %.2f) · %.1f M window scores/s",
+                        burstQueries, burstPerSecond, burstMilliseconds,
+                        Double(embedNanoseconds) / 1e6 / Double(burstQueries),
+                        Double(rankNanoseconds) / 1e6 / Double(burstQueries),
+                        burstPerSecond * Double(windows) / 1e6), color: 81)
+            }
+        }
+        // The tiles keep the whole step's average.
+        let elapsed = Double(activeNow - start) / 1e9
+        if elapsed > 0, burstQueries > 0 {
+            burstPerSecond = Double(burstQueries) / elapsed
+            burstMilliseconds = 1000 / burstPerSecond
+        }
+    }
+
+    private func tick(_ update: @escaping @MainActor () -> Void) -> Task<Void, Never> {
+        Task { @MainActor in
+            while !Task.isCancelled {
+                update()
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+    }
+
+    // MARK: Search by hand (when the show is not running)
+
+    /// Ranks every indexed window against the typed query (debounced).
     func search() {
-        if autoTyping || query == autoQuery { return }
-        stopAutoPlay()
+        if query == showQuery || isRunning { return }
         searchTask?.cancel()
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty, !entries.isEmpty else {
@@ -293,169 +479,30 @@ final class AudioSearchModel: ObservableObject {
         queryMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - begin) / 1e6
         DemoLog.line(
             String(format: "🔎 “%@” → %d windows ranked in %.0f ms", query, entries.count, queryMilliseconds), color: 81)
-        for result in ranked.prefix(3) {
-            DemoLog.line(
-                String(
-                    format: "      %.3f  %@  %@ @ %@", result.score, collections[result.entry.collection].name,
-                    result.entry.file.lastPathComponent, Self.clock(result.entry.start)))
-        }
         return ranked
     }
 
-    func toggleAutoPlay() {
-        if autoPlay { stopAutoPlay() } else if !entries.isEmpty { startAutoPlay() }
+    /// Row play button (when the show is not running): plays or stops one window.
+    func play(_ result: Result) {
+        guard !isRunning else { return }
+        if playing == result.id {
+            stop()
+            return
+        }
+        Task { await playClip(result, seconds: result.entry.duration) }
     }
 
-    /// The hands-free show, once: index everything, then `segmentSeconds` of listening, then `segmentSeconds` of
-    /// search speed, then stop. Auto (Space) runs it again.
-    private func startAutoPlay() {
-        autoTask?.cancel()
-        autoPlay = true
-        DemoLog.event(
-            "▶ hands-free: \(Int(segmentSeconds)) s listening to the top 3, then \(Int(segmentSeconds)) s of searches as fast as it can"
-        )
-        autoTask = Task { [weak self] in
-            var nextQuery = 0
-            // Indexing comes first, on its own; the show starts once every file is searchable.
-            if let self, self.indexedWindows == 0 || self.isIndexing {
-                if !self.isIndexing, self.indexedWindows == 0 {
-                    self.isIndexing = true
-                    self.runTask = Task { await self.index() }
-                }
-                while !Task.isCancelled, self.isIndexing { try? await Task.sleep(for: .milliseconds(100)) }
-            }
-            // One run: listen, then search speed, then stop.
-            if let self, !Task.isCancelled, self.indexedWindows > 0 {
-                // 🔎 Listen
-                self.segment = .listen
-                let deadline = ContinuousClock.now + .seconds(self.segmentSeconds)
-                let ticker = self.countDown(to: deadline)
-                let queries = self.allSuggestions
-                while !Task.isCancelled, !queries.isEmpty, ContinuousClock.now < deadline {
-                    let query = queries[nextQuery % queries.count]
-                    nextQuery += 1
-                    // Type it like a person would, then search.
-                    self.autoTyping = true
-                    self.autoQuery = ""
-                    self.query = ""
-                    for character in query {
-                        self.autoQuery.append(character)
-                        self.query.append(character)
-                        try? await Task.sleep(for: .milliseconds(30))
-                    }
-                    self.autoTyping = false
-                    guard !Task.isCancelled, let ranked = await self.rank(query) else { break }
-                    self.results = ranked
-                    for (rank, result) in ranked.prefix(3).enumerated() {
-                        let left = (deadline - ContinuousClock.now).components.seconds
-                        guard !Task.isCancelled, left > 0 else { break }
-                        DemoLog.line(
-                            String(
-                                format: "   ▶ #%d  %@  %@ @ %@", rank + 1,
-                                self.collections[result.entry.collection].name,
-                                result.entry.file.lastPathComponent, Self.clock(result.entry.start)), color: 120)
-                        await self.playClip(
-                            result, seconds: min(self.clipSeconds, result.entry.duration, Double(left)))
-                    }
-                    try? await Task.sleep(for: .milliseconds(800))
-                }
-                ticker.cancel()
-                self.stop()
-                guard !Task.isCancelled else { return }
-                // ⚡ Search speed
-                self.segment = .burst
-                let burstEnd = ContinuousClock.now + .seconds(self.segmentSeconds)
-                let burstTicker = self.countDown(to: burstEnd)
-                await self.burst(until: burstEnd)
-                burstTicker.cancel()
-                guard !Task.isCancelled else { return }
-                self.autoTask = nil
-                self.autoPlay = false
-                self.segment = nil
-                DemoLog.event(
-                    String(
-                        format: "■ done: %@ of audio indexed at %.0fx real time; %d searches at %.0f/s",
-                        Self.clock(self.audioSeconds), self.realTimeFactor, self.burstQueries, self.burstAverage))
-            }
-        }
+    func stop() {
+        player?.stop()
+        player = nil
+        playing = nil
     }
 
-    /// Queries back to back until `deadline`: 64 at a time, embedded eight per Neural Engine call, then ranked
-    /// against every window in one matrix multiply. The field and the results show the latest query of each batch.
-    private func burst(until deadline: ContinuousClock.Instant) async {
-        guard let text, !entries.isEmpty else { return }
-        let pool = queryPool
-        let dimension = EmbeddingGemma2Manager.dimension
-        let batchSize = 64
-        burstQueries = 0
-        burstPerSecond = 0
-        burstMilliseconds = 0
-        DemoLog.event(
-            "⚡ search speed: \(pool.count) different queries, back to back, against \(entries.count)+ windows")
-        let start = DispatchTime.now().uptimeNanoseconds
-        var embedNanoseconds: UInt64 = 0
-        var rankNanoseconds: UInt64 = 0
-        var next = 0
-        var lastLog = start
-        var recent: [(time: UInt64, count: Int)] = [(start, 0)]
-        while !Task.isCancelled, ContinuousClock.now < deadline {
-            let batch = (0..<batchSize).map { pool[(next + $0) % pool.count] }
-            next += batchSize
-            let embedStart = DispatchTime.now().uptimeNanoseconds
-            guard let vectors = try? await text.embed(batch, prompt: .searchQuery) else { return }
-            let rankStart = DispatchTime.now().uptimeNanoseconds
-            // The index may still be growing: rank against this moment's windows.
-            let snapshot = entries
-            let index = matrix
-            let windows = snapshot.count
-            let queryMatrix = vectors.flatMap { $0 }
-            var scores = [Float](repeating: 0, count: batchSize * windows)
-            cblas_sgemm(
-                CblasRowMajor, CblasNoTrans, CblasTrans, Int32(batchSize), Int32(windows), Int32(dimension), 1,
-                queryMatrix, Int32(dimension), index, Int32(dimension), 0, &scores, Int32(windows))
-            // Every query gets its own top 10, as a real search would; only the last one is shown.
-            var shown: [Result] = []
-            for row in 0..<batchSize {
-                let top = Self.topIndices(scores, row: row, width: windows, count: 10)
-                if row == batchSize - 1 {
-                    shown = top.map { Result(entry: entries[$0], score: scores[row * windows + $0]) }
-                }
-            }
-            let end = DispatchTime.now().uptimeNanoseconds
-            embedNanoseconds += rankStart - embedStart
-            rankNanoseconds += end - rankStart
-            burstQueries += batchSize
-            // Rate over the last second, so the tiles show the current speed.
-            recent.append((end, batchSize))
-            recent.removeAll { end - $0.time > 1_000_000_000 }
-            let window = Double(end - (recent.first.map { $0.time } ?? start)) / 1e9
-            let recentQueries = recent.dropFirst().reduce(0) { $0 + $1.count }
-            if window > 0.2, recentQueries > 0 {
-                burstPerSecond = Double(recentQueries) / window
-                burstMilliseconds = 1000 / burstPerSecond
-            }
-            autoQuery = batch[batchSize - 1]
-            query = autoQuery
-            results = shown
-            queryMilliseconds = burstMilliseconds
-            if end - lastLog > 1_000_000_000 {
-                lastLog = end
-                DemoLog.line(
-                    String(
-                        format:
-                            "⚡ %d queries · %.0f/s · %.2f ms each (embed %.2f + rank %.2f) · %.1f M window scores/s",
-                        burstQueries, burstPerSecond, burstMilliseconds,
-                        Double(embedNanoseconds) / 1e6 / Double(burstQueries),
-                        Double(rankNanoseconds) / 1e6 / Double(burstQueries),
-                        burstPerSecond * Double(entries.count) / 1e6), color: 81)
-            }
-        }
-        let total = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
-        burstAverage = Double(burstQueries) / max(total, 1e-6)
-        DemoLog.event(
-            String(
-                format: "⚡ %d searches in %.0f s = %.0f/s on average, %.0f/s at the end", burstQueries, total,
-                Double(burstQueries) / total, burstPerSecond))
+    static func clock(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        return total >= 3600
+            ? String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
+            : String(format: "%d:%02d", total / 60, total % 60)
     }
 
     /// Indices of the `count` highest scores in one row of a row-major score matrix, best first.
@@ -471,15 +518,6 @@ final class AudioSearchModel: ObservableObject {
             }
         }
         return best.map(\.index)
-    }
-
-    private func countDown(to deadline: ContinuousClock.Instant) -> Task<Void, Never> {
-        Task { @MainActor [weak self] in
-            while !Task.isCancelled, let self {
-                self.segmentRemaining = max(0, Int((deadline - ContinuousClock.now).components.seconds))
-                try? await Task.sleep(for: .milliseconds(250))
-            }
-        }
     }
 
     /// Everything the search-speed segment cycles through: the suggestions plus a spread of topics and sounds.
@@ -509,52 +547,6 @@ final class AudioSearchModel: ObservableObject {
         "farming and crops", "the ocean and fish", "a museum exhibition", "an earthquake", "a new law was passed",
         "a festival with fireworks",
     ]
-
-    private func stopAutoPlay() {
-        guard autoPlay || autoTask != nil else { return }
-        autoTask?.cancel()
-        autoTask = nil
-        autoTyping = false
-        autoPlay = false
-        segment = nil
-        stop()
-        DemoLog.event("❚❚ hands-free off")
-    }
-
-    /// Plays `seconds` of a result's window and returns when it ends (or is stopped).
-    private func playClip(_ result: Result, seconds: TimeInterval) async {
-        stop()
-        guard let player = try? AVAudioPlayer(contentsOf: result.entry.file) else { return }
-        player.currentTime = result.entry.start
-        player.play()
-        self.player = player
-        playing = result.id
-        try? await Task.sleep(for: .seconds(seconds))
-        if playing == result.id { stop() }
-    }
-
-    /// Play button: plays (or stops) one window; ends hands-free mode.
-    func play(_ result: Result) {
-        stopAutoPlay()
-        if playing == result.id {
-            stop()
-            return
-        }
-        Task { await playClip(result, seconds: result.entry.duration) }
-    }
-
-    func stop() {
-        player?.stop()
-        player = nil
-        playing = nil
-    }
-
-    static func clock(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded())
-        return total >= 3600
-            ? String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
-            : String(format: "%d:%02d", total / 60, total % 60)
-    }
 
     /// `--audio=<file or folder>` (repeatable), else the public datasets already on this Mac.
     static func defaultCollections() -> [Collection] {
@@ -623,6 +615,17 @@ final class WindowInbox: Sendable {
             defer { entries = [] }
             return entries
         }
+    }
+}
+
+/// Holds embedding tasks while the show is paused.
+final class PauseGate: Sendable {
+    private let state = OSAllocatedUnfairLock(initialState: false)
+
+    func set(paused: Bool) { state.withLock { $0 = paused } }
+
+    func wait() async {
+        while state.withLock({ $0 }), !Task.isCancelled { try? await Task.sleep(for: .milliseconds(50)) }
     }
 }
 

@@ -25,26 +25,26 @@ struct Header: View {
                 Spacer()
                 Text(status).font(.callout).foregroundStyle(.secondary)
                 Button {
-                    model.start()
+                    model.play()
                 } label: {
-                    Label("Index", systemImage: "play.fill")
+                    Label(model.paused ? "Resume" : "Play", systemImage: "play.fill")
                 }
-                .keyboardShortcut(.return, modifiers: [.command])
-                .disabled(model.phase != .ready && !(model.phase == .done && !model.isIndexing))
+                .keyboardShortcut(.return, modifiers: [])
+                .disabled(!model.canPlay)
                 Button {
-                    model.toggleAutoPlay()
+                    model.pause()
                 } label: {
-                    Label(model.autoPlay ? "Stop" : "Auto", systemImage: model.autoPlay ? "pause.fill" : "sparkles")
+                    Label("Pause", systemImage: "pause.fill")
                 }
                 .keyboardShortcut(.space, modifiers: [])
-                .disabled(model.indexedWindows == 0)
+                .disabled(!model.isRunning || model.paused)
                 Button {
-                    model.reset()
+                    model.replay()
                 } label: {
-                    Label("Reset", systemImage: "arrow.counterclockwise")
+                    Label("Replay", systemImage: "arrow.counterclockwise")
                 }
                 .keyboardShortcut("r", modifiers: [.command])
-                .disabled(model.indexedWindows == 0 && !model.isIndexing)
+                .disabled(!model.canReplay)
             }
             GeometryReader { proxy in
                 Capsule().fill(Color.primary.opacity(0.08))
@@ -61,7 +61,7 @@ struct Header: View {
                 Tile(value: String(format: "%.1f s", model.indexSeconds), caption: "indexing time")
                 Tile(
                     value: model.realTimeFactor == 0 ? "–" : String(format: "%.0f×", model.realTimeFactor),
-                    caption: model.isIndexing ? "faster than real time (indexing…)" : "faster than real time")
+                    caption: "faster than real time")
                 Tile(value: "\(model.indexedWindows)", caption: "windows searchable")
             }
             HStack(spacing: 10) {
@@ -77,7 +77,7 @@ struct Header: View {
                         ? "–" : String(format: "%.1f M", model.burstPerSecond * Double(model.indexedWindows) / 1e6),
                     caption: "audio windows ranked / s")
             }
-            .opacity(model.segment == .burst ? 1 : 0.55)
+            .opacity(model.step == .speed || model.step == .finished ? 1 : 0.55)
             HStack(spacing: 8) {
                 ForEach(model.collections) { collection in
                     HStack(spacing: 5) {
@@ -97,15 +97,15 @@ struct Header: View {
     }
 
     private var status: String {
-        switch (model.segment, model.phase) {
-        case (.listen, _): "🔎 Listening to the top 3 · \(model.segmentRemaining) s left"
-        case (.burst, _): "⚡ Searching as fast as it can · \(model.segmentRemaining) s left"
-        case (nil, .loading(let message)): message
-        case (nil, .ready): "Ready · press Index (⌘↩)"
-        case (nil, .indexing): "📥 Indexing \(model.windowsDone)/\(model.windowsTotal) windows · search starts when done"
-        case (nil, .done):
-            model.burstQueries > 0 ? "Done · type to search, or Auto (Space) to run it again" : "Indexed · search below"
-        case (nil, .failed(let message)): message
+        let pause = model.paused ? " · paused" : ""
+        switch model.step {
+        case .loading(let message): return message
+        case .idle: return "Ready · press Play"
+        case .indexing: return "📥 Indexing \(model.windowsDone)/\(model.windowsTotal) windows" + pause
+        case .listening: return "🔎 Listening to the top 3 · \(model.stepRemaining) s left" + pause
+        case .speed: return "⚡ Searching as fast as it can · \(model.stepRemaining) s left" + pause
+        case .finished: return "Done · Replay to run it again"
+        case .failed(let message): return message
         }
     }
 }
@@ -121,6 +121,7 @@ struct SearchBar: View {
                     .textFieldStyle(.plain).font(.title3)
                     .onSubmit { model.search() }
                     .onChange(of: model.query) { model.search() }
+                    .disabled(model.isRunning)
                 if model.queryMilliseconds > 0, !model.results.isEmpty {
                     Text(String(format: "%.0f ms", model.queryMilliseconds)).font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -134,6 +135,7 @@ struct SearchBar: View {
                             model.search()
                         }
                         .buttonStyle(.bordered).controlSize(.small)
+                        .disabled(model.isRunning)
                     }
                 }
             }
@@ -156,7 +158,7 @@ struct Results: View {
         }
         .overlay {
             if model.results.isEmpty {
-                Text(model.phase == .done ? "Type a query or pick a suggestion" : "Index the audio, then search it")
+                Text(model.step == .finished ? "Type a query or pick a suggestion" : "Press Play")
                     .foregroundStyle(.secondary)
             }
         }
@@ -179,6 +181,7 @@ struct ResultRow: View {
                     .font(.system(size: 26)).foregroundStyle(collection.color)
             }
             .buttonStyle(.plain)
+            .disabled(model.isRunning)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(collection.name).font(.caption.bold()).foregroundStyle(collection.color)

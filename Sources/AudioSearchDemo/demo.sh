@@ -31,4 +31,4 @@ fi
 pkill -f "release/AudioSearchDemo" 2>/dev/null || true
 cd "$ROOT"
 "$ROOT/.build/release/AudioSearchDemo" "$@" > "$LOG" 2> "$LOG.stderr" &
-echo "demo pid $! · log $LOG · indexes and plays on its own (Space stops hands-free mode)"
+echo "demo pid $! · log $LOG · press Play (↩) · Pause (Space) · Replay (⌘R)"
