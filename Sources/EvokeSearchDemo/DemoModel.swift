@@ -34,40 +34,72 @@ final class DemoModel {
         "wedding anniversary", "back to school",
     ]
 
+    private var tweets: [Tweet] = []
+
     func start() async {
-        let tweets = Launch.postsFile.map(MockTimeline.load(from:)) ?? MockTimeline.tweets
+        tweets = Launch.postsFile.map(MockTimeline.load(from:)) ?? MockTimeline.tweets
         do {
             let encoder = try await EvokeManager.loadDefault(lengths: [64]) { file, bytes in
                 Task { @MainActor in self.phase = .loading(bytes > 0 ? "Downloaded \(file)" : "Downloading \(file)…") }
             }
-            phase = .loading("Indexing \(tweets.count) posts…")
+            DemoLog.loaded(posts: tweets.count)
             _ = try await encoder.terms(for: "warm up", kind: .document)
-            let clock = ContinuousClock()
-            var atoms: [EvokeTerms] = []
-            let elapsed = try await clock.measure {
-                for tweet in tweets {
-                    atoms.append(try await encoder.terms(for: tweet.text, kind: .document))
-                    if atoms.count % 50 == 0 { phase = .loading("Indexing \(atoms.count)/\(tweets.count) posts…") }
-                }
-            }
-            var words: [Int: String] = [:]
-            for id in Set(atoms.flatMap(\.keys)) {
-                if let word = encoder.word(for: id) { words[id] = word }
-            }
-            // Warm the query path so the first keystroke isn't a cold Neural Engine call.
-            _ = try await encoder.terms(for: "warm up", kind: .query)
             self.encoder = encoder
-            self.index = SearchIndex(tweets: tweets, atoms: atoms, words: words)
-            let seconds = Double(elapsed.components.attoseconds) / 1e18 + Double(elapsed.components.seconds)
-            indexSummary = String(
-                format: "%d posts indexed in %.2f s on Neural Engine · %.1f terms/post", atoms.count, seconds,
-                Double(atoms.map(\.count).reduce(0, +)) / Double(atoms.count))
-            phase = .ready
-            search()
-            startAutoplay()
+            try await reindexAndPlay()
         } catch {
             phase = .failed("\(error)")
         }
+    }
+
+    /// Restart button: drop the index, encode every post again, then start a fresh autoplay run.
+    func restart() {
+        guard encoder != nil else { return }
+        stopAutoplay(resume: false)
+        Task {
+            do {
+                try await reindexAndPlay()
+            } catch {
+                phase = .failed("\(error)")
+            }
+        }
+    }
+
+    private func reindexAndPlay() async throws {
+        guard let encoder else { return }
+        index = nil
+        hits = []
+        query = ""
+        queryTerms = []
+        queryLatencyMs = nil
+        cachedQuery = nil
+        indexSummary = ""
+        phase = .loading("Indexing \(tweets.count) posts…")
+        let clock = ContinuousClock()
+        var atoms: [EvokeTerms] = []
+        let elapsed = try await clock.measure {
+            for tweet in tweets {
+                atoms.append(try await encoder.terms(for: tweet.text, kind: .document))
+                if atoms.count % 50 == 0 {
+                    phase = .loading("Indexing \(atoms.count)/\(tweets.count) posts…")
+                    DemoLog.indexing(atoms.count, of: tweets.count)
+                }
+            }
+        }
+        var words: [Int: String] = [:]
+        for id in Set(atoms.flatMap(\.keys)) {
+            if let word = encoder.word(for: id) { words[id] = word }
+        }
+        // Warm the query path so the first keystroke isn't a cold Neural Engine call.
+        _ = try await encoder.terms(for: "warm up", kind: .query)
+        index = SearchIndex(tweets: tweets, atoms: atoms, words: words)
+        let seconds = Double(elapsed.components.attoseconds) / 1e18 + Double(elapsed.components.seconds)
+        let termsPerPost = Double(atoms.map(\.count).reduce(0, +)) / Double(atoms.count)
+        indexSummary = String(
+            format: "%d posts indexed in %.2f s on Neural Engine · %.1f terms/post", atoms.count, seconds, termsPerPost)
+        DemoLog.indexed(posts: atoms.count, seconds: seconds, termsPerPost: termsPerPost)
+        phase = .ready
+        search()
+        startAutoplay()
     }
 
     /// Scripted loop: type each query, show keyword results, then flip to Evoke.
@@ -78,10 +110,19 @@ final class DemoModel {
         isAutoplaying = true
         tickStart = .now
         encodesSinceTick = 0
+        let deadline = ContinuousClock.now + .seconds(Launch.autoplaySeconds)
         autoplayTask = Task {
+            // Runs for one recording take, then stops on a fully typed query (no auto-resume).
+            var typed = 0
             while !Task.isCancelled {
                 for q in Self.suggestions {
                     guard await play(q) else { return }
+                    typed += 1
+                    if ContinuousClock.now >= deadline {
+                        stopAutoplay(resume: false)
+                        caption = "Done · \(typed) queries typed live"
+                        return
+                    }
                 }
             }
         }
@@ -188,6 +229,7 @@ final class DemoModel {
                 if terms.count == 14 { break }
             }
             queryTerms = terms
+            DemoLog.search(text, ms: queryLatencyMs ?? 0, terms: terms, hits: hits)
         }
     }
 }

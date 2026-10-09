@@ -87,6 +87,15 @@ struct FeedColumn: View {
                     .buttonStyle(.plain)
                 }
                 Button {
+                    model.restart()
+                } label: {
+                    Label("Restart", systemImage: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.feedAccent)
+                }
+                .buttonStyle(.plain)
+                .help("Re-index every post, then run the demo again")
+                Button {
                     model.isAutoplaying ? model.stopAutoplay(resume: false) : model.startAutoplay()
                 } label: {
                     Label(
