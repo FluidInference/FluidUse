@@ -19,6 +19,13 @@ final class CodeSearchModel: ObservableObject {
         case failed(String)
     }
 
+    /// A line in the live list while indexing (a function just indexed) or during search speed (question → answer).
+    struct FeedItem: Identifiable {
+        let id: Int
+        let question: String?
+        let chunk: CodeChunk
+    }
+
     struct Result: Identifiable {
         let chunk: CodeChunk
         let score: Float
@@ -42,6 +49,7 @@ final class CodeSearchModel: ObservableObject {
     @Published private(set) var burstQueries = 0
     @Published private(set) var burstPerSecond: Double = 0
     @Published private(set) var burstMilliseconds: Double = 0
+    @Published private(set) var feed: [FeedItem] = []
     @Published var query = ""
 
     private var repository = URL(fileURLWithPath: "/")
@@ -54,16 +62,17 @@ final class CodeSearchModel: ObservableObject {
     private var searchTask: Task<Void, Never>?
     private var showQuery = ""
     private var snippets: [String: String] = [:]
+    private var feedSerial = 0
     private var pausedNanoseconds: UInt64 = 0
     private var pauseBegan: UInt64?
     /// Tokens kept per chunk (title + doc comment + the start of the code): 128 indexed FluidAudio in ~28 s with the
     /// best top-1 on our question set.
     private let maxTokens =
-        CommandLine.arguments.first { $0.hasPrefix("--tokens=") }.flatMap { Int($0.dropFirst(9)) } ?? 128
+        CommandLine.arguments.first { $0.hasPrefix("--tokens=") }.flatMap { Int($0.dropFirst(9)) } ?? 64
     private let speedSeconds = max(
         5, CommandLine.arguments.first { $0.hasPrefix("--segment=") }.flatMap { Double($0.dropFirst(10)) } ?? 30)
     private let dwellSeconds = max(
-        1, CommandLine.arguments.first { $0.hasPrefix("--dwell=") }.flatMap { Double($0.dropFirst(8)) } ?? 4)
+        0.5, CommandLine.arguments.first { $0.hasPrefix("--dwell=") }.flatMap { Double($0.dropFirst(8)) } ?? 1.6)
 
     var chunksPerSecond: Double { indexSeconds > 0 ? Double(chunksDone) / indexSeconds : 0 }
     var isRunning: Bool { [.indexing, .examples, .speed].contains(step) }
@@ -163,6 +172,7 @@ final class CodeSearchModel: ObservableObject {
         chunksDone = 0
         indexSeconds = 0
         results = []
+        feed = []
         selected = nil
         grepMatches = nil
         query = ""
@@ -217,7 +227,9 @@ final class CodeSearchModel: ObservableObject {
         step = .indexing
         DemoLog.event("📥 indexing \(chunks.count) functions and types (\(maxTokens) tokens each, at most)")
         let start = activeNow
-        let batchSize = 256
+        // Small batches keep the live list moving; packing still fills each Neural Engine call.
+        let batchSize = 64
+        feed = []
         do {
             for batchStart in stride(from: 0, to: chunks.count, by: batchSize) {
                 await waitWhilePaused()
@@ -228,6 +240,8 @@ final class CodeSearchModel: ObservableObject {
                 indexed += batch
                 matrix += vectors.flatMap { $0 }
                 chunksDone = indexed.count
+                push(batch.suffix(4).map { (nil, $0) })
+                if let last = batch.last { selected = Result(chunk: last, score: 0) }
                 indexSeconds = Double(activeNow - start) / 1e9
             }
             DemoLog.event(
@@ -245,6 +259,8 @@ final class CodeSearchModel: ObservableObject {
 
     private func examplesStep() async {
         step = .examples
+        feed = []
+        selected = nil
         for (number, question) in Self.examples.enumerated() {
             guard !Task.isCancelled else { return }
             exampleNumber = number + 1
@@ -256,7 +272,7 @@ final class CodeSearchModel: ObservableObject {
                 await waitWhilePaused()
                 showQuery.append(character)
                 query.append(character)
-                try? await Task.sleep(for: .milliseconds(30))
+                try? await Task.sleep(for: .milliseconds(12))
             }
             await waitWhilePaused()
             guard let ranked = await rank(question) else { return }
@@ -296,6 +312,7 @@ final class CodeSearchModel: ObservableObject {
         let count = indexed.count
         let batchSize = 64
         burstQueries = 0
+        feed = []
         DemoLog.event("⚡ search speed: \(pool.count) different questions, back to back, against \(count) functions")
         let start = activeNow
         let length = UInt64(speedSeconds * 1e9)
@@ -317,14 +334,17 @@ final class CodeSearchModel: ObservableObject {
             cblas_sgemm(
                 CblasRowMajor, CblasNoTrans, CblasTrans, Int32(batchSize), Int32(count), Int32(dimension), 1,
                 queryMatrix, Int32(dimension), matrix, Int32(dimension), 0, &scores, Int32(count))
-            // Every question gets its own top 10, as a real search would; only the last one is shown.
+            // Every question gets its own top 10, as a real search would; a few answers per batch go to the live list.
             var shown: [Result] = []
+            var answered: [(String?, CodeChunk)] = []
             for row in 0..<batchSize {
                 let top = Self.topIndices(scores, row: row, width: count, count: 10)
+                if row % 16 == 15, let best = top.first { answered.append((batch[row], indexed[best])) }
                 if row == batchSize - 1 {
                     shown = top.map { Result(chunk: indexed[$0], score: scores[row * count + $0]) }
                 }
             }
+            push(answered)
             burstQueries += batchSize
             let now = activeNow
             recent.append((now, batchSize))
@@ -354,6 +374,25 @@ final class CodeSearchModel: ObservableObject {
             burstPerSecond = Double(burstQueries) / elapsed
             burstMilliseconds = 1000 / burstPerSecond
         }
+    }
+
+    private func push(_ items: [(String?, CodeChunk)]) {
+        for (question, chunk) in items {
+            feedSerial += 1
+            feed.insert(FeedItem(id: feedSerial, question: question, chunk: chunk), at: 0)
+        }
+        if feed.count > 18 { feed.removeLast(feed.count - 18) }
+    }
+
+    /// The part of the codebase a path belongs to (`ASR`, `TTS`, `Diarizer`, …), for the coloured tag.
+    static func area(_ path: String) -> String {
+        let parts = path.split(separator: "/").map(String.init)
+        if parts.first == "Tests" { return "Tests" }
+        if parts.count > 2, parts[0] == "Sources" {
+            if parts[1].hasSuffix("CLI") { return "CLI" }
+            return parts.count > 3 ? parts[2] : parts[1]
+        }
+        return parts.first ?? path
     }
 
     static func topIndices(_ scores: [Float], row: Int, width: Int, count: Int) -> [Int] {
