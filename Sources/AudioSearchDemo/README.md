@@ -15,7 +15,7 @@ The first run downloads the models (about 1.1 GB, checksum-verified) from
 them once (a few minutes). Needs macOS 15+.
 
 - **Play** (↩) runs the show once, in order: **📥 index** every file (16 kHz mono, 10 s windows across all files with
-  four in flight, so the GPU and the Neural Engine work at the same time), then **🔎 listen** to four example searches (each
+  four in flight, so the GPU and the Neural Engine work at the same time), then **🔎 listen** to eight example searches (each
   typed, then its top three windows play, 3 s each), then **⚡ search speed** for 30 s (~100 different queries
   back to back, 64 at a time, embedded eight per Neural Engine call, ranked against every window with one matrix
   multiply). **Pause** (Space) holds it anywhere, timers included; **Replay** (⌘R) starts over from an empty index.
@@ -24,7 +24,8 @@ them once (a few minutes). Needs macOS 15+.
 
 Default audio, when present: the 1-hour Earnings-22 sample and FLEURS English/French used by FluidAudio's
 benchmarks (`~/Library/Application Support/FluidAudio`), and ESC-50 sound clips
-(`~/Library/Application Support/FluidUse/Datasets/esc50/wav`). Nothing is bundled.
+(`~/Library/Application Support/FluidUse/Datasets/esc50/wav`), renamed to random ids (`clip_3f9a1c.wav`) so the file
+name cannot give the answer away; the classes live in `esc50/labels.json`. Nothing is bundled.
 
 Numbers (M5 Pro, macOS 27):
 

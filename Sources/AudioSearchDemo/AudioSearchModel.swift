@@ -288,19 +288,26 @@ final class AudioSearchModel: ObservableObject {
 
     // MARK: Listen
 
-    /// The listening step's examples: each is typed, then its top three play. Picked to land: two phrases from the
-    /// earnings call, two everyday sounds.
+    /// The listening step's examples: each is typed, then its top three play. Two phrases from the earnings call,
+    /// six everyday sounds; every one returns three right hits.
     static let showcase = [
-        "forward-looking statements disclaimer", "a baby crying", "the operator opens the line for questions",
-        "someone laughing",
+        "forward-looking statements disclaimer", "a baby crying", "church bells ringing",
+        "the operator opens the line for questions", "a siren", "someone laughing", "a cow mooing", "birds chirping",
+    ]
+
+    static let earningsExamples: Set = [
+        "forward-looking statements disclaimer", "the operator opens the line for questions",
     ]
 
     /// Types each showcase query (those whose collection is present), then plays its top three.
     private func listen() async {
         step = .listening
-        let available = Set(allSuggestions)
-        var queries = Self.showcase.filter { available.contains($0) }
-        if queries.isEmpty { queries = Array(allSuggestions.prefix(4)) }
+        // Earnings-call examples need that collection; sound examples need the sound clips.
+        let names = Set(collections.map(\.name))
+        var queries = Self.showcase.filter { query in
+            Self.earningsExamples.contains(query) ? names.contains("Earnings calls") : names.contains("Sounds (ESC-50)")
+        }
+        if queries.isEmpty { queries = Array(allSuggestions.prefix(8)) }
         guard !queries.isEmpty else { return }
         for (number, query) in queries.enumerated() {
             guard !Task.isCancelled else { return }
@@ -522,15 +529,24 @@ final class AudioSearchModel: ObservableObject {
 
     /// Everything the search-speed segment cycles through: the suggestions plus a spread of topics and sounds.
     var queryPool: [String] {
-        var pool = allSuggestions + Self.extraQueries
-        let sounds = Set(
-            collections.flatMap(\.files).compactMap { file -> String? in
-                let name = file.deletingPathExtension().lastPathComponent
-                guard let range = name.range(of: "__") else { return nil }
-                return "the sound of " + name[..<range.lowerBound].replacingOccurrences(of: "_", with: " ")
-            })
+        var pool = Self.showcase + allSuggestions + Self.extraQueries
+        // Sound clips have random file names; their classes come from labels.json next to the folder.
+        var sounds = Set<String>()
+        for collection in collections {
+            guard let folder = collection.files.first?.deletingLastPathComponent(),
+                let data = try? Data(
+                    contentsOf: folder.deletingLastPathComponent().appendingPathComponent("labels.json")),
+                let labels = try? JSONSerialization.jsonObject(with: data) as? [String: [String: String]]
+            else { continue }
+            for label in labels.values {
+                if let category = label["category"] {
+                    sounds.insert("the sound of " + category.replacingOccurrences(of: "_", with: " "))
+                }
+            }
+        }
         pool += sounds.sorted()
-        return pool
+        var seen = Set<String>()
+        return pool.filter { seen.insert($0).inserted }
     }
 
     static let extraQueries = [

@@ -89,6 +89,11 @@ struct Header: View {
                     .background(Capsule().fill(collection.color.opacity(0.12)))
                 }
                 Spacer()
+                Text("Sound clips have random file names: the model only hears the audio")
+                    .font(.caption.bold()).foregroundStyle(.secondary)
+            }
+            HStack {
+                Spacer()
                 Text("EmbeddingGemma 2 · audio on the GPU, text on the Neural Engine · nothing leaves this Mac")
                     .font(.caption).foregroundStyle(.secondary)
             }
