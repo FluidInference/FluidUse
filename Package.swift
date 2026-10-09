@@ -54,7 +54,7 @@ let package = Package(
         .executableTarget(name: "BookmarkSortCheck", dependencies: ["BookmarkSort", "FluidUse"]),
         .executableTarget(name: "BookmarkSortDemo", dependencies: ["BookmarkSort"]),
         .executableTarget(
-            name: "TopicSortDemo", dependencies: ["BookmarkSort", "FluidUse"], exclude: ["README.md"],
+            name: "TopicSortDemo", dependencies: ["BookmarkSort", "FluidUse"], exclude: ["README.md", "demo.sh"],
             resources: [.copy("Resources")]),
         .target(name: "ImageSort", dependencies: ["FluidUse"]),
         .executableTarget(name: "ImageSortCheck", dependencies: ["ImageSort", "FluidUse"]),

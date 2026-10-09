@@ -37,7 +37,19 @@ public enum EmbeddingGemma2ModelStore {
         let directory = root.appendingPathComponent(directoryName)
         let manager = FileManager.default
         try manager.createDirectory(at: directory, withIntermediateDirectories: true)
-        var downloaded = false
+        // Hashing ~550 MB takes a moment; skip it once this revision has been verified and nothing is missing.
+        let verified = directory.appendingPathComponent(".verified-\(revision)")
+        let compiled = directory.appendingPathComponent("EmbeddingGemma2Text.mlmodelc")
+        let stamp = compiled.appendingPathComponent("fluiduse-revision")
+        let allPresent = assets.allSatisfy {
+            manager.fileExists(atPath: directory.appendingPathComponent($0.path).path)
+        }
+        if allPresent, manager.fileExists(atPath: verified.path),
+            (try? String(contentsOf: stamp, encoding: .utf8)) == revision
+        {
+            return directory
+        }
+        try? manager.removeItem(at: verified)
         for asset in assets {
             let destination = directory.appendingPathComponent(asset.path)
             if manager.fileExists(atPath: destination.path), try checksum(of: destination) == asset.sha256 {
@@ -62,16 +74,23 @@ public enum EmbeddingGemma2ModelStore {
             let size = (try manager.attributesOfItem(atPath: temporary.path)[.size] as? NSNumber)?.int64Value ?? 0
             try LayaModelStore.installDownloadedFile(temporary, at: destination)
             progress?(asset.path, size)
-            downloaded = true
         }
-        let compiled = directory.appendingPathComponent("EmbeddingGemma2Text.mlmodelc")
-        if downloaded || !manager.fileExists(atPath: compiled.path) {
+        // Recompile unless the compiled model carries this revision's stamp (a revision bump or an interrupted
+        // compile leaves an old or missing stamp). Staged rename, so a reader never sees a half-written bundle.
+        if (try? String(contentsOf: stamp, encoding: .utf8)) != revision {
             progress?("EmbeddingGemma2Text.mlmodelc", 0)
             let temporary = try await MLModel.compileModel(
                 at: directory.appendingPathComponent("EmbeddingGemma2Text.mlpackage"))
-            try? manager.removeItem(at: compiled)
-            try manager.moveItem(at: temporary, to: compiled)
+            try revision.write(
+                to: temporary.appendingPathComponent("fluiduse-revision"), atomically: true, encoding: .utf8)
+            let staged = directory.appendingPathComponent("EmbeddingGemma2Text.\(UUID().uuidString).mlmodelc")
+            try manager.moveItem(at: temporary, to: staged)
+            let retired = directory.appendingPathComponent("EmbeddingGemma2Text.\(UUID().uuidString).old")
+            if manager.fileExists(atPath: compiled.path) { try manager.moveItem(at: compiled, to: retired) }
+            try manager.moveItem(at: staged, to: compiled)
+            try? manager.removeItem(at: retired)
         }
+        manager.createFile(atPath: verified.path, contents: Data())
         return directory
     }
 

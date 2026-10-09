@@ -8,7 +8,11 @@ siblings.
 
 ```bash
 swift run -c release TopicSortDemo
+Sources/TopicSortDemo/demo.sh          # same app, plus one terminal: macmon (ANE / GPU / power) above the live log
 ```
+
+The log (`$TMPDIR/topic-sort-demo.log`, colour-coded) shows the model load, every batch (posts, Neural Engine calls, ms,
+posts/s, one post and where it was filed), each re-sort with its topics, and each split with its subtopics.
 
 The first run downloads the model (about 530 MB, checksum-verified) from
 [FluidInference/embeddinggemma-2-coreml](https://huggingface.co/FluidInference/embeddinggemma-2-coreml); the first

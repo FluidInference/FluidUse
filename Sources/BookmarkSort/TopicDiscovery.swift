@@ -3,7 +3,8 @@ import Foundation
 
 /// A discovered topic: the posts in it (indices into the input), a name, and subtopics for big topics.
 public struct TopicNode: Identifiable, Sendable {
-    public let id: String
+    /// Stable across re-sorts when `carryColors` matches the topic to an earlier one.
+    public var id: String
     public var name: String
     public var members: [Int]
     public var children: [TopicNode]
@@ -131,8 +132,9 @@ public struct TopicDiscovery: Sendable {
         return path
     }
 
-    /// Gives each new topic the colour of the most similar old one (greedy, centroid similarity above 0.8);
-    /// the rest get colours not in use.
+    /// Gives each new topic the colour and id of the most similar old one (greedy, centroid similarity above 0.8),
+    /// so colours, the selection and renames follow a topic across re-sorts; the rest get unused colours and fresh
+    /// ids. Children are re-pathed under their parent's id.
     public static func carryColors(from old: [TopicNode], to new: inout [TopicNode], paletteSize: Int) {
         var pairs: [(similarity: Float, new: Int, old: Int)] = []
         for (n, node) in new.enumerated() {
@@ -144,15 +146,26 @@ public struct TopicDiscovery: Sendable {
         for pair in pairs.sorted(by: { $0.similarity > $1.similarity })
         where pair.similarity > 0.8 && !matchedNew.contains(pair.new) && !matchedOld.contains(pair.old) {
             new[pair.new].colorIndex = old[pair.old].colorIndex
+            new[pair.new].id = old[pair.old].id
             matchedNew.insert(pair.new)
             matchedOld.insert(pair.old)
             usedColors.insert(old[pair.old].colorIndex)
         }
+        var usedIDs = Set(new.indices.filter { matchedNew.contains($0) }.map { new[$0].id })
         var next = 0
+        var serial = 0
         for index in new.indices where !matchedNew.contains(index) {
             while usedColors.contains(next % paletteSize), usedColors.count < paletteSize { next += 1 }
             new[index].colorIndex = next % paletteSize
             usedColors.insert(new[index].colorIndex)
+            while usedIDs.contains("t\(serial)") || old.contains(where: { $0.id == "t\(serial)" }) { serial += 1 }
+            new[index].id = "t\(serial)"
+            usedIDs.insert(new[index].id)
+        }
+        for index in new.indices {
+            for child in new[index].children.indices {
+                new[index].children[child].id = "\(new[index].id).\(child)"
+            }
         }
     }
 

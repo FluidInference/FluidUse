@@ -31,6 +31,10 @@ public final class EmbeddingGemma2Manager: Sendable {
     public static func loadDefault(
         computeUnits: MLComputeUnits = .cpuAndNeuralEngine, progress: EmbeddingGemma2ModelStore.Progress? = nil
     ) async throws -> EmbeddingGemma2Manager {
+        // Before any download: the package needs multifunction support.
+        guard #available(macOS 15, iOS 18, *) else {
+            throw EmbeddingGemma2Error.unsupported("multifunction Core ML models need macOS 15 / iOS 18")
+        }
         if let path = ProcessInfo.processInfo.environment["EMBEDDINGGEMMA2_MODEL_DIR"], !path.isEmpty {
             return try await load(from: URL(fileURLWithPath: path), computeUnits: computeUnits)
         }
@@ -77,8 +81,10 @@ public final class EmbeddingGemma2Manager: Sendable {
             tokenizer: tokenizer, models: models, packModel: try await function("pack_256"), table: table)
     }
 
-    /// Embeddings for many texts, in order. Texts that fit are packed eight to a 256-token call; the calls run
-    /// concurrently (Core ML's async prediction is thread-safe).
+    /// Embeddings for many texts, in order. Texts that fit are packed eight to a 256-token call; up to
+    /// `maxInFlight` calls run concurrently (Core ML's async prediction is thread-safe).
+    public static let maxInFlight = 8
+
     public func embed(_ texts: [String], prompt: EmbeddingGemma2Prompt = .none) async throws -> [[Float]] {
         let tokenized = texts.map { tokenizer.encode(prompt.apply(to: $0), maxLength: Self.lengths.last!) }
         var bins: [[Int]] = []
@@ -99,15 +105,29 @@ public final class EmbeddingGemma2Manager: Sendable {
             used += ids.count
         }
         if !current.isEmpty { bins.append(current) }
+        // Each job is one model call: a bin of packed texts or one long text.
+        let jobs: [[Int]] = bins + singles.map { [$0] }
+        let packedJobs = bins.count
         return try await withThrowingTaskGroup(of: [(Int, [Float])].self) { group in
-            for bin in bins {
-                group.addTask { try await zip(bin, self.embedPacked(bin.map { tokenized[$0] })).map { ($0, $1) } }
-            }
-            for index in singles {
-                group.addTask { [(index, try await self.embed(ids: tokenized[index]))] }
-            }
             var result = [[Float]](repeating: [], count: texts.count)
-            for try await pairs in group { for (index, vector) in pairs { result[index] = vector } }
+            var next = 0
+            func addJob() {
+                guard next < jobs.count else { return }
+                let job = jobs[next]
+                let packed = next < packedJobs
+                next += 1
+                group.addTask {
+                    if packed {
+                        return zip(job, try await self.embedPacked(job.map { tokenized[$0] })).map { ($0, $1) }
+                    }
+                    return [(job[0], try await self.embed(ids: tokenized[job[0]]))]
+                }
+            }
+            for _ in 0..<min(Self.maxInFlight, jobs.count) { addJob() }
+            for try await pairs in group {
+                for (index, vector) in pairs { result[index] = vector }
+                addJob()
+            }
             return result
         }
     }
@@ -153,7 +173,8 @@ public final class EmbeddingGemma2Manager: Sendable {
         guard let matrix = output.featureValue(for: "embedding")?.multiArrayValue,
             matrix.count == Self.packSlots * Self.dimension
         else { throw EmbeddingGemma2Error.predictionFailed("missing packed embedding output") }
-        let rowStride = matrix.strides[0].intValue
+        // [8, 768] or [1, 8, 768]: the row stride is the second-to-last one.
+        let rowStride = matrix.strides[matrix.strides.count - 2].intValue
         return (0..<sequences.count).map { slot in
             (0..<Self.dimension).map { column in
                 let index = slot * rowStride + column
