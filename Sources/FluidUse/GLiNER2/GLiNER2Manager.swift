@@ -171,6 +171,11 @@ public actor GLiNER2Manager {
         }
     }
 
+    /// Tokens `classifyConcurrently(text:heads:)` would use, to fit text to `maximumLength` before calling it.
+    public nonisolated func tokenCount(text: String, heads: [(task: String, labels: [String])]) throws -> Int {
+        try tokenizer.classificationSequence(text: text, heads: heads).ids.count
+    }
+
     /// Exposes the native schema sequence for reference parity checks.
     public nonisolated func tokenSequence(
         text: String, task: String, labels: [String]
