@@ -3,12 +3,29 @@ import os
 
 /// Byte-level BPE tokenizer for Qwen `tokenizer.json` files (Qwen2 through Qwen3.5): NFC normalization, added tokens
 /// matched literally, Qwen's split regex, GPT-2 byte-to-unicode mapping, then merges by rank. `encode` adds no
-/// special tokens; `decode` drops them.
+/// special tokens; `decode` drops them. `.gpt2` switches to the GPT-2 / RoBERTa split regex without normalization.
 public final class QwenBPETokenizer: Sendable {
+    public enum PreTokenizer: Sendable {
+        case qwen
+        case gpt2
+
+        var pattern: String {
+            switch self {
+            case .qwen:
+                #"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+"#
+            case .gpt2:
+                #"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"#
+            }
+        }
+    }
+
+    private let preTokenizer: PreTokenizer
     private let vocabulary: [String: Int]
     private let mergeRanks: [String: Int]
     /// Added tokens, longest first, so a longer token wins over one it contains.
     private let addedTokens: [(content: String, id: Int)]
+    /// Added tokens that swallow the whitespace before them (`lstrip`, e.g. RoBERTa's `<mask>`).
+    private let leftStrippingIDs: Set<Int>
     private let byteToCharacter: [Character]
     /// Reverse tables for `decode`.
     private let tokenForID: [Int: String]
@@ -17,7 +34,8 @@ public final class QwenBPETokenizer: Sendable {
     /// Encoded pieces; ordinary text repeats the same words, so this saves most of the merge loops.
     private let cache = OSAllocatedUnfairLock<[String: [Int]]>(initialState: [:])
 
-    public init(tokenizerJsonURL: URL) throws {
+    public init(tokenizerJsonURL: URL, preTokenizer: PreTokenizer = .qwen) throws {
+        self.preTokenizer = preTokenizer
         let data = try Data(contentsOf: tokenizerJsonURL)
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
             let model = root["model"] as? [String: Any], model["type"] as? String == "BPE",
@@ -55,22 +73,22 @@ public final class QwenBPETokenizer: Sendable {
         for (byte, character) in byteToCharacter.enumerated() { byteForCharacter[character] = UInt8(byte) }
         self.byteForCharacter = byteForCharacter
         specialIDs = Set(addedTokens.map(\.id))
-        _ = try Self.splitter()
+        leftStrippingIDs = Set(
+            added.compactMap { entry in (entry["lstrip"] as? Bool ?? false) ? entry["id"] as? Int : nil })
+        _ = try splitter()
     }
 
-    /// Qwen's pre-tokenizer split. Built per call: NSRegularExpression is not Sendable.
-    private static func splitter() throws -> NSRegularExpression {
-        try NSRegularExpression(
-            pattern:
-                #"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+"#
-        )
+    /// Pre-tokenizer split. Built per call: NSRegularExpression is not Sendable.
+    private func splitter() throws -> NSRegularExpression {
+        try NSRegularExpression(pattern: preTokenizer.pattern)
     }
 
     /// Token ids for `text`, without any special tokens around it.
     public func encode(_ text: String) throws -> [Int] {
-        let splitter = try Self.splitter()
+        let splitter = try splitter()
         var ids: [Int] = []
-        for (segment, addedID) in splitAddedTokens(text.precomposedStringWithCanonicalMapping) {
+        let normalized = preTokenizer == .qwen ? text.precomposedStringWithCanonicalMapping : text
+        for (segment, addedID) in splitAddedTokens(normalized) {
             if let addedID {
                 ids.append(addedID)
                 continue
@@ -114,8 +132,12 @@ public final class QwenBPETokenizer: Sendable {
                 parts.append((String(rest), nil))
                 break
             }
-            if found.range.lowerBound > rest.startIndex {
-                parts.append((String(rest[..<found.range.lowerBound]), nil))
+            var before = rest[..<found.range.lowerBound]
+            if leftStrippingIDs.contains(found.id) {
+                while let last = before.last, last.isWhitespace { before = before.dropLast() }
+            }
+            if !before.isEmpty {
+                parts.append((String(before), nil))
             }
             parts.append(("", found.id))
             rest = rest[found.range.upperBound...]

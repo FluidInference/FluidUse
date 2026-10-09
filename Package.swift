@@ -60,6 +60,9 @@ let package = Package(
         .executableTarget(
             name: "IssueTriageDemo", dependencies: ["FluidUse"], exclude: ["README.md", "fetch-issues.sh"]),
         .executableTarget(name: "Vela2Check", dependencies: ["FluidUse"]),
+        .executableTarget(name: "EvokeCheck", dependencies: ["FluidUse"]),
+        .executableTarget(
+            name: "EvokeSearchDemo", dependencies: ["FluidUse"], exclude: ["README.md", "fetch-posts.py"]),
         .executableTarget(name: "GuardrailDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
         .executableTarget(name: "FrontDoorDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
         .executableTarget(name: "ShortReplyCheck", dependencies: ["FluidUse"]),
