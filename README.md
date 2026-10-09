@@ -276,6 +276,28 @@ PII-masked before sending, replies checked against a source document) and
 [Sources/FrontDoorDemo](Sources/FrontDoorDemo/README.md) (1,000 synthetic chatbot messages screened and routed at ~90
 messages per second: guard on the Neural Engine, route + PII on the GPU).
 
+## d1-omni-600M decisions and moderation
+
+`D1OmniManager` runs the text path of Liquid AI's [d1-omni-600M](https://huggingface.co/LiquidAI/d1-omni-600M)
+(LFM2.5-Encoder-350M trunk + decision head; weights under the LFM Open License v1.0) on Core ML: yes/no, choice and
+score questions answered in one pass with zero generated tokens, calibrated with the release's temperatures. The
+pinned snapshot downloads from
+[FluidInference/d1-omni-600m-coreml](https://huggingface.co/FluidInference/d1-omni-600m-coreml) on first use (~735 MB,
+one multifunction package, macOS 15 / iOS 18). 99.1% of ops run on the Neural Engine; the Neural Engine's fused SiLU is
+replaced by its tanh form, which keeps answers matching PyTorch (0 / 5,000 moderation flags differ).
+
+```swift
+let d1 = try await D1OmniManager.load(from: try await D1OmniModelStore.ensure(), computeUnits: .cpuAndNeuralEngine)
+let answer = try await d1.answer(
+    state: "I was charged twice this month, please refund one of them.",
+    question: .choice("Which team should handle this?",
+                      options: [("billing", "Charges, refunds, invoices"), ("technical", "App or site faults")]))
+print(answer.probabilities, answer.selectedIndex, answer.predictionMilliseconds)
+```
+
+[Sources/ModerationDemo](Sources/ModerationDemo/README.md) moderates 5,000 real Civil Comments at ~240–300 comments per
+second with the Neural Engine and GPU together (95.4% agreement with human raters).
+
 ## Short replies
 
 `ShortReplyManager` drafts one short reply to a social post with a sub-1B model:

@@ -77,6 +77,9 @@ let package = Package(
         .executableTarget(name: "ShortReplyCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "ShortReplyDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "mock-feed"]),
         .executableTarget(name: "GLiClassServe", dependencies: ["FluidUse"]),
+        .target(name: "Moderation", dependencies: ["FluidUse"], resources: [.copy("Resources/civil-comments-5000.json")]),
+        .executableTarget(name: "ModerationCheck", dependencies: ["Moderation", "FluidUse"]),
+        .executableTarget(name: "ModerationDemo", dependencies: ["Moderation", "FluidUse"], exclude: ["README.md"]),
         .executableTarget(
             name: "KevGuessWhoDemo", dependencies: ["FluidUse", "SortAnything"], exclude: ["README.md", "demo.sh"]),
         .testTarget(
