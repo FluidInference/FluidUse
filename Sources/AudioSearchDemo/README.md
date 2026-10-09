@@ -14,6 +14,9 @@ The first run downloads the models (about 1.1 GB, checksum-verified) from
 [FluidInference/embeddinggemma-2-coreml](https://huggingface.co/FluidInference/embeddinggemma-2-coreml) and compiles
 them once (a few minutes). Needs macOS 15+.
 
+- **Hands-free by default:** it indexes on launch, then types each suggested query, plays the top three windows
+  (6 s each, `--clip=`), and moves on, round and round. **Space** (Stop/Auto) or typing yourself ends it;
+  `--manual` starts without it.
 - **Index** (⌘↩) decodes every file to 16 kHz mono, then embeds 10 s windows across all files with four in flight, so
   the GPU (audio encoder) and the Neural Engine (text model) work at the same time. **Reset** (⌘R) clears the index.
 - Type a query (or pick a suggestion): every window is ranked in one matrix-vector product; ▶ plays that window.

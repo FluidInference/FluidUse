@@ -32,6 +32,13 @@ struct Header: View {
                 .keyboardShortcut(.return, modifiers: [.command])
                 .disabled(model.phase != .ready)
                 Button {
+                    model.toggleAutoPlay()
+                } label: {
+                    Label(model.autoPlay ? "Stop" : "Auto", systemImage: model.autoPlay ? "pause.fill" : "sparkles")
+                }
+                .keyboardShortcut(.space, modifiers: [])
+                .disabled(model.phase != .done)
+                Button {
                     model.reset()
                 } label: {
                     Label("Reset", systemImage: "arrow.counterclockwise")
@@ -80,7 +87,7 @@ struct Header: View {
         case .loading(let message): message
         case .ready: "Ready · press Index (⌘↩)"
         case .indexing: "Indexing \(model.windowsDone)/\(model.windowsTotal) windows…"
-        case .done: "Indexed · search below"
+        case .done: model.autoPlay ? "Hands-free · top 3 for each query" : "Indexed · search below"
         case .failed(let message): message
         }
     }

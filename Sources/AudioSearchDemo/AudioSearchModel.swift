@@ -49,6 +49,9 @@ final class AudioSearchModel: ObservableObject {
     @Published private(set) var queryMilliseconds: Double = 0
     @Published private(set) var playing: String?
     @Published var query = ""
+    /// Hands-free mode (default; `--manual` turns it off): index on launch, then type each suggested query and play
+    /// its top three windows, round and round. Typing or pressing play yourself switches it off.
+    @Published private(set) var autoPlay = !CommandLine.arguments.contains("--manual")
 
     private var entries: [Entry] = []
     /// Every window's embedding, row after row, so a query is one matrix-vector product.
@@ -58,6 +61,11 @@ final class AudioSearchModel: ObservableObject {
     private var player: AVAudioPlayer?
     private var searchTask: Task<Void, Never>?
     private var runTask: Task<Void, Never>?
+    private var autoTask: Task<Void, Never>?
+    private var autoTyping = false
+    /// Seconds of each result to play in hands-free mode (`--clip=`).
+    private let clipSeconds = max(
+        1, CommandLine.arguments.first { $0.hasPrefix("--clip=") }.flatMap { Double($0.dropFirst(7)) } ?? 6)
 
     var realTimeFactor: Double { indexSeconds > 0 ? audioSeconds / indexSeconds : 0 }
     var allSuggestions: [String] { collections.flatMap(\.suggestions) }
@@ -94,7 +102,7 @@ final class AudioSearchModel: ObservableObject {
                     format: "models loaded in %.1f s · audio encoder on the GPU, text model on the Neural Engine",
                     Double(DispatchTime.now().uptimeNanoseconds - loadStart) / 1e9))
             phase = .ready
-            if CommandLine.arguments.contains("--autostart") { start() }
+            if autoPlay || CommandLine.arguments.contains("--autostart") { start() }
         } catch {
             phase = .failed(error.localizedDescription)
             DemoLog.line("failed: \(error.localizedDescription)", color: 196, bold: true)
@@ -107,6 +115,8 @@ final class AudioSearchModel: ObservableObject {
     }
 
     func reset() {
+        autoTask?.cancel()
+        autoTask = nil
         runTask?.cancel()
         runTask = nil
         stop()
@@ -167,7 +177,11 @@ final class AudioSearchModel: ObservableObject {
             if let preset = CommandLine.arguments.first(where: { $0.hasPrefix("--query=") }) {
                 query = String(preset.dropFirst(8))
             }
-            if !query.isEmpty { search() }
+            if autoPlay {
+                startAutoPlay()
+            } else if !query.isEmpty {
+                search()
+            }
         } catch is CancellationError {
         } catch {
             phase = .failed(error.localizedDescription)
@@ -184,54 +198,116 @@ final class AudioSearchModel: ObservableObject {
         indexSeconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
     }
 
-    /// Ranks every indexed window against the query (debounced while typing).
+    /// Ranks every indexed window against the query (debounced while typing). Typing by hand ends hands-free mode.
     func search() {
+        if autoTyping { return }
+        stopAutoPlay()
         searchTask?.cancel()
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let text, !query.isEmpty, !entries.isEmpty else {
+        guard !query.isEmpty, !entries.isEmpty else {
             results = []
             return
         }
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(120))
-            guard !Task.isCancelled else { return }
-            let begin = DispatchTime.now().uptimeNanoseconds
-            guard let vector = try? await text.embed(query, prompt: .searchQuery), !Task.isCancelled else { return }
-            var scores = [Float](repeating: 0, count: entries.count)
-            cblas_sgemv(
-                CblasRowMajor, CblasNoTrans, Int32(entries.count), Int32(vector.count), 1, matrix, Int32(vector.count),
-                vector, 1, 0, &scores, 1)
-            let top = scores.indices.sorted { scores[$0] > scores[$1] }.prefix(25)
-            results = top.map { Result(entry: entries[$0], score: scores[$0]) }
-            queryMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - begin) / 1e6
+            guard !Task.isCancelled, let ranked = await rank(query), !Task.isCancelled else { return }
+            results = ranked
+        }
+    }
+
+    /// Top 25 windows for `query`: one text embedding, then one matrix-vector product over every window.
+    private func rank(_ query: String) async -> [Result]? {
+        guard let text else { return nil }
+        let begin = DispatchTime.now().uptimeNanoseconds
+        guard let vector = try? await text.embed(query, prompt: .searchQuery) else { return nil }
+        var scores = [Float](repeating: 0, count: entries.count)
+        cblas_sgemv(
+            CblasRowMajor, CblasNoTrans, Int32(entries.count), Int32(vector.count), 1, matrix, Int32(vector.count),
+            vector, 1, 0, &scores, 1)
+        let ranked = scores.indices.sorted { scores[$0] > scores[$1] }.prefix(25).map {
+            Result(entry: entries[$0], score: scores[$0])
+        }
+        queryMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - begin) / 1e6
+        DemoLog.line(
+            String(format: "🔎 “%@” → %d windows ranked in %.0f ms", query, entries.count, queryMilliseconds), color: 81)
+        for result in ranked.prefix(3) {
             DemoLog.line(
-                String(format: "🔎 “%@” → %d windows ranked in %.0f ms", query, entries.count, queryMilliseconds),
-                color: 81)
-            for result in results.prefix(3) {
-                DemoLog.line(
-                    String(
-                        format: "      %.3f  %@  %@ @ %@", result.score, collections[result.entry.collection].name,
-                        result.entry.file.lastPathComponent, Self.clock(result.entry.start)))
+                String(
+                    format: "      %.3f  %@  %@ @ %@", result.score, collections[result.entry.collection].name,
+                    result.entry.file.lastPathComponent, Self.clock(result.entry.start)))
+        }
+        return ranked
+    }
+
+    func toggleAutoPlay() {
+        if autoPlay { stopAutoPlay() } else if phase == .done { startAutoPlay() }
+    }
+
+    private func startAutoPlay() {
+        autoTask?.cancel()
+        autoPlay = true
+        DemoLog.event("▶ hands-free: each query, then its top 3 (\(Int(clipSeconds)) s each)")
+        autoTask = Task { [weak self] in
+            while let self, !Task.isCancelled {
+                let queries = self.allSuggestions
+                guard !queries.isEmpty else { return }
+                for query in queries {
+                    guard !Task.isCancelled else { return }
+                    // Type it like a person would, then search.
+                    self.autoTyping = true
+                    self.query = ""
+                    for character in query {
+                        self.query.append(character)
+                        try? await Task.sleep(for: .milliseconds(35))
+                    }
+                    self.autoTyping = false
+                    guard !Task.isCancelled, let ranked = await self.rank(query) else { return }
+                    self.results = ranked
+                    for (rank, result) in ranked.prefix(3).enumerated() {
+                        guard !Task.isCancelled else { return }
+                        DemoLog.line(
+                            String(
+                                format: "   ▶ #%d  %@  %@ @ %@", rank + 1,
+                                self.collections[result.entry.collection].name,
+                                result.entry.file.lastPathComponent, Self.clock(result.entry.start)), color: 120)
+                        await self.playClip(result, seconds: min(self.clipSeconds, result.entry.duration))
+                    }
+                    try? await Task.sleep(for: .seconds(1.2))
+                }
             }
         }
     }
 
-    func play(_ result: Result) {
-        if playing == result.id {
-            stop()
-            return
-        }
+    private func stopAutoPlay() {
+        guard autoPlay || autoTask != nil else { return }
+        autoTask?.cancel()
+        autoTask = nil
+        autoTyping = false
+        autoPlay = false
+        stop()
+        DemoLog.event("❚❚ hands-free off")
+    }
+
+    /// Plays `seconds` of a result's window and returns when it ends (or is stopped).
+    private func playClip(_ result: Result, seconds: TimeInterval) async {
         stop()
         guard let player = try? AVAudioPlayer(contentsOf: result.entry.file) else { return }
         player.currentTime = result.entry.start
         player.play()
         self.player = player
         playing = result.id
-        let id = result.id
-        Task { [weak self] in
-            try? await Task.sleep(for: .seconds(result.entry.duration))
-            if self?.playing == id { self?.stop() }
+        try? await Task.sleep(for: .seconds(seconds))
+        if playing == result.id { stop() }
+    }
+
+    /// Play button: plays (or stops) one window; ends hands-free mode.
+    func play(_ result: Result) {
+        stopAutoPlay()
+        if playing == result.id {
+            stop()
+            return
         }
+        Task { await playClip(result, seconds: result.entry.duration) }
     }
 
     func stop() {
