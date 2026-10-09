@@ -90,20 +90,37 @@ final class TopicSortModel: ObservableObject {
             if let limit = Self.value("limit").flatMap(Int.init) { source = Array(source.prefix(limit)) }
             topicCount = Self.value("topics").flatMap(Int.init) ?? 6
             phase = .loading("Loading EmbeddingGemma 2 on the Neural Engine…")
-            let manager = try await EmbeddingGemma2Manager.loadDefault { [weak self] file, bytes in
-                Task { @MainActor in
-                    self?.phase = .loading(
-                        bytes == 0 ? "Fetching \(file)…" : "Loading EmbeddingGemma 2 on the Neural Engine…")
+            DemoLog.event("Sort by topic · \(source.count) posts · EmbeddingGemma 2 on the Neural Engine")
+            let loadStart = DispatchTime.now().uptimeNanoseconds
+            // The first load of a new model copy compiles all functions for the Neural Engine (minutes, once);
+            // a ticking status keeps that from looking like a hang.
+            let ticker = Task { @MainActor [weak self] in
+                var seconds = 0
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1))
+                    seconds += 1
+                    guard let self, case .loading = self.phase else { continue }
+                    self.phase = .loading(
+                        "Loading on the Neural Engine… \(seconds) s"
+                            + (seconds >= 8 ? " (first launch compiles the model once, ~2 min)" : ""))
                 }
+            }
+            defer { ticker.cancel() }
+            let manager = try await EmbeddingGemma2Manager.loadDefault { file, bytes in
+                if bytes == 0 { DemoLog.model("fetching \(file) from Hugging Face…") }
             }
             self.manager = manager
             _ = try await manager.embed("warm up", prompt: .clustering)
+            DemoLog.model(
+                String(
+                    format: "model loaded in %.1f s · 7 functions (embed_32…512, pack_256 = 8 posts per call)",
+                    Double(DispatchTime.now().uptimeNanoseconds - loadStart) / 1e9))
             phase = .ready
             lastEvent = "\(source.count) posts queued. Press Start."
             if CommandLine.arguments.contains("--autostart") { start() }
         } catch {
             phase = .failed(error.localizedDescription)
-            print("failed: \(error.localizedDescription)")
+            DemoLog.line("failed: \(error.localizedDescription)", color: 196, bold: true)
         }
     }
 
@@ -112,9 +129,11 @@ final class TopicSortModel: ObservableObject {
         if phase == .paused {
             pauseRequested = false
             phase = .streaming
+            DemoLog.event("▶ resume at \(posts.count) posts")
             return
         }
         guard phase == .ready else { return }
+        DemoLog.event("▶ start: streaming \(source.count) posts")
         pauseRequested = false
         runTask = Task { await run() }
     }
@@ -122,10 +141,12 @@ final class TopicSortModel: ObservableObject {
     func pause() {
         guard isRunning else { return }
         pauseRequested = true
+        DemoLog.event("❚❚ pause at \(posts.count) posts")
     }
 
     /// Clears every sorted post and topic; Start replays the stream from the first post.
     func reset() {
+        DemoLog.event("↺ reset")
         runTask?.cancel()
         runTask = nil
         pauseRequested = false
@@ -159,6 +180,7 @@ final class TopicSortModel: ObservableObject {
                 let tick = DispatchTime.now().uptimeNanoseconds
                 let batch = Array(source[posts.count..<min(posts.count + Self.batchSize, source.count)])
                 let embedded = try await Self.embed(batch, manager: manager)
+                let embedMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - tick) / 1e6
                 try Task.checkCancellation()
                 for (post, vector) in zip(batch, embedded) {
                     let index = posts.count
@@ -168,6 +190,7 @@ final class TopicSortModel: ObservableObject {
                 }
                 activeSeconds += Double(DispatchTime.now().uptimeNanoseconds - tick) / 1e9
                 postsPerSecond = Double(posts.count) / max(activeSeconds, 1e-6)
+                logBatch(batch.count, milliseconds: embedMilliseconds)
                 if let point = resortAt, posts.count >= point {
                     try await resort()
                     resortAt = nextResort.next()
@@ -178,7 +201,8 @@ final class TopicSortModel: ObservableObject {
             phase = .done
             lastEvent = String(
                 format: "%d posts sorted at %.0f posts/s. Pick a topic and press Split.", posts.count, postsPerSecond)
-            print(String(format: "streamed %d posts at %.0f posts/s (embed + file)", posts.count, postsPerSecond))
+            DemoLog.event(
+                String(format: "streamed %d posts at %.0f posts/s (embed + file)", posts.count, postsPerSecond))
             printTree()
             if CommandLine.arguments.contains("--auto-split"),
                 let largest = topics.max(by: { $0.members.count < $1.members.count })
@@ -203,7 +227,7 @@ final class TopicSortModel: ObservableObject {
         } catch is CancellationError {
         } catch {
             phase = .failed(error.localizedDescription)
-            print("failed: \(error.localizedDescription)")
+            DemoLog.line("failed: \(error.localizedDescription)", color: 196, bold: true)
         }
     }
 
@@ -233,7 +257,8 @@ final class TopicSortModel: ObservableObject {
         let seconds = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
         lastEvent = String(
             format: "Re-sorted %d posts into %d broad topics in %.2f s", posts.count, topics.count, seconds)
-        print(lastEvent + ": " + topics.map { "\($0.name) (\($0.members.count))" }.joined(separator: " | "))
+        DemoLog.line("↻ " + lastEvent, color: 220)
+        for topic in topics { DemoLog.line("    \(DemoLog.topic(topic))  \(topic.members.count)") }
         phase = .streaming
     }
 
@@ -256,7 +281,8 @@ final class TopicSortModel: ObservableObject {
             }
             lastEvent = String(
                 format: "Split “%@” into %d subtopics in %.2f s", topic.name, children.count, seconds)
-            print(lastEvent + ": " + children.map { "\($0.name) (\($0.members.count))" }.joined(separator: " | "))
+            DemoLog.line("✂ " + lastEvent, color: 220, bold: true)
+            for child in children { DemoLog.line("    \(DemoLog.topic(child))  \(child.members.count)") }
         } catch {
             lastEvent = "Split failed: \(error.localizedDescription)"
         }
@@ -265,6 +291,7 @@ final class TopicSortModel: ObservableObject {
 
     func merge(_ id: String) {
         guard let index = topics.firstIndex(where: { $0.id == id }) else { return }
+        DemoLog.event("⤺ merged “\(topics[index].name)” back into one topic")
         withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
             topics[index].children = []
             rebuildPaths()
@@ -295,9 +322,24 @@ final class TopicSortModel: ObservableObject {
 
     private func printTree() {
         for topic in topics {
-            print("[\(topic.members.count)] \(topic.name)")
-            for child in topic.children { print("    [\(child.members.count)] \(child.name)") }
+            DemoLog.line("[\(topic.members.count)] \(DemoLog.topic(topic))")
+            for child in topic.children { DemoLog.line("    [\(child.members.count)] \(DemoLog.topic(child))") }
         }
+    }
+
+    /// One line per batch: Neural Engine time and rate, plus one of the batch's posts and where it went.
+    private func logBatch(_ count: Int, milliseconds: Double) {
+        let calls = (count + EmbeddingGemma2Manager.packSlots - 1) / EmbeddingGemma2Manager.packSlots
+        DemoLog.model(
+            String(
+                format: "%d posts · ~%d calls · %.0f ms · %.0f posts/s · %d/%d", count, calls, milliseconds,
+                Double(count) / max(milliseconds / 1000, 1e-6), posts.count, source.count))
+        guard let last = posts.indices.last else { return }
+        let text = posts[last].text.replacingOccurrences(of: "\n", with: " ")
+        let snippet = text.count > 70 ? String(text.prefix(70)) + "…" : text
+        let destination =
+            paths[last].map { $0.map(DemoLog.topic).joined(separator: " › ") } ?? "(topics after 64 posts)"
+        DemoLog.line("      “\(snippet)” → \(destination)")
     }
 }
 
