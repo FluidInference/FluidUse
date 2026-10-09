@@ -54,7 +54,7 @@ final class DemoModel {
     /// Restart button: drop the index, encode every post again, then start a fresh autoplay run.
     func restart() {
         guard encoder != nil else { return }
-        stopAutoplay(resume: false)
+        stopAutoplay()
         Task {
             do {
                 try await reindexAndPlay()
@@ -104,7 +104,6 @@ final class DemoModel {
 
     /// Scripted loop: type each query, show keyword results, then flip to Evoke.
     func startAutoplay() {
-        resumeTask?.cancel()
         autoplayTask?.cancel()
         searchTask?.cancel()
         isAutoplaying = true
@@ -112,14 +111,14 @@ final class DemoModel {
         encodesSinceTick = 0
         let deadline = ContinuousClock.now + .seconds(Launch.autoplaySeconds)
         autoplayTask = Task {
-            // Runs for one recording take, then stops on a fully typed query (no auto-resume).
+            // One recording take: stops on a fully typed query once the time is up (queries take < 1 s each).
             var typed = 0
             while !Task.isCancelled {
                 for q in Self.suggestions {
                     guard await play(q) else { return }
                     typed += 1
                     if ContinuousClock.now >= deadline {
-                        stopAutoplay(resume: false)
+                        stopAutoplay()
                         caption = "Done · \(typed) queries typed live"
                         return
                     }
@@ -128,21 +127,12 @@ final class DemoModel {
         }
     }
 
-    private var resumeTask: Task<Void, Never>?
-
-    /// Pauses on user interaction; resumes by itself after 20 s idle unless `resume` is false.
-    func stopAutoplay(resume: Bool = true) {
+    /// Stops the take and stays paused until Auto demo or Restart (never resumes by itself).
+    func stopAutoplay() {
         autoplayTask?.cancel()
         autoplayTask = nil
         isAutoplaying = false
         caption = ""
-        resumeTask?.cancel()
-        guard resume else { return }
-        resumeTask = Task {
-            try? await Task.sleep(for: .seconds(20))
-            guard !Task.isCancelled else { return }
-            startAutoplay()
-        }
     }
 
     /// No pacing: every keystroke is encoded and rendered before the next one is typed.

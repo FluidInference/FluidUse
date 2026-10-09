@@ -96,7 +96,7 @@ struct FeedColumn: View {
                 .buttonStyle(.plain)
                 .help("Re-index every post, then run the demo again")
                 Button {
-                    model.isAutoplaying ? model.stopAutoplay(resume: false) : model.startAutoplay()
+                    model.isAutoplaying ? model.stopAutoplay() : model.startAutoplay()
                 } label: {
                     Label(
                         model.isAutoplaying ? "Pause demo" : "Auto demo",

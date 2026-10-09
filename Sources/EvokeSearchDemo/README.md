@@ -17,8 +17,8 @@ The first launch downloads the 64-token package (58 MB, checksum-pinned) into th
 points at a local copy instead.
 
 - **Autoplay** types each suggested query with no pauses: every keystroke is encoded, searched and drawn before the
-  next. It runs for one take (`--seconds`, default 55) and stops on a fully typed query. Typing or clicking pauses
-  it (resuming after 20 s idle). The banner shows live searches per second.
+  next. Each take runs under a minute (`--seconds`, default and max 58) and stops on a fully typed query; it stays
+  paused until Auto demo or Restart. Typing or clicking pauses it. The banner shows live searches per second.
 - **Restart** drops the index, re-encodes every post (progress and time in the app and the log), and starts a new take.
 - **Keyword / Evoke tabs** compare BM25 over literal words with Evoke terms. Chips under each post show the terms that
   matched it.
