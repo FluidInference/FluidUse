@@ -24,15 +24,22 @@ enum DemoLog {
                 seconds * 1000 / Double(max(posts, 1)), termsPerPost))
     }
 
+    /// The last logged query, so a trailing space (same trimmed text) doesn't print twice.
+    @MainActor private static var lastQuery = ""
+
+    @MainActor
     static func search(
         _ query: String, ms: Double, terms: [(word: String, weight: Float, evoked: Bool)], hits: [SearchHit]
     ) {
-        let expansion = terms.prefix(6).map { $0.evoked ? "\(amber)\($0.word)\(reset)" : $0.word }
+        guard query != lastQuery else { return }
+        lastQuery = query
+        // Fits a ~100-column pane: latency, query, top expanded terms (amber = not typed), hit count.
+        let expansion = terms.prefix(5).map { $0.evoked ? "\(amber)\($0.word)\(reset)" : $0.word }
             .joined(separator: " ")
-        let top = hits.first.map { "@\($0.tweet.handle)" } ?? "-"
-        let padded = query.count < 24 ? query + String(repeating: " ", count: 24 - query.count) : query
+        let shown = query.count > 22 ? String(query.prefix(21)) + "…" : query
+        let padded = shown + String(repeating: " ", count: max(0, 22 - shown.count))
         print(
-            String(format: "\(cyan)%6.2f ms\(reset) ANE  ", ms) + "\(bold)\(padded)\(reset) → \(expansion)"
-                + "  \(dim)\(hits.count) hits · top \(top)\(reset)")
+            String(format: "\(cyan)%5.2f ms\(reset) ", ms) + "\(bold)\(padded)\(reset) → \(expansion)"
+                + "  \(dim)\(hits.count) hits\(reset)")
     }
 }

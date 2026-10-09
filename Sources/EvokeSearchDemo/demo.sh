@@ -22,8 +22,11 @@ if ! tmux has-session -t evoke-search 2>/dev/null; then
     "$MONITOR; echo; echo \"monitor exited (\$?) — press Enter to retry\"; read; $MONITOR"
   tmux set-option -t evoke-search remain-on-exit on
   tmux split-window -v -t evoke-search "tail -n 300 -F '$LOG'"
+fi
+# Open a window whenever none is attached (also after the previous one was closed).
+if [[ -z "$(tmux list-clients -t evoke-search 2>/dev/null)" ]]; then
   if [[ -d /Applications/Ghostty.app ]]; then
-    # Ghostty on macOS runs `-e` through a launcher script reliably; a bare `-e tmux attach` opened a plain shell.
+    # Ghostty on macOS runs `-e` through an executable launcher script; a bare `-e tmux attach` opened a plain shell.
     ATTACH=${TMPDIR:-/tmp}/evoke-search-attach.sh
     printf '#!/bin/zsh\nexec %s attach -t evoke-search\n' "$(command -v tmux)" > "$ATTACH"
     chmod +x "$ATTACH"
