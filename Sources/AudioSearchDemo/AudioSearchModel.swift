@@ -315,14 +315,13 @@ final class AudioSearchModel: ObservableObject {
         )
         autoTask = Task { [weak self] in
             var nextQuery = 0
-            // Indexing is its own thing: it runs in the background while the show goes on. The show starts as
-            // soon as there is something to search, and every search sees whatever is indexed by then.
-            if let self, self.indexedWindows == 0 {
-                if !self.isIndexing {
+            // Indexing comes first, on its own; the show starts once every file is searchable.
+            if let self, self.indexedWindows == 0 || self.isIndexing {
+                if !self.isIndexing, self.indexedWindows == 0 {
                     self.isIndexing = true
                     self.runTask = Task { await self.index() }
                 }
-                while !Task.isCancelled, self.indexedWindows < 64 { try? await Task.sleep(for: .milliseconds(100)) }
+                while !Task.isCancelled, self.isIndexing { try? await Task.sleep(for: .milliseconds(100)) }
             }
             while let self, !Task.isCancelled, self.indexedWindows > 0 {
                 // 🔎 Listen
@@ -330,8 +329,7 @@ final class AudioSearchModel: ObservableObject {
                 let deadline = ContinuousClock.now + .seconds(self.segmentSeconds)
                 let ticker = self.countDown(to: deadline)
                 let queries = self.allSuggestions
-                // Search speed shares the Neural Engine with indexing, so listening goes on until indexing is done.
-                while !Task.isCancelled, !queries.isEmpty, ContinuousClock.now < deadline || self.isIndexing {
+                while !Task.isCancelled, !queries.isEmpty, ContinuousClock.now < deadline {
                     let query = queries[nextQuery % queries.count]
                     nextQuery += 1
                     // Type it like a person would, then search.
@@ -347,7 +345,7 @@ final class AudioSearchModel: ObservableObject {
                     guard !Task.isCancelled, let ranked = await self.rank(query) else { break }
                     self.results = ranked
                     for (rank, result) in ranked.prefix(3).enumerated() {
-                        let left = self.isIndexing ? 60 : (deadline - ContinuousClock.now).components.seconds
+                        let left = (deadline - ContinuousClock.now).components.seconds
                         guard !Task.isCancelled, left > 0 else { break }
                         DemoLog.line(
                             String(

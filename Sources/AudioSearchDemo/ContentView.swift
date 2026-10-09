@@ -98,14 +98,11 @@ struct Header: View {
 
     private var status: String {
         switch (model.segment, model.phase) {
-        case (.listen, _):
-            model.isIndexing && model.segmentRemaining == 0
-                ? "🔎 Listening to the top 3 · search speed once indexing finishes"
-                : "🔎 Listening to the top 3 · \(model.segmentRemaining) s left"
+        case (.listen, _): "🔎 Listening to the top 3 · \(model.segmentRemaining) s left"
         case (.burst, _): "⚡ Searching as fast as it can · \(model.segmentRemaining) s left"
         case (nil, .loading(let message)): message
         case (nil, .ready): "Ready · press Index (⌘↩)"
-        case (nil, .indexing): "Indexing \(model.windowsDone)/\(model.windowsTotal) windows…"
+        case (nil, .indexing): "📥 Indexing \(model.windowsDone)/\(model.windowsTotal) windows · search starts when done"
         case (nil, .done): "Indexed · search below"
         case (nil, .failed(let message)): message
         }
