@@ -54,7 +54,7 @@ final class ChallengeModel: ObservableObject {
         ["bridge", "lighthouse", "ladder", "traffic light", "fire hydrant", "umbrella"],
     ]
     static let turboGrids = max(
-        1, CommandLine.arguments.first { $0.hasPrefix("--grids=") }.flatMap { Int($0.dropFirst(8)) } ?? 200)
+        1, CommandLine.arguments.first { $0.hasPrefix("--grids=") }.flatMap { Int($0.dropFirst(8)) } ?? 1000)
 
     private var text: EmbeddingGemma2Manager?
     private var vision: EmbeddingGemma2Vision?
@@ -141,7 +141,7 @@ final class ChallengeModel: ObservableObject {
             phase = .running("Turbo · \(Self.turboGrids) grids, no pauses")
             try await turbo()
             summary = String(
-                format: "%d grids, %d tiles in %.1f s · %.0f tiles/s · %.0f%% of tiles right · %d/%d grids perfect",
+                format: "%d grids, %d tiles in %.1f s · %.0f tiles/s · %.1f%% of tiles right · %d/%d grids perfect",
                 gridsDone, tilesDone, busySeconds, tilesPerSecond, 100 * accuracy, gridsSolved, gridsDone)
             DemoLog.event("■ " + summary)
             phase = .done

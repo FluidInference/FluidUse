@@ -12,6 +12,6 @@ Sources/TileChallengeDemo/demo.sh             # same, plus one terminal: macmon 
 ```
 
 It runs on its own: three mixed grids and three lookalike grids (bus vs fire truck, horse vs zebra…) at a watchable pace, then **turbo**
-(`--grids=200` by default): the next batch is decoded and embedded while the current grid is shown, and the counters
+(`--grids=1000` by default): the next batch is decoded and embedded while the current grid is shown, and the counters
 show photos per second, milliseconds per grid and accuracy against the true labels. Space stops or reruns it;
 `--manual` waits for Space.
