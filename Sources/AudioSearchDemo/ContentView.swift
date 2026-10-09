@@ -57,22 +57,27 @@ struct Header: View {
             }
             .frame(height: 6)
             HStack(spacing: 10) {
-                if model.segment == .burst {
-                    Tile(value: "\(model.burstQueries)", caption: "searches run")
-                    Tile(value: String(format: "%.0f", model.burstPerSecond), caption: "searches / second")
-                    Tile(value: String(format: "%.2f ms", model.burstMilliseconds), caption: "per search")
-                    Tile(
-                        value: String(format: "%.1f M", model.burstPerSecond * Double(model.indexedWindows) / 1e6),
-                        caption: "audio windows ranked / s")
-                } else {
-                    Tile(value: AudioSearchModel.clock(model.audioSeconds), caption: "audio indexed")
-                    Tile(value: String(format: "%.1f s", model.indexSeconds), caption: "indexing time")
-                    Tile(
-                        value: model.realTimeFactor == 0 ? "–" : String(format: "%.0f×", model.realTimeFactor),
-                        caption: "faster than real time")
-                    Tile(value: "\(model.indexedWindows)", caption: "windows searchable")
-                }
+                Tile(value: AudioSearchModel.clock(model.audioSeconds), caption: "audio indexed")
+                Tile(value: String(format: "%.1f s", model.indexSeconds), caption: "indexing time")
+                Tile(
+                    value: model.realTimeFactor == 0 ? "–" : String(format: "%.0f×", model.realTimeFactor),
+                    caption: model.isIndexing ? "faster than real time (indexing…)" : "faster than real time")
+                Tile(value: "\(model.indexedWindows)", caption: "windows searchable")
             }
+            HStack(spacing: 10) {
+                Tile(value: model.burstQueries == 0 ? "–" : "\(model.burstQueries)", caption: "searches run")
+                Tile(
+                    value: model.burstPerSecond == 0 ? "–" : String(format: "%.0f", model.burstPerSecond),
+                    caption: "searches / second")
+                Tile(
+                    value: model.burstMilliseconds == 0 ? "–" : String(format: "%.2f ms", model.burstMilliseconds),
+                    caption: "per search")
+                Tile(
+                    value: model.burstPerSecond == 0
+                        ? "–" : String(format: "%.1f M", model.burstPerSecond * Double(model.indexedWindows) / 1e6),
+                    caption: "audio windows ranked / s")
+            }
+            .opacity(model.segment == .burst ? 1 : 0.55)
             HStack(spacing: 8) {
                 ForEach(model.collections) { collection in
                     HStack(spacing: 5) {
@@ -93,8 +98,10 @@ struct Header: View {
 
     private var status: String {
         switch (model.segment, model.phase) {
-        case (.reading, _): "📥 Reading everything · searchable as it goes · \(model.segmentRemaining) s"
-        case (.listen, _): "🔎 Listening to the top 3 · \(model.segmentRemaining) s left"
+        case (.listen, _):
+            model.isIndexing && model.segmentRemaining == 0
+                ? "🔎 Listening to the top 3 · search speed once indexing finishes"
+                : "🔎 Listening to the top 3 · \(model.segmentRemaining) s left"
         case (.burst, _): "⚡ Searching as fast as it can · \(model.segmentRemaining) s left"
         case (nil, .loading(let message)): message
         case (nil, .ready): "Ready · press Index (⌘↩)"
