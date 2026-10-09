@@ -15,10 +15,10 @@ The first run downloads the models (about 1.1 GB, checksum-verified) from
 them once (a few minutes). Needs macOS 15+.
 
 - **Hands-free by default.** Indexing runs first, on its own (tiles: audio indexed, time, × real time). Once every
-  file is searchable the show alternates two 30 s segments (`--segment=`): **🔎 Listen** types each suggested query and
+  file is searchable it runs two 30 s segments, once (`--segment=`): **🔎 Listen** types each suggested query and
   plays its top three windows (4 s each, `--clip=`), and **⚡ Search speed** runs ~100 different queries back to back
   (64 at a time, embedded eight per Neural Engine call, ranked against every window with one matrix multiply; second
-  tile row). **Space** (Stop/Auto) or typing yourself ends it; `--manual` starts without it.
+  tile row), then stops. **Space** (Stop/Auto) stops or reruns it, typing yourself ends it; `--manual` starts without it.
 - **Index** (⌘↩) decodes every file to 16 kHz mono, then embeds 10 s windows across all files with four in flight, so
   the GPU (audio encoder) and the Neural Engine (text model) work at the same time. **Reset** (⌘R) clears the index.
 - Type a query (or pick a suggestion): every window is ranked in one matrix-vector product; ▶ plays that window.

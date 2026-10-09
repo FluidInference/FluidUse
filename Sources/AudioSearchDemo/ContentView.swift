@@ -103,7 +103,8 @@ struct Header: View {
         case (nil, .loading(let message)): message
         case (nil, .ready): "Ready · press Index (⌘↩)"
         case (nil, .indexing): "📥 Indexing \(model.windowsDone)/\(model.windowsTotal) windows · search starts when done"
-        case (nil, .done): "Indexed · search below"
+        case (nil, .done):
+            model.burstQueries > 0 ? "Done · type to search, or Auto (Space) to run it again" : "Indexed · search below"
         case (nil, .failed(let message)): message
         }
     }

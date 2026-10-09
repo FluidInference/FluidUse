@@ -67,6 +67,7 @@ final class AudioSearchModel: ObservableObject {
     @Published private(set) var burstQueries = 0
     @Published private(set) var burstPerSecond: Double = 0
     @Published private(set) var burstMilliseconds: Double = 0
+    private var burstAverage: Double = 0
 
     private var entries: [Entry] = []
     /// Every window's embedding, row after row, so a query is one matrix-vector product.
@@ -305,8 +306,8 @@ final class AudioSearchModel: ObservableObject {
         if autoPlay { stopAutoPlay() } else if !entries.isEmpty { startAutoPlay() }
     }
 
-    /// The hands-free show: the first read (searchable as it grows), then listen / search-speed segments, each
-    /// `segmentSeconds` long, round and round.
+    /// The hands-free show, once: index everything, then `segmentSeconds` of listening, then `segmentSeconds` of
+    /// search speed, then stop. Auto (Space) runs it again.
     private func startAutoPlay() {
         autoTask?.cancel()
         autoPlay = true
@@ -323,7 +324,8 @@ final class AudioSearchModel: ObservableObject {
                 }
                 while !Task.isCancelled, self.isIndexing { try? await Task.sleep(for: .milliseconds(100)) }
             }
-            while let self, !Task.isCancelled, self.indexedWindows > 0 {
+            // One run: listen, then search speed, then stop.
+            if let self, !Task.isCancelled, self.indexedWindows > 0 {
                 // 🔎 Listen
                 self.segment = .listen
                 let deadline = ContinuousClock.now + .seconds(self.segmentSeconds)
@@ -366,6 +368,14 @@ final class AudioSearchModel: ObservableObject {
                 let burstTicker = self.countDown(to: burstEnd)
                 await self.burst(until: burstEnd)
                 burstTicker.cancel()
+                guard !Task.isCancelled else { return }
+                self.autoTask = nil
+                self.autoPlay = false
+                self.segment = nil
+                DemoLog.event(
+                    String(
+                        format: "■ done: %@ of audio indexed at %.0fx real time; %d searches at %.0f/s",
+                        Self.clock(self.audioSeconds), self.realTimeFactor, self.burstQueries, self.burstAverage))
             }
         }
     }
@@ -441,6 +451,7 @@ final class AudioSearchModel: ObservableObject {
             }
         }
         let total = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e9
+        burstAverage = Double(burstQueries) / max(total, 1e-6)
         DemoLog.event(
             String(
                 format: "⚡ %d searches in %.0f s = %.0f/s on average, %.0f/s at the end", burstQueries, total,
