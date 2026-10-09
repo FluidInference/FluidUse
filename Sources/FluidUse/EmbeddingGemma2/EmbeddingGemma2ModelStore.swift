@@ -31,6 +31,22 @@ public enum EmbeddingGemma2ModelStore {
             sha256: "41d7b552caabe376e377dcbe1c8c5f9879853bc4f384a161bb1f886f19e84b56"),
     ]
 
+    static let visionRevision = "f9d567d5f36c0a98773cdba26034b8185a353834"
+
+    private static let visionAssets = [
+        Asset(
+            path: "position_embeddings.f16", sha256: "17de9480acc23638c0634a97ed89e51ed664433256d7d6f109587dcd91c79124"),
+        Asset(
+            path: "EmbeddingGemma2Vision.mlpackage/Manifest.json",
+            sha256: "376afe7b51608637312cd15a0a89b1d7863f9779502aaf5f12fa6b14c4272d8d"),
+        Asset(
+            path: "EmbeddingGemma2Vision.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+            sha256: "0085b5e04a13d000fe5969adeaa13d897f5a3cb7be60c76c8685c023747f89ef"),
+        Asset(
+            path: "EmbeddingGemma2Vision.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+            sha256: "5b5b6dd8d80aa438bf91ba143fbe90d56a2e25bfcf685a56b990aad71cf75232"),
+    ]
+
     private static let assets = [
         Asset(path: "config.json", sha256: "4ff891a28a5d55562b55ff3aa4ef362968d378629f9453f337cb70a9e1b45f61"),
         Asset(path: "tokenizer.json", sha256: "4d777ef5bdc1aa36227abdfb77c3e49e7b9c892d16e1b6bda41c393504828be4"),
@@ -60,6 +76,14 @@ public enum EmbeddingGemma2ModelStore {
         try await ensure(
             assets: audioAssets, revision: audioRevision, package: "EmbeddingGemma2Audio",
             verifiedName: ".verified-audio-\(audioRevision)", cacheDirectory: cacheDirectory, progress: progress)
+    }
+
+    /// Ensures the vision model (`EmbeddingGemma2Vision`) and its position tables exist, match their checksums, and
+    /// are compiled; returns the directory. Image tokens are embedded by the text model, so `ensure` is needed too.
+    public static func ensureVision(cacheDirectory: URL? = nil, progress: Progress? = nil) async throws -> URL {
+        try await ensure(
+            assets: visionAssets, revision: visionRevision, package: "EmbeddingGemma2Vision",
+            verifiedName: ".verified-vision-\(visionRevision)", cacheDirectory: cacheDirectory, progress: progress)
     }
 
     private static func ensure(

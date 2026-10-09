@@ -109,3 +109,19 @@ final class EmbeddingGemma2AudioWindowTests: XCTestCase {
         XCTAssertEqual(EmbeddingGemma2Audio.validFrames(samples: 100), 0)
     }
 }
+
+/// Image resize targets, against Hugging Face `get_aspect_ratio_preserving_size`.
+final class EmbeddingGemma2VisionSizeTests: XCTestCase {
+    func testTargetSizesMatchHuggingFace() {
+        let cases: [(width: Int, height: Int, budget: EmbeddingGemma2Vision.Budget, expected: (Int, Int))] = [
+            (500, 334, .detailed, (960, 624)), (334, 500, .fast, (288, 480)), (1920, 1080, .balanced, (720, 384)),
+            (4000, 100, .fast, (2496, 48)), (64, 64, .detailed, (768, 768)),
+        ]
+        for item in cases {
+            let size = EmbeddingGemma2Vision.targetSize(width: item.width, height: item.height, budget: item.budget)
+            XCTAssertEqual(size.width, item.expected.0, "\(item.width)x\(item.height)")
+            XCTAssertEqual(size.height, item.expected.1, "\(item.width)x\(item.height)")
+            XCTAssertLessThanOrEqual((size.width / 16) * (size.height / 16), item.budget.patches)
+        }
+    }
+}
