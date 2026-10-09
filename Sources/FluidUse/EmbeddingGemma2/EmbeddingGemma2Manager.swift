@@ -85,8 +85,12 @@ public final class EmbeddingGemma2Manager: Sendable {
     /// `maxInFlight` calls run concurrently (Core ML's async prediction is thread-safe).
     public static let maxInFlight = 8
 
-    public func embed(_ texts: [String], prompt: EmbeddingGemma2Prompt = .none) async throws -> [[Float]] {
-        let tokenized = texts.map { tokenizer.encode(prompt.apply(to: $0), maxLength: Self.lengths.last!) }
+    /// `maxTokens` (≤ 512) truncates each text first: shorter texts pack more per call.
+    public func embed(
+        _ texts: [String], prompt: EmbeddingGemma2Prompt = .none, maxTokens: Int = 512
+    ) async throws -> [[Float]] {
+        let limit = min(max(maxTokens, 3), Self.lengths.last!)
+        let tokenized = texts.map { tokenizer.encode(prompt.apply(to: $0), maxLength: limit) }
         var bins: [[Int]] = []
         var singles: [Int] = []
         var current: [Int] = []

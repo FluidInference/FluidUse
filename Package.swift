@@ -54,6 +54,10 @@ let package = Package(
         .executableTarget(name: "BookmarkSortCheck", dependencies: ["BookmarkSort", "FluidUse"]),
         .executableTarget(name: "BookmarkSortDemo", dependencies: ["BookmarkSort"]),
         .executableTarget(name: "AudioSearchCheck", dependencies: ["FluidUse"]),
+        .target(name: "CodeSearch"),
+        .executableTarget(name: "CodeSearchCheck", dependencies: ["CodeSearch", "FluidUse"]),
+        .executableTarget(
+            name: "CodeSearchDemo", dependencies: ["CodeSearch", "FluidUse"], exclude: ["README.md", "demo.sh"]),
         .executableTarget(name: "AudioSearchDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh"]),
         .executableTarget(
             name: "TopicSortDemo", dependencies: ["BookmarkSort", "FluidUse"], exclude: ["README.md", "demo.sh"],
@@ -81,6 +85,7 @@ let package = Package(
         ),
         .testTarget(name: "LayaTetrisTests", dependencies: ["LayaTetris"]),
         .testTarget(name: "BookmarkSortTests", dependencies: ["BookmarkSort"]),
+        .testTarget(name: "CodeSearchTests", dependencies: ["CodeSearch"]),
         .testTarget(name: "LayaTetrisDemoTests", dependencies: ["LayaTetrisDemo", "LayaTetris"]),
         .testTarget(name: "Game2048Tests", dependencies: ["Game2048"]),
         .testTarget(name: "GLiClass2048DemoTests", dependencies: ["GLiClass2048Demo", "Game2048"]),
