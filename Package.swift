@@ -53,6 +53,9 @@ let package = Package(
         .target(name: "BookmarkSort", dependencies: ["FluidUse"]),
         .executableTarget(name: "BookmarkSortCheck", dependencies: ["BookmarkSort", "FluidUse"]),
         .executableTarget(name: "BookmarkSortDemo", dependencies: ["BookmarkSort"]),
+        .executableTarget(
+            name: "TopicSortDemo", dependencies: ["BookmarkSort", "FluidUse"], exclude: ["README.md"],
+            resources: [.copy("Resources")]),
         .target(name: "ImageSort", dependencies: ["FluidUse"]),
         .executableTarget(name: "ImageSortCheck", dependencies: ["ImageSort", "FluidUse"]),
         .executableTarget(name: "ImageSortDemo", dependencies: ["ImageSort"], exclude: ["README.md"]),
@@ -75,6 +78,7 @@ let package = Package(
             resources: [.copy("Fixtures")]
         ),
         .testTarget(name: "LayaTetrisTests", dependencies: ["LayaTetris"]),
+        .testTarget(name: "BookmarkSortTests", dependencies: ["BookmarkSort"]),
         .testTarget(name: "LayaTetrisDemoTests", dependencies: ["LayaTetrisDemo", "LayaTetris"]),
         .testTarget(name: "Game2048Tests", dependencies: ["Game2048"]),
         .testTarget(name: "GLiClass2048DemoTests", dependencies: ["GLiClass2048Demo", "Game2048"]),
