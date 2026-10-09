@@ -15,8 +15,8 @@ The first run downloads the models (about 1.1 GB, checksum-verified) from
 them once (a few minutes). Needs macOS 15+.
 
 - **Play** (↩) runs the show once, in order: **📥 index** every file (16 kHz mono, 10 s windows across all files with
-  four in flight, so the GPU and the Neural Engine work at the same time), then **🔎 listen** for 30 s (type each
-  suggested query, play its top three windows, 4 s each), then **⚡ search speed** for 30 s (~100 different queries
+  four in flight, so the GPU and the Neural Engine work at the same time), then **🔎 listen** to four example searches (each
+  typed, then its top three windows play, 3 s each), then **⚡ search speed** for 30 s (~100 different queries
   back to back, 64 at a time, embedded eight per Neural Engine call, ranked against every window with one matrix
   multiply). **Pause** (Space) holds it anywhere, timers included; **Replay** (⌘R) starts over from an empty index.
 - When it is done, type a query (or pick a suggestion); ▶ plays a window. `--segment=` and `--clip=` change the step

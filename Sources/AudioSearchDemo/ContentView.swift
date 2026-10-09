@@ -102,7 +102,10 @@ struct Header: View {
         case .loading(let message): return message
         case .idle: return "Ready · press Play"
         case .indexing: return "📥 Indexing \(model.windowsDone)/\(model.windowsTotal) windows" + pause
-        case .listening: return "🔎 Listening to the top 3 · \(model.stepRemaining) s left" + pause
+        case .listening:
+            return
+                "🔎 Top 3 for each example search · \(AudioSearchModel.showcase.count - model.stepRemaining + 1) of \(AudioSearchModel.showcase.count)"
+                + pause
         case .speed: return "⚡ Searching as fast as it can · \(model.stepRemaining) s left" + pause
         case .finished: return "Done · Replay to run it again"
         case .failed(let message): return message

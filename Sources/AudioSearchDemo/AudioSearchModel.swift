@@ -76,7 +76,7 @@ final class AudioSearchModel: ObservableObject {
     private let gate = PauseGate()
     /// Seconds of each result to play (`--clip=`) and length of the listen and speed steps (`--segment=`).
     private let clipSeconds = max(
-        1, CommandLine.arguments.first { $0.hasPrefix("--clip=") }.flatMap { Double($0.dropFirst(7)) } ?? 4)
+        1, CommandLine.arguments.first { $0.hasPrefix("--clip=") }.flatMap { Double($0.dropFirst(7)) } ?? 3)
     private let segmentSeconds = max(
         5, CommandLine.arguments.first { $0.hasPrefix("--segment=") }.flatMap { Double($0.dropFirst(10)) } ?? 30)
 
@@ -193,7 +193,7 @@ final class AudioSearchModel: ObservableObject {
     /// Index, listen, speed, done.
     private func show() async {
         DemoLog.event(
-            "▶ play: index everything, \(Int(segmentSeconds)) s of listening to the top 3, \(Int(segmentSeconds)) s of searches as fast as they go"
+            "▶ play: index everything, top 3 of \(Self.showcase.count) example searches, \(Int(segmentSeconds)) s of searches as fast as they go"
         )
         await index()
         guard !Task.isCancelled, indexedWindows > 0 else { return }
@@ -288,23 +288,23 @@ final class AudioSearchModel: ObservableObject {
 
     // MARK: Listen
 
-    /// Types each suggested query, then plays its top three, for `segmentSeconds` of running time.
+    /// The listening step's examples: each is typed, then its top three play. Picked to land: two phrases from the
+    /// earnings call, two everyday sounds.
+    static let showcase = [
+        "forward-looking statements disclaimer", "a baby crying", "the operator opens the line for questions",
+        "someone laughing",
+    ]
+
+    /// Types each showcase query (those whose collection is present), then plays its top three.
     private func listen() async {
         step = .listening
-        let queries = allSuggestions
+        let available = Set(allSuggestions)
+        var queries = Self.showcase.filter { available.contains($0) }
+        if queries.isEmpty { queries = Array(allSuggestions.prefix(4)) }
         guard !queries.isEmpty else { return }
-        let start = activeNow
-        let length = UInt64(segmentSeconds * 1e9)
-        let ticker = tick { [weak self] in
-            guard let self else { return }
-            self.stepRemaining = max(0, Int((Double(length) - Double(self.activeNow - start)) / 1e9))
-        }
-        defer { ticker.cancel() }
-        var next = 0
-        func left() -> Double { (Double(length) - Double(activeNow - start)) / 1e9 }
-        while !Task.isCancelled, left() > 0 {
-            let query = queries[next % queries.count]
-            next += 1
+        for (number, query) in queries.enumerated() {
+            guard !Task.isCancelled else { return }
+            stepRemaining = queries.count - number
             showQuery = ""
             self.query = ""
             for character in query {
@@ -317,15 +317,15 @@ final class AudioSearchModel: ObservableObject {
             guard !Task.isCancelled, let ranked = await rank(query) else { return }
             results = ranked
             for (rank, result) in ranked.prefix(3).enumerated() {
-                guard !Task.isCancelled, left() > 0.5 else { break }
+                guard !Task.isCancelled else { return }
                 DemoLog.line(
                     String(
                         format: "   ▶ #%d  %@  %@ @ %@", rank + 1, collections[result.entry.collection].name,
                         result.entry.file.lastPathComponent, Self.clock(result.entry.start)), color: 120)
-                await playClip(result, seconds: min(clipSeconds, result.entry.duration, left()))
+                await playClip(result, seconds: min(clipSeconds, result.entry.duration))
             }
             await waitWhilePaused()
-            try? await Task.sleep(for: .milliseconds(800))
+            try? await Task.sleep(for: .milliseconds(700))
         }
     }
 
