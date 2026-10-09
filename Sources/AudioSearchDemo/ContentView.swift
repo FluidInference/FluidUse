@@ -57,14 +57,21 @@ struct Header: View {
             }
             .frame(height: 6)
             HStack(spacing: 10) {
-                Tile(
-                    value: AudioSearchModel.clock(model.audioSeconds),
-                    caption: model.pass > 1 ? "audio read, pass \(model.pass)" : "audio read")
-                Tile(value: String(format: "%.1f s", model.indexSeconds), caption: "indexing time")
-                Tile(
-                    value: model.realTimeFactor == 0 ? "–" : String(format: "%.0f×", model.realTimeFactor),
-                    caption: "faster than real time")
-                Tile(value: "\(model.indexedWindows)", caption: "windows searchable")
+                if model.segment == .burst {
+                    Tile(value: "\(model.burstQueries)", caption: "searches run")
+                    Tile(value: String(format: "%.0f", model.burstPerSecond), caption: "searches / second")
+                    Tile(value: String(format: "%.2f ms", model.burstMilliseconds), caption: "per search")
+                    Tile(
+                        value: String(format: "%.1f M", model.burstPerSecond * Double(model.indexedWindows) / 1e6),
+                        caption: "audio windows ranked / s")
+                } else {
+                    Tile(value: AudioSearchModel.clock(model.audioSeconds), caption: "audio indexed")
+                    Tile(value: String(format: "%.1f s", model.indexSeconds), caption: "indexing time")
+                    Tile(
+                        value: model.realTimeFactor == 0 ? "–" : String(format: "%.0f×", model.realTimeFactor),
+                        caption: "faster than real time")
+                    Tile(value: "\(model.indexedWindows)", caption: "windows searchable")
+                }
             }
             HStack(spacing: 8) {
                 ForEach(model.collections) { collection in
@@ -86,11 +93,9 @@ struct Header: View {
 
     private var status: String {
         switch (model.segment, model.phase) {
-        case (.speed, _):
-            model.pass > 1 && model.indexedWindows > 0
-                ? "⚡ Reading everything again, as fast as it can · \(model.segmentRemaining) s"
-                : "⚡ Reading everything for the first time · \(model.segmentRemaining) s"
-        case (.search, _): "🔎 Searching · \(model.segmentRemaining) s left"
+        case (.reading, _): "📥 Reading everything · searchable as it goes · \(model.segmentRemaining) s"
+        case (.listen, _): "🔎 Listening to the top 3 · \(model.segmentRemaining) s left"
+        case (.burst, _): "⚡ Searching as fast as it can · \(model.segmentRemaining) s left"
         case (nil, .loading(let message)): message
         case (nil, .ready): "Ready · press Index (⌘↩)"
         case (nil, .indexing): "Indexing \(model.windowsDone)/\(model.windowsTotal) windows…"

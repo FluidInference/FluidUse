@@ -14,10 +14,11 @@ The first run downloads the models (about 1.1 GB, checksum-verified) from
 [FluidInference/embeddinggemma-2-coreml](https://huggingface.co/FluidInference/embeddinggemma-2-coreml) and compiles
 them once (a few minutes). Needs macOS 15+.
 
-- **Hands-free by default**, alternating two 30 s segments (`--segment=`): **⚡ Speed** reads every file again as fast
-  as it can (the first pass runs to completion and is searchable as it grows), then **🔎 Search** types each suggested
-  query and plays its top three windows (4 s each, `--clip=`). Searches keep using the previous index while a speed
-  pass rebuilds it. **Space** (Stop/Auto) or typing yourself ends it; `--manual` starts without it.
+- **Hands-free by default.** It reads everything once (searchable while it reads), then alternates two 30 s segments
+  (`--segment=`): **🔎 Listen** types each suggested query and plays its top three windows (4 s each, `--clip=`);
+  **⚡ Search speed** runs ~100 different queries back to back (64 at a time, embedded eight per Neural Engine call,
+  ranked against every window with one matrix multiply) and shows searches per second live. **Space** (Stop/Auto) or
+  typing yourself ends it; `--manual` starts without it.
 - **Index** (⌘↩) decodes every file to 16 kHz mono, then embeds 10 s windows across all files with four in flight, so
   the GPU (audio encoder) and the Neural Engine (text model) work at the same time. **Reset** (⌘R) clears the index.
 - Type a query (or pick a suggestion): every window is ranked in one matrix-vector product; ▶ plays that window.
@@ -33,6 +34,7 @@ Numbers (M5 Pro, macOS 27):
 |---|---|
 | 1 hour earnings call, 360 windows | 4.6–5.7 s, 626–777× real time |
 | 4 h 36 min (2,301 files incl. 2,000 five-second clips) | 34.7 s, 478× real time |
+| Search speed over those 2,786 windows | ~700 searches/s, 1.4 ms each (query embedding 1.4 ms on the ANE, ranking 0.02 ms) |
 | Swift vs sentence-transformers (fp32) | cosine 0.9995 on a LibriSpeech clip |
 
 Quality: speech search works well when the query names something said ("forward-looking statements" finds the
