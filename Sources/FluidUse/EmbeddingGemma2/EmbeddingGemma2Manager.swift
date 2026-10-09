@@ -216,13 +216,22 @@ public final class EmbeddingGemma2Manager: Sendable {
     /// Embedding of one audio window: `<bos> <|audio> tokens <audio|> <eos>` through the text model, where `tokens`
     /// are the first `count` rows of an `EmbeddingGemma2Audio` output ([1, 250, 512], fp16 or fp32).
     public func embed(audioTokens tokens: MLMultiArray, count: Int) async throws -> [Float] {
+        try await embed(media: tokens, count: count, start: Self.audioStartId, end: Self.audioEndId)
+    }
+
+    /// Embedding of one image: `<bos> <|image> tokens <image|> <eos>`, `tokens` from `EmbeddingGemma2Vision`.
+    public func embed(imageTokens tokens: MLMultiArray, count: Int) async throws -> [Float] {
+        try await embed(media: tokens, count: count, start: Self.imageStartId, end: Self.imageEndId)
+    }
+
+    private func embed(media tokens: MLMultiArray, count: Int, start: Int32, end: Int32) async throws -> [Float] {
         let total = count + 4
         guard let length = Self.lengths.first(where: { $0 >= total }) else {
-            throw EmbeddingGemma2Error.predictionFailed("\(count) audio tokens do not fit")
+            throw EmbeddingGemma2Error.predictionFailed("\(count) media tokens do not fit")
         }
         let tokenStride = tokens.strides[tokens.strides.count - 2].intValue
         return try await run(length: length, count: total) { destination in
-            writeEmbeddings([bosId, Self.audioStartId], to: destination)
+            writeEmbeddings([bosId, start], to: destination)
             let target = destination + 2 * Self.hiddenSize
             for row in 0..<count {
                 for column in 0..<Self.hiddenSize {
@@ -234,13 +243,15 @@ public final class EmbeddingGemma2Manager: Sendable {
                 }
             }
             writeEmbeddings(
-                [Self.audioEndId, eosId] + [Int32](repeating: tokenizer.padId, count: length - total),
+                [end, eosId] + [Int32](repeating: tokenizer.padId, count: length - total),
                 to: destination + (2 + count) * Self.hiddenSize)
         }
     }
 
     static let audioStartId: Int32 = 256_000  // <|audio>
     static let audioEndId: Int32 = 258_883  // <audio|>
+    static let imageStartId: Int32 = 255_999  // <|image>
+    static let imageEndId: Int32 = 258_882  // <image|>
     private var bosId: Int32 { tokenizer.bosId }
     private var eosId: Int32 { tokenizer.eosId }
 
