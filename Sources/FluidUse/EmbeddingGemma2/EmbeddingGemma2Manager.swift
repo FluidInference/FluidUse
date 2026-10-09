@@ -206,15 +206,55 @@ public final class EmbeddingGemma2Manager: Sendable {
     }
 
     private func embed(ids: [Int32]) async throws -> [Float] {
+        let padded = ids + [Int32](repeating: tokenizer.padId, count: max(Self.lengths.last!, ids.count) - ids.count)
         let length = Self.lengths.first { $0 >= ids.count } ?? Self.lengths.last!
+        return try await run(length: length, count: ids.count) { destination in
+            writeEmbeddings(Array(padded.prefix(length)), to: destination)
+        }
+    }
+
+    /// Embedding of one audio window: `<bos> <|audio> tokens <audio|> <eos>` through the text model, where `tokens`
+    /// are the first `count` rows of an `EmbeddingGemma2Audio` output ([1, 250, 512], fp16 or fp32).
+    public func embed(audioTokens tokens: MLMultiArray, count: Int) async throws -> [Float] {
+        let total = count + 4
+        guard let length = Self.lengths.first(where: { $0 >= total }) else {
+            throw EmbeddingGemma2Error.predictionFailed("\(count) audio tokens do not fit")
+        }
+        let tokenStride = tokens.strides[tokens.strides.count - 2].intValue
+        return try await run(length: length, count: total) { destination in
+            writeEmbeddings([bosId, Self.audioStartId], to: destination)
+            let target = destination + 2 * Self.hiddenSize
+            for row in 0..<count {
+                for column in 0..<Self.hiddenSize {
+                    let index = row * tokenStride + column
+                    target[row * Self.hiddenSize + column] =
+                        tokens.dataType == .float16
+                        ? tokens.dataPointer.assumingMemoryBound(to: Float16.self)[index]
+                        : Float16(tokens.dataPointer.assumingMemoryBound(to: Float.self)[index])
+                }
+            }
+            writeEmbeddings(
+                [Self.audioEndId, eosId] + [Int32](repeating: tokenizer.padId, count: length - total),
+                to: destination + (2 + count) * Self.hiddenSize)
+        }
+    }
+
+    static let audioStartId: Int32 = 256_000  // <|audio>
+    static let audioEndId: Int32 = 258_883  // <audio|>
+    private var bosId: Int32 { tokenizer.bosId }
+    private var eosId: Int32 { tokenizer.eosId }
+
+    /// One `embed_<length>` call: `fill` writes `length` rows of fp16 inputs; the first `count` are attended.
+    private func run(
+        length: Int, count: Int, fill: (UnsafeMutablePointer<Float16>) throws -> Void
+    ) async throws -> [Float] {
         guard let model = models[length] else { throw EmbeddingGemma2Error.predictionFailed("no model for \(length)") }
         let embeds = try MLMultiArray(
             shape: [1, NSNumber(value: length), NSNumber(value: Self.hiddenSize)], dataType: .float16)
         let mask = try MLMultiArray(shape: [1, NSNumber(value: length)], dataType: .float16)
         let maskPointer = mask.dataPointer.assumingMemoryBound(to: Float16.self)
-        let padded = ids + [Int32](repeating: tokenizer.padId, count: length - ids.count)
-        writeEmbeddings(padded, to: embeds.dataPointer.assumingMemoryBound(to: Float16.self))
-        for position in 0..<length { maskPointer[position] = position < ids.count ? 1 : 0 }
+        try fill(embeds.dataPointer.assumingMemoryBound(to: Float16.self))
+        for position in 0..<length { maskPointer[position] = position < count ? 1 : 0 }
         let input = try MLDictionaryFeatureProvider(dictionary: [
             "inputs_embeds": MLFeatureValue(multiArray: embeds), "attention_mask": MLFeatureValue(multiArray: mask),
         ])

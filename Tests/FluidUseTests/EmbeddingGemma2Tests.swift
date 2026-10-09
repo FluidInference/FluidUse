@@ -88,3 +88,24 @@ final class EmbeddingGemma2Tests: XCTestCase {
         }
     }
 }
+
+/// Window arithmetic for the audio path, against the Hugging Face feature extractor's counts.
+final class EmbeddingGemma2AudioWindowTests: XCTestCase {
+    func testFullWindowMatchesFeatureExtractor() {
+        // 10 s at 16 kHz: the extractor yields 999 frames and the encoder 250 tokens.
+        let frames = EmbeddingGemma2Audio.validFrames(samples: 160_000)
+        XCTAssertEqual(frames, 999)
+        XCTAssertEqual(EmbeddingGemma2Audio.tokenCount(validFrames: frames), 250)
+    }
+
+    func testShortClipMatchesFeatureExtractor() {
+        // 55,680 samples (3.48 s): 347 frames, 87 audio tokens.
+        let frames = EmbeddingGemma2Audio.validFrames(samples: 55_680)
+        XCTAssertEqual(frames, 347)
+        XCTAssertEqual(EmbeddingGemma2Audio.tokenCount(validFrames: frames), 87)
+    }
+
+    func testTooShortHasNoFrames() {
+        XCTAssertEqual(EmbeddingGemma2Audio.validFrames(samples: 100), 0)
+    }
+}
