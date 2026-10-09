@@ -58,6 +58,7 @@ let package = Package(
         .executableTarget(name: "CodeSearchCheck", dependencies: ["CodeSearch", "FluidUse"]),
         .executableTarget(
             name: "CodeSearchDemo", dependencies: ["CodeSearch", "FluidUse"], exclude: ["README.md", "demo.sh"]),
+        .executableTarget(name: "ImageSearchCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "AudioSearchDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh"]),
         .executableTarget(
             name: "TopicSortDemo", dependencies: ["BookmarkSort", "FluidUse"], exclude: ["README.md", "demo.sh"],
