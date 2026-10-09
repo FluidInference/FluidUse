@@ -99,7 +99,9 @@ public final class EmbeddingGemma2Vision: Sendable {
     }
 
     /// Embeddings of many images, in order; up to `maxInFlight` run at once.
-    public func embed(images: [CGImage], budget: Budget = .fast) async throws -> [[Float]] {
+    public func embed(
+        images: [CGImage], budget: Budget = .fast, maxInFlight: Int = EmbeddingGemma2Vision.maxInFlight
+    ) async throws -> [[Float]] {
         try await withThrowingTaskGroup(of: (Int, [Float]).self) { group in
             var result = [[Float]](repeating: [], count: images.count)
             var next = 0
@@ -110,7 +112,7 @@ public final class EmbeddingGemma2Vision: Sendable {
                 next += 1
                 group.addTask { (index, try await self.embed(image: image, budget: budget)) }
             }
-            for _ in 0..<min(Self.maxInFlight, images.count) { addImage() }
+            for _ in 0..<min(max(maxInFlight, 1), images.count) { addImage() }
             for try await (index, vector) in group {
                 result[index] = vector
                 addImage()
