@@ -62,6 +62,8 @@ final class CodeSearchModel: ObservableObject {
     private var searchTask: Task<Void, Never>?
     private var showQuery = ""
     private var snippets: [String: String] = [:]
+    /// Every indexed file's text, lowercased, for the exact-phrase grep comparison.
+    private var sources: [String: String] = [:]
     private var feedSerial = 0
     private var pausedNanoseconds: UInt64 = 0
     private var pauseBegan: UInt64?
@@ -104,8 +106,15 @@ final class CodeSearchModel: ObservableObject {
             repositoryName = repository.lastPathComponent
             chunks = CodeChunker.chunks(repository: repository)
             guard !chunks.isEmpty else { throw EmbeddingGemma2Error.invalidAsset("No Swift files in \(path)") }
-            fileCount = Set(chunks.map(\.path)).count
-            lineCount = Self.lines(in: repository, paths: Set(chunks.map(\.path)))
+            let paths = Set(chunks.map(\.path))
+            fileCount = paths.count
+            for path in paths {
+                sources[path] =
+                    (try? String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8))?.lowercased()
+            }
+            lineCount = sources.values.reduce(0) {
+                $0 + $1.split(separator: "\n", omittingEmptySubsequences: false).count
+            }
             chunksTotal = chunks.count
             DemoLog.event(
                 "Code search · \(repositoryName): \(fileCount) Swift files, \(lineCount) lines, \(chunks.count) functions and types"
@@ -294,12 +303,10 @@ final class CodeSearchModel: ObservableObject {
         }
     }
 
-    /// Files containing the question verbatim (case-insensitive): what a plain text search would find.
+    /// Files containing the question verbatim (case-insensitive), over their full text: what `grep -ril` finds.
     private func grepCount(_ phrase: String) -> Int {
         let needle = phrase.lowercased()
-        var files = Set<String>()
-        for chunk in indexed where chunk.code.lowercased().contains(needle) { files.insert(chunk.path) }
-        return files.count
+        return sources.values.filter { $0.contains(needle) }.count
     }
 
     // MARK: Speed
@@ -472,13 +479,6 @@ final class CodeSearchModel: ObservableObject {
         .joined(separator: "\n")
         snippets[chunk.path + ":\(chunk.line)"] = result
         return result
-    }
-
-    static func lines(in repository: URL, paths: Set<String>) -> Int {
-        paths.reduce(0) { total, path in
-            let text = (try? String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8)) ?? ""
-            return total + text.split(separator: "\n", omittingEmptySubsequences: false).count
-        }
     }
 
     /// Questions for the speed step: the examples plus a spread of developer questions about an audio SDK.
