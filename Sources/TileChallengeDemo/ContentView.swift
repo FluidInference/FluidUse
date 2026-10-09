@@ -11,8 +11,7 @@ struct ContentView: View {
                 ChallengeCard()
                 VStack(alignment: .leading, spacing: 14) {
                     Stats()
-                    HistoryStrip()
-                    Spacer()
+                    HistoryStrip().frame(maxHeight: .infinity)
                 }
             }
             .padding(20)
@@ -154,22 +153,40 @@ struct Stats: View {
     }
 }
 
+/// Every grid so far, one square each (green solved, red missed), filling the space below the stats; squares
+/// shrink as the run grows so nothing scrolls away.
 struct HistoryStrip: View {
     @EnvironmentObject private var model: ChallengeModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("\(model.gridsSolved) of \(model.gridsDone) grids perfect").font(.caption).foregroundStyle(.secondary)
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(9), spacing: 3), count: 36), spacing: 3) {
-                ForEach(Array(model.history.suffix(216).enumerated()), id: \.offset) { _, solved in
-                    RoundedRectangle(cornerRadius: 2).fill(solved ? Color.green : Color.red).frame(width: 9, height: 9)
-                }
-            }
-            .frame(width: 440, alignment: .leading)
             Text(
                 "EmbeddingGemma 2 · photos on the GPU, labels on the Neural Engine · zero-shot · nothing leaves this Mac"
             )
             .font(.caption2).foregroundStyle(.secondary)
+            Canvas { context, size in
+                let history = model.history
+                let count = max(history.count, 1)
+                // Largest square (gap = 1/3 of it, up to 12 pt) for which every grid fits in the space.
+                var cell: CGFloat = 12
+                while cell > 2 {
+                    let columns = max(Int(size.width / cell), 1)
+                    if CGFloat((count + columns - 1) / columns) * cell <= size.height { break }
+                    cell -= 0.5
+                }
+                let columns = max(Int(size.width / cell), 1)
+                let square = cell * 0.75
+                for (index, solved) in history.enumerated() {
+                    let rect = CGRect(
+                        x: CGFloat(index % columns) * cell, y: CGFloat(index / columns) * cell, width: square,
+                        height: square)
+                    context.fill(
+                        Path(roundedRect: rect, cornerRadius: square * 0.2), with: .color(solved ? .green : .red))
+                }
+            }
+            .frame(width: 440)
+            .frame(maxHeight: .infinity)
         }
     }
 }
