@@ -27,6 +27,7 @@ M5 Pro, macOS 27, greedy decoding:
 | The ten demo tasks | 10/10 pass all asserts, ~50 s in total (95–330 tokens each) |
 | Prompt (448 tokens, Neural Engine) | ~52 ms |
 | Writing (GPU) | 36–51 tokens/s |
+| MBPP sanitized test split (257) | 119/257 = 46.3% |
 | HumanEval (164) | 89/164 = 54.3% (PyTorch fp32: 90/164 = 54.9%) |
 
 `CodeWriterCheck` replays HumanEval through the Swift host and compares every token stream with a reference run.

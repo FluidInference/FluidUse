@@ -299,7 +299,7 @@ print(draft.reply, draft.timing.totalSeconds)                           // "Cong
 `CodeWriterManager` writes Python from a plain-English request with
 [qwen2.5-coder-0.5b-coreml](https://huggingface.co/FluidInference/qwen2.5-coder-0.5b-coreml), Qwen2.5-Coder-0.5B-Instruct
 (Apache-2.0) in one 944 MB package: the prompt runs on the Neural Engine, the writing on the GPU at 36–51 tokens/s on
-an M5 Pro, streamed as it goes. HumanEval pass@1 89/164 (PyTorch: 90/164).
+an M5 Pro, streamed as it goes. Pass@1: HumanEval 89/164 (PyTorch: 90/164), MBPP 119/257.
 
 ```swift
 let directory = try await CodeWriterModelStore.ensure()           // pinned Hugging Face snapshot
