@@ -5,6 +5,7 @@ import Foundation
 actor MarioBridge {
     struct Step: Sendable {
         let frame: CGImage
+        let pixels: Data  // raw 256x240 RGB
         let x: Int
         let screenX: Int
         let screenY: Int
@@ -73,7 +74,8 @@ actor MarioBridge {
                 shouldInterpolate: false, intent: .defaultIntent)
         else { throw BridgeError.badFrame }
         return Step(
-            frame: frame, x: meta.x, screenX: meta.screenX, screenY: meta.screenY, onGround: meta.onGround,
+            frame: frame, pixels: pixels, x: meta.x, screenX: meta.screenX, screenY: meta.screenY,
+            onGround: meta.onGround,
             done: meta.done, flag: meta.flag, time: meta.time)
     }
 

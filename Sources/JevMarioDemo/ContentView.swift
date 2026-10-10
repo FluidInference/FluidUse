@@ -27,10 +27,27 @@ struct ContentView: View {
                 Text(player.status).foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 14) {
-                Text("JEV-9B · Core ML").font(.title2.bold())
-                Text("Every move: three yes/no questions about the screen just ahead of Mario")
-                    .font(.callout).foregroundStyle(.secondary)
-                ForEach(MarioPlayer.questions) { q in
+                Picker("Model", selection: $player.brain) {
+                    ForEach(MarioPlayer.Brain.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden()
+                .disabled(!player.finished)
+                if player.brain == .tiny {
+                    Text("Every move: a 0.46M-parameter CNN looks at the pixels around Mario")
+                        .font(.callout).foregroundStyle(.secondary)
+                    ForEach(Array(TinyMarioPolicy.moves.enumerated()), id: \.offset) { i, move in
+                        let p = i < player.moveProbabilities.count ? player.moveProbabilities[i] : 0
+                        HStack {
+                            Text(move.rawValue).font(.headline).frame(width: 50, alignment: .leading)
+                            ProgressView(value: Double(p)).tint(move == player.move ? .orange : .gray)
+                            Text(String(format: "%.2f", p)).font(.system(.caption, design: .monospaced))
+                        }
+                    }
+                } else {
+                    Text("Every move: JEV-9B answers three yes/no questions about the screen just ahead of Mario")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                ForEach(player.brain == .jev ? MarioPlayer.questions : []) { q in
                     HStack(spacing: 12) {
                         Group {
                             if let image = player.viewImages[q.view] {
@@ -53,7 +70,10 @@ struct ContentView: View {
                         .foregroundStyle(player.move == .run ? .green : .orange)
                     Spacer()
                     VStack(alignment: .trailing) {
-                        Text(String(format: "%.0f ms", player.lastMilliseconds)).font(
+                        Text(
+                            String(
+                                format: player.lastMilliseconds < 10 ? "%.2f ms" : "%.0f ms", player.lastMilliseconds)
+                        ).font(
                             .system(.title3, design: .monospaced))
                         Text("decision \(player.decisions)").foregroundStyle(.secondary)
                     }

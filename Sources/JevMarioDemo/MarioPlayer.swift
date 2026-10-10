@@ -3,9 +3,12 @@ import FluidUse
 import Foundation
 import Observation
 
-/// The control loop: while Mario is on the ground, JEV-9B answers three yes/no questions about close-ups of the
-/// screen just ahead of him (enemy? pipe or step? gap?); if any says yes he takes a long running jump, otherwise he
-/// runs right. The move plays out frame by frame. Mirrors model-lab `jev-9b-coreml/conversion/mario.py`.
+/// The control loop. While Mario is on the ground the emulator pauses for a decision, then the move plays out frame by
+/// frame at 60 fps.
+/// - JEV-9B: three yes/no questions about close-ups just ahead of him (enemy? pipe or step? gap?); any yes -> long
+///   running jump, else run. Mirrors model-lab `jev-9b-coreml/conversion/mario.py`.
+/// - Tiny: the 0.46M-parameter student picks run / jump / hop / wait from the pixels around Mario (model-lab
+///   `mario-tiny`).
 @available(macOS 15.0, *)
 @MainActor
 @Observable
@@ -17,7 +20,13 @@ final class MarioPlayer {
         let threshold: Float
     }
 
-    enum Move: String { case run, jump }
+    enum Move: String { case run, jump, hop, wait }
+
+    enum Brain: String, CaseIterable, Identifiable {
+        case jev = "JEV-9B · 3 questions"
+        case tiny = "Tiny · 0.46M params"
+        var id: String { rawValue }
+    }
 
     /// (x offset from Mario, width, top relative to his feet, height) in screen px, and the state text.
     static let views: [String: (dx: Int, width: Int, dy: Int, height: Int, state: String)] = [
@@ -44,6 +53,8 @@ final class MarioPlayer {
     static let moves: [Move: [UInt8]] = [
         .run: Array(repeating: right | b, count: 6),
         .jump: [right | b] + Array(repeating: right | a | b, count: 22) + Array(repeating: right | b, count: 4),
+        .hop: [right | b] + Array(repeating: right | a | b, count: 8) + Array(repeating: right | b, count: 4),
+        .wait: Array(repeating: 0, count: 6),
     ]
     static let flagX = 3160
 
@@ -56,10 +67,14 @@ final class MarioPlayer {
     var decisions = 0
     var lastMilliseconds: Double = 0
     var x = 40
-    var status = "Loading JEV-9B (Core ML)…"
+    var status = "Loading…"
     var finished = false
+    var brain: Brain = ProcessInfo.processInfo.environment["JEV_MARIO_BRAIN"] == "tiny" ? .tiny : .jev
+    var moveProbabilities: [Float] = []  // tiny: per TinyMarioPolicy.moves
 
     private var manager: JevManager?
+    private var tiny: TinyMarioPolicy?
+    private var history: [Data] = []  // last 5 frames' pixels (the tiny student also sees 4 frames back)
     private var bridge: MarioBridge?
     private var loop: Task<Void, Never>?
     private var started = false
@@ -75,11 +90,19 @@ final class MarioPlayer {
         loop?.cancel()
         loop = Task {
             do {
-                if manager == nil {
-                    let started = Date()
+                let loadStarted = Date()
+                switch brain {
+                case .jev where manager == nil:
+                    status = "Loading JEV-9B (Core ML)…"
                     manager = try await JevManager.load(from: modelDirectory, bucket: 256)
-                    status = String(format: "Model loaded in %.0f s", Date().timeIntervalSince(started))
+                case .tiny where tiny == nil:
+                    guard let path = ProcessInfo.processInfo.environment["TINY_MARIO_MODEL"] else {
+                        throw DemoError.noTinyModel
+                    }
+                    tiny = try await TinyMarioPolicy(package: URL(fileURLWithPath: path))
+                default: break
                 }
+                status = String(format: "\(brain.rawValue) ready in %.1f s", Date().timeIntervalSince(loadStarted))
                 if bridge == nil { bridge = try MarioBridge(command: bridgeCommand) }
                 try await play()
             } catch is CancellationError {
@@ -89,6 +112,11 @@ final class MarioPlayer {
         }
     }
 
+    enum DemoError: Error, LocalizedError {
+        case noTinyModel
+        var errorDescription: String? { "Set TINY_MARIO_MODEL to the TinyMario.mlpackage path" }
+    }
+
     func restart(modelDirectory: URL, bridgeCommand: [String]) {
         finished = false
         decisions = 0
@@ -96,12 +124,25 @@ final class MarioPlayer {
     }
 
     private func play() async throws {
-        guard let manager, let bridge else { return }
+        guard let bridge else { return }
         var step = try await bridge.reset()
         show(step)
+        history = Array(repeating: step.pixels, count: 5)
         while !step.done {
             try Task.checkCancellation()
             // 1. decide (emulator paused)
+            if brain == .tiny, let tiny {
+                let started = Date()
+                moveProbabilities = try tiny.decide(now: step.pixels, before: history[0], marioX: step.screenX)
+                lastMilliseconds = Date().timeIntervalSince(started) * 1000
+                let best = moveProbabilities.indices.max { moveProbabilities[$0] < moveProbabilities[$1] } ?? 0
+                move = TinyMarioPolicy.moves[best]
+                decisions += 1
+                print(String(format: "%3d  x %4d  %@  %.2f ms", decisions, step.x, move.rawValue, lastMilliseconds))
+                step = try await perform(move, from: step, bridge: bridge)
+                continue
+            }
+            guard let manager else { return }
             thinking = true
             let started = Date()
             var probs: [String: Float] = [:]
@@ -124,32 +165,44 @@ final class MarioPlayer {
                 separator: "  ")
             print(
                 String(format: "%3d  x %4d  %@  %@  %.0f ms", decisions, step.x, move.rawValue, line, lastMilliseconds))
-            // 2. play the move at 60 fps, then keep running until Mario lands
-            let buttons = Self.moves[move] ?? []
-            var index = 0
-            var airborne = 0
-            while !step.done {
-                let press: UInt8
-                if index < buttons.count {
-                    press = buttons[index]
-                    index += 1
-                } else if !step.onGround && airborne < 90 {
-                    press = Self.right | Self.b
-                    airborne += 1
-                } else {
-                    break
-                }
-                let tick = Date()
-                step = try await bridge.step(press)
-                show(step)
-                let elapsed = Date().timeIntervalSince(tick)
-                if elapsed < 1 / 60 { try await Task.sleep(for: .seconds(1 / 60 - elapsed)) }
-            }
+            step = try await perform(move, from: step, bridge: bridge)
         }
         finished = true
         status =
             step.flag
             ? "Reached the flag in \(decisions) decisions" : "Mario died at x \(step.x) after \(decisions) decisions"
+        print(status)
+    }
+
+    /// Play the move at 60 fps, then keep running until Mario lands (max 90 frames).
+    private func perform(
+        _ move: Move, from start: MarioBridge.Step, bridge: MarioBridge
+    ) async throws
+        -> MarioBridge.Step
+    {
+        var step = start
+        let buttons = Self.moves[move] ?? []
+        var index = 0
+        var airborne = 0
+        while !step.done {
+            let press: UInt8
+            if index < buttons.count {
+                press = buttons[index]
+                index += 1
+            } else if !step.onGround && airborne < 90 {
+                press = Self.right | Self.b
+                airborne += 1
+            } else {
+                break
+            }
+            let tick = Date()
+            step = try await bridge.step(press)
+            show(step)
+            history = Array(history.dropFirst()) + [step.pixels]
+            let elapsed = Date().timeIntervalSince(tick)
+            if elapsed < 1 / 60 { try await Task.sleep(for: .seconds(1 / 60 - elapsed)) }
+        }
+        return step
     }
 
     private func show(_ step: MarioBridge.Step) {

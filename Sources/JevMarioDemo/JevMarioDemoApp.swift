@@ -13,6 +13,8 @@ struct JevMarioDemoApp: App {
     @State private var modelDirectory: URL?
     @State private var error: String?
 
+    init() { setvbuf(stdout, nil, _IOLBF, 0) }  // the decision log is tailed live (demo.sh)
+
     var body: some Scene {
         WindowGroup("JEV-9B plays Mario") {
             Group {
