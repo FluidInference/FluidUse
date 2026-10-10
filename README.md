@@ -294,6 +294,25 @@ print(draft.reply, draft.timing.totalSeconds)                           // "Cong
 `Sources/ShortReplyDemo/demo.sh --x` launches it with a macmon + log terminal
 ([Sources/ShortReplyDemo](Sources/ShortReplyDemo/README.md)).
 
+## Python writer
+
+`CodeWriterManager` writes Python from a plain-English request with
+[qwen2.5-coder-0.5b-coreml](https://huggingface.co/FluidInference/qwen2.5-coder-0.5b-coreml), Qwen2.5-Coder-0.5B-Instruct
+(Apache-2.0) in one 944 MB package: the prompt runs on the Neural Engine, the writing on the GPU at 36–51 tokens/s on
+an M5 Pro, streamed as it goes. Pass@1: HumanEval 89/164 (PyTorch: 90/164), MBPP 119/257.
+
+```swift
+let directory = try await CodeWriterModelStore.ensure()           // pinned Hugging Face snapshot
+let writer = try await CodeWriterManager.load(from: directory)
+let result = try await writer.write(task: "Write a function to reverse each string in a list.") { text in
+    print(text)                                                   // the text so far, after every token
+}
+print(result.code, result.timing.tokensPerSecond)
+```
+
+`CodeWriterDemo` writes ten short tasks live into an editor and runs each one's asserts with `python3`
+([Sources/CodeWriterDemo](Sources/CodeWriterDemo/README.md)).
+
 ## Demo
 
 ```bash

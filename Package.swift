@@ -75,6 +75,10 @@ let package = Package(
         .executableTarget(name: "GuardrailDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
         .executableTarget(name: "FrontDoorDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
         .executableTarget(name: "ShortReplyCheck", dependencies: ["FluidUse"]),
+        .executableTarget(name: "CodeWriterCheck", dependencies: ["FluidUse"]),
+        .executableTarget(
+            name: "CodeWriterDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh"],
+            resources: [.copy("Resources")]),
         .executableTarget(name: "ShortReplyDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "mock-feed"]),
         .executableTarget(name: "GLiClassServe", dependencies: ["FluidUse"]),
         .executableTarget(
