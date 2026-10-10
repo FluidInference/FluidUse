@@ -5,12 +5,14 @@ import XCTest
 /// clef-flash host pieces that need no model: manifest parsing, text-only RoPE tables, and the pinned asset list.
 @available(macOS 15.0, *)
 final class ClefFlashTests: XCTestCase {
-    static let manifest: [String: Any] = [
-        "hidden_size": 4096, "rotary_dim": 64, "rope_theta": 10_000_000, "pad_id": 248044, "vocab_size": 248320,
-        "buckets": [512, 256, 2048, 1024], "max_questions": 16, "max_options": 96, "image_token_id": 248056,
-        "vision_start_token_id": 248053, "vision_end_token_id": 248054,
-        "parts": (0..<8).map { String(format: "part%02d.mlpackage", $0) }, "head": "Head.mlpackage",
-    ]
+    static var manifest: [String: Any] {
+        [
+            "hidden_size": 4096, "rotary_dim": 64, "rope_theta": 10_000_000, "pad_id": 248044, "vocab_size": 248320,
+            "buckets": [512, 256, 2048, 1024], "max_questions": 16, "max_options": 96, "image_token_id": 248056,
+            "vision_start_token_id": 248053, "vision_end_token_id": 248054,
+            "parts": (0..<8).map { String(format: "part%02d.mlpackage", $0) }, "head": "Head.mlpackage",
+        ]
+    }
 
     func testManifestParses() throws {
         let config = try ClefFlashManager.Config(json: Self.manifest)
