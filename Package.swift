@@ -67,7 +67,9 @@ let package = Package(
         .executableTarget(name: "ImageSortDemo", dependencies: ["ImageSort"], exclude: ["README.md"]),
         .executableTarget(name: "KevCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "ClefVisionCheck", dependencies: ["FluidUse"]),
-        .executableTarget(name: "ClefFlashDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh"]),
+        .executableTarget(name: "ClefFlashDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "bars.py"]),
+        .executableTarget(name: "ClefTextCheck", dependencies: ["FluidUse"]),
+        .executableTarget(name: "ClefCompareDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh"]),
         .executableTarget(name: "InternDecisionCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "Decision2Check", dependencies: ["FluidUse"]),
         .executableTarget(

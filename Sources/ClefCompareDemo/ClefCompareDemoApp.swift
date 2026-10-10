@@ -2,12 +2,11 @@ import AppKit
 import SwiftUI
 
 @main
-struct ClefFlashDemoApp: App {
-    @StateObject private var model = TriageModel()
+struct ClefCompareDemoApp: App {
+    @StateObject private var model = CompareModel()
 
     init() {
         setvbuf(stdout, nil, _IOLBF, 0)
-        // Bare SwiftPM executables start as background processes; make this one a regular windowed app.
         for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("NSWindow Frame") {
             UserDefaults.standard.removeObject(forKey: key)  // open at the default size, not a remembered one
         }
@@ -16,13 +15,13 @@ struct ClefFlashDemoApp: App {
     }
 
     var body: some Scene {
-        WindowGroup(TriageModel.model == .text ? "clef-text 0.6B — on this Mac" : "clef-flash 9B — on this Mac") {
+        WindowGroup("clef-flash 9B vs clef-text 0.6B") {
             ContentView()
                 .environmentObject(model)
                 .frame(minWidth: 1000, minHeight: 640)
                 .task { await model.start() }
         }
-        .defaultSize(width: 1280, height: 820)
+        .defaultSize(width: 1320, height: 840)
         .windowResizability(.contentMinSize)
     }
 }
