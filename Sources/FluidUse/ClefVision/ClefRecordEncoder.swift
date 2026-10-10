@@ -24,7 +24,7 @@ enum ClefRecordEncoder {
     /// `imageTokenCounts`: merged vision tokens per image (grid_h * grid_w / merge²), in the order the images are given.
     static func encode(
         state: Any, questions: [(id: String, question: ClefQuestion)], imageTokenCounts: [Int],
-        tokenizer: QwenBPETokenizer, config: ClefVisionConfig, maxLength: Int
+        tokenizer: QwenBPETokenizer, imageTokenID: Int, visionStartID: Int, visionEndID: Int, maxLength: Int
     ) throws -> ClefEncodedRecord {
         func tokens(_ text: String) throws -> [Int] { try tokenizer.encode(text) }
 
@@ -53,18 +53,20 @@ enum ClefRecordEncoder {
             }
             schema += try tokens("END FIELD\n")
             encodedQuestions.append(
-                .init(id: id, typeIndex: question.typeIndex, span: start..<end, optionSpans: optionSpans, optionIDs: optionIDs))
+                .init(
+                    id: id, typeIndex: question.typeIndex, span: start..<end, optionSpans: optionSpans,
+                    optionIDs: optionIDs))
         }
 
         var prefix = try tokens("<|im_start|>system\n\(systemPrompt)<|im_end|>\n<|im_start|>user\nSTATE:\n")
         var imageRanges: [Range<Int>] = []
         if !imageTokenCounts.isEmpty {
             for count in imageTokenCounts {
-                prefix.append(config.visionStartID)
+                prefix.append(visionStartID)
                 let start = prefix.count
-                prefix += Array(repeating: config.imageTokenID, count: count)
+                prefix += Array(repeating: imageTokenID, count: count)
                 imageRanges.append(start..<prefix.count)
-                prefix.append(config.visionEndID)
+                prefix.append(visionEndID)
             }
             prefix += try tokens("\n")
         }
@@ -77,12 +79,13 @@ enum ClefRecordEncoder {
         let shifted = encodedQuestions.map { q in
             ClefEncodedRecord.Question(
                 id: q.id, typeIndex: q.typeIndex, span: (q.span.lowerBound + offset)..<(q.span.upperBound + offset),
-                optionSpans: q.optionSpans.map { ($0.lowerBound + offset)..<($0.upperBound + offset) }, optionIDs: q.optionIDs)
+                optionSpans: q.optionSpans.map { ($0.lowerBound + offset)..<($0.upperBound + offset) },
+                optionIDs: q.optionIDs)
         }
         let inputIDs = prefix + stateIDs + schema + suffix
         // The tokenizer maps literal special-token text (e.g. "<|image_pad|>" inside the state) to the special id,
         // which would desynchronise the vision splice and the M-RoPE grid walk. Refuse such records.
-        let imagePads = inputIDs.reduce(0) { $0 + ($1 == config.imageTokenID ? 1 : 0) }
+        let imagePads = inputIDs.reduce(0) { $0 + ($1 == imageTokenID ? 1 : 0) }
         guard imagePads == imageTokenCounts.reduce(0, +) else {
             throw ClefVisionError.invalidInput("state or schema text contains image placeholder tokens")
         }
