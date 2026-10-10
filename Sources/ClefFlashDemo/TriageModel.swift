@@ -101,12 +101,6 @@ final class TriageModel: ObservableObject {
 
     func count(for team: Team) -> Int { tickets.reduce(0) { $0 + ($1.team == team ? 1 : 0) } }
 
-    static var bundleURL: URL {
-        if let path = ProcessInfo.processInfo.environment["CLEF_FLASH_BUNDLE"] { return URL(fileURLWithPath: path) }
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-            "Documents/model-lab-clef-flash/models/clef-flash-coreml/conversion/build/bundle-w8")
-    }
-
     func start() async {
         guard answer == nil else { return }
         do {
@@ -114,9 +108,16 @@ final class TriageModel: ObservableObject {
                 status = "clef-flash's Core ML path needs macOS 15"
                 return
             }
+            let directory: URL
+            if let path = ProcessInfo.processInfo.environment["CLEF_FLASH_BUNDLE"], !path.isEmpty {
+                directory = URL(fileURLWithPath: path)
+            } else {
+                status = "Downloading clef-flash Core ML (FluidInference/clef-flash-coreml, ~11 GB)…"
+                directory = try await ClefFlashModelStore.ensure()
+            }
             let started = Date()
             status = "Loading clef-flash 9B (first launch compiles the packages)…"
-            let manager = try await ClefFlashManager.load(from: Self.bundleURL, bucket: 512)
+            let manager = try await ClefFlashManager.load(from: directory, bucket: 512)
             try await manager.warm()
             // a couple of full-length tickets page every part's weights in before the board starts timing
             for text in Self.mockTickets.prefix(2) {
