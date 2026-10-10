@@ -1,18 +1,21 @@
 # ClefFlashDemo
 
-Cloudflare [clef-flash](https://huggingface.co/Cloudflare/clef-flash) (Qwen3.5-9B decision model, Apache-2.0) triaging
-support tickets on this Mac through Core ML. Each ticket gets three typed decisions in one forward pass: team (choice),
-urgency (score), refund (noul). Tickets are fictional mock data; typed tickets jump the queue.
+Support-ticket triage with a Clef decision model on this Mac. Each ticket gets three typed decisions in one forward
+pass — team (choice), urgency (score), refund (noul) — while the board works through a fixed backlog of 1,000
+fictional tickets (`MockTickets.swift`, deterministic); typed tickets jump the queue.
 
 ```bash
-Sources/ClefFlashDemo/demo.sh                  # downloads FluidInference/clef-flash-coreml (~11 GB) on first run
-Sources/ClefFlashDemo/demo.sh /path/to/bundle  # or a local bundle (CLEF_FLASH_BUNDLE)
+CLEF_MODEL=text Sources/ClefFlashDemo/demo.sh   # clef-text-0.6b, GPU: ~48 ms / ticket, 1,000 tickets in ~57 s
+Sources/ClefFlashDemo/demo.sh                   # Cloudflare clef-flash 9B, GPU: ~0.5 s / ticket
 ```
 
-- Runtime: `ClefFlashManager` — 8 decoder packages (4 layers each, 8-bit weights, 6.5 GB) chained on the GPU + the
-  joint schema head (fp32), 512-token bucket. ~0.50 s per ticket on an M5 Pro; ~40 s to load (first launch also
-  compiles the packages into `<bundle>/compiled/`).
-- Bundle: [FluidInference/clef-flash-coreml](https://huggingface.co/FluidInference/clef-flash-coreml), pinned in
-  `ClefFlashModelStore` with per-file SHA-256.
-- GPU only: the Qwen3.5 decoder puts 0 ops on the Neural Engine (every op falls back to CPU under `CPU_AND_NE`).
-- Same answers as the Python Core ML pipeline on the mock tickets; 8-bit vs fp32 reference: 1 flip / 611 ARC questions.
+`demo.sh` downloads the pinned bundle on first run (`CLEF_TEXT_BUNDLE` / `CLEF_FLASH_BUNDLE` for a local one) and
+opens Ghostty with live CPU / GPU bar charts (`bars.py` over `macmon pipe`, no sudo) above the decision log.
+
+- **clef-text-0.6b** — [FluidInference/clef-text-0.6b-coreml](https://huggingface.co/FluidInference/clef-text-0.6b-coreml),
+  `ClefTextManager`: Qwen3-0.6B + Clef joint head distilled from clef-flash; runs on the GPU or 100% on the Neural
+  Engine (`.cpuAndNeuralEngine`, ~77 ms / ticket).
+- **clef-flash 9B** — [FluidInference/clef-flash-coreml](https://huggingface.co/FluidInference/clef-flash-coreml),
+  `ClefFlashManager`: 8 decoder packages (8-bit) chained on the GPU; ~7 GB of RAM.
+
+`ClefCompareDemo` runs both side by side on the same tickets (9B on the GPU, 0.6B on the Neural Engine).

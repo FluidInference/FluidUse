@@ -77,7 +77,7 @@ final class TriageModel: ObservableObject {
         "Would be great if the search bar supported filters by date.",
     ]
 
-    @Published var status = "Loading clef-flash 9B…"
+    @Published var status = "Loading…"
     @Published var ready = false
     @Published var tickets: [Ticket] = []
     @Published var running = false
@@ -90,6 +90,11 @@ final class TriageModel: ObservableObject {
     /// The loaded model as a closure (ClefFlashManager needs macOS 15; the package targets 14): answers + total ms.
     private var answer: ((String) async throws -> ([ClefAnswer], Double))?
     private var next = 0
+    /// The fixed 1,000-ticket backlog the stream works through (fictional).
+    static let backlog = MockTickets.make(count: 1000)
+    /// Wall time spent triaging (pauses excluded), and whether the backlog is done.
+    @Published var activeSeconds: Double = 0
+    @Published var finished = false
     /// Bumped by `restart()`; a decision that finishes for an older generation is dropped.
     private var generation = 0
     private var streamTask: Task<Void, Never>?
@@ -101,31 +106,68 @@ final class TriageModel: ObservableObject {
 
     func count(for team: Team) -> Int { tickets.reduce(0) { $0 + ($1.team == team ? 1 : 0) } }
 
+    /// Which model the board runs: `CLEF_MODEL=text` for clef-text-0.6b on the Neural Engine, else clef-flash 9B.
+    enum Model {
+        case flash, text
+        var title: String {
+            self == .text ? "clef-text · 0.6B decision model" : "Cloudflare clef-flash · 9B decision model"
+        }
+        var subtitle: String {
+            self == .text
+                ? "Distilled from Cloudflare clef-flash · Core ML on the GPU · no network"
+                : "Running on this Mac · Core ML on the GPU · no network"
+        }
+        var short: String { self == .text ? "clef-text 0.6B" : "clef-flash" }
+    }
+
+    static let model: Model = ProcessInfo.processInfo.environment["CLEF_MODEL"] == "text" ? .text : .flash
+
     func start() async {
         guard answer == nil else { return }
         do {
             guard #available(macOS 15.0, *) else {
-                status = "clef-flash's Core ML path needs macOS 15"
+                status = "These Core ML models need macOS 15"
                 return
             }
-            let directory: URL
-            if let path = ProcessInfo.processInfo.environment["CLEF_FLASH_BUNDLE"], !path.isEmpty {
-                directory = URL(fileURLWithPath: path)
-            } else {
-                status = "Downloading clef-flash Core ML (FluidInference/clef-flash-coreml, ~11 GB)…"
-                directory = try await ClefFlashModelStore.ensure()
-            }
             let started = Date()
-            status = "Loading clef-flash 9B (first launch compiles the packages)…"
-            let manager = try await ClefFlashManager.load(from: directory, bucket: 512)
-            try await manager.warm()
-            // a couple of full-length tickets page every part's weights in before the board starts timing
-            for text in Self.mockTickets.prefix(2) {
-                _ = try await manager.answer(state: text, questions: Self.questions)
-            }
-            answer = { text in
-                let result = try await manager.answer(state: text, questions: Self.questions)
-                return (result.answers, result.totalMilliseconds)
+            switch Self.model {
+            case .flash:
+                let directory: URL
+                if let path = ProcessInfo.processInfo.environment["CLEF_FLASH_BUNDLE"], !path.isEmpty {
+                    directory = URL(fileURLWithPath: path)
+                } else {
+                    status = "Downloading clef-flash Core ML (FluidInference/clef-flash-coreml, ~11 GB)…"
+                    directory = try await ClefFlashModelStore.ensure()
+                }
+                status = "Loading clef-flash 9B (first launch compiles the packages)…"
+                let manager = try await ClefFlashManager.load(from: directory, bucket: 512)
+                try await manager.warm()
+                // a couple of full-length tickets page every part's weights in before the board starts timing
+                for text in Self.mockTickets.prefix(2) {
+                    _ = try await manager.answer(state: text, questions: Self.questions)
+                }
+                answer = { text in
+                    let result = try await manager.answer(state: text, questions: Self.questions)
+                    return (result.answers, result.totalMilliseconds)
+                }
+            case .text:
+                let directory: URL
+                if let path = ProcessInfo.processInfo.environment["CLEF_TEXT_BUNDLE"], !path.isEmpty {
+                    directory = URL(fileURLWithPath: path)
+                } else {
+                    status = "Downloading clef-text-0.6b Core ML (FluidInference/clef-text-0.6b-coreml, ~1.3 GB)…"
+                    directory = try await ClefTextModelStore.ensure()
+                }
+                status = "Loading clef-text 0.6B…"
+                let manager = try await ClefTextManager.load(from: directory, buckets: [512], computeUnits: .cpuAndGPU)
+                try await manager.warm()
+                for text in Self.mockTickets.prefix(2) {
+                    _ = try await manager.answer(state: text, questions: Self.questions)
+                }
+                answer = { text in
+                    let result = try await manager.answer(state: text, questions: Self.questions)
+                    return (result.answers, result.totalMilliseconds)
+                }
             }
             print("loaded in \(String(format: "%.1f", Date().timeIntervalSince(started))) s")
             ready = true
@@ -147,29 +189,39 @@ final class TriageModel: ObservableObject {
             // back to back: the next ticket starts the moment the previous one is decided
             while let self, !Task.isCancelled {
                 self.refill()
-                guard !self.incoming.isEmpty else { break }
-                let ticket = withAnimation(.easeOut(duration: 0.2)) { self.incoming.removeFirst() }
-                withAnimation(.easeOut(duration: 0.2)) { self.current = ticket }
+                guard !self.incoming.isEmpty else {
+                    self.finished = true
+                    self.running = false
+                    self.current = nil
+                    break
+                }
+                let ticket = self.incoming.removeFirst()  // no animation: a ticket takes ~50 ms on the 0.6B
+                self.current = ticket
+                let started = Date()
                 await self.triage(ticket.text, typed: ticket.typed)
+                self.activeSeconds += Date().timeIntervalSince(started)
                 await Task.yield()
             }
         }
     }
 
-    /// Keep the visible queue full of mock arrivals.
+    /// Keep the visible queue topped up from the backlog.
     private func refill() {
-        while incoming.count < 8 {
-            incoming.append(Incoming(text: Self.mockTickets[next % Self.mockTickets.count], typed: false))
+        while incoming.count < 8, next < Self.backlog.count {
+            incoming.append(Incoming(text: Self.backlog[next], typed: false))
             next += 1
         }
     }
+
+    /// Backlog tickets decided so far (typed ones not counted).
+    var backlogDone: Int { tickets.filter { !$0.typed }.count }
 
     func submitDraft() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         draft = ""
         // typed tickets jump the queue
-        withAnimation(.easeOut(duration: 0.2)) { incoming.insert(Incoming(text: text, typed: true), at: 0) }
+        incoming.insert(Incoming(text: text, typed: true), at: 0)
         if !running {
             Task {
                 let ticket = incoming.removeFirst()
@@ -190,6 +242,8 @@ final class TriageModel: ObservableObject {
             current = nil
         }
         next = 0
+        activeSeconds = 0
+        finished = false
         toggleStream()
     }
 
@@ -217,10 +271,9 @@ final class TriageModel: ObservableObject {
                 String(
                     format: "%5.0f ms  %-11@ %-8@ refund %.2f  %@", milliseconds, ticket.team.rawValue,
                     Self.urgencyLabels[urgencyIndex], ticket.refund, text))
-            withAnimation(.spring(duration: 0.35)) {
+            withAnimation(.easeOut(duration: 0.12)) {
                 tickets.append(ticket)
-                if tickets.count > 200 { tickets.removeFirst(tickets.count - 200) }
-                current = nil
+                if tickets.count > 1200 { tickets.removeFirst(tickets.count - 1200) }
             }
         } catch {
             status = "Error: \(error.localizedDescription)"

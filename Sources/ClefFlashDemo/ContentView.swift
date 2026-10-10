@@ -23,17 +23,21 @@ struct ContentView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Cloudflare clef-flash · 9B decision model")
+                Text(TriageModel.model.title)
                     .font(.system(size: 26, weight: .bold))
-                Text("Running on this Mac · Core ML on the GPU · no network")
+                Text(TriageModel.model.subtitle)
                     .font(.system(size: 15)).foregroundStyle(.secondary)
             }
             Spacer()
             if let median = model.medianMilliseconds {
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text(String(format: "%.2f s", median / 1000))
-                        .font(.system(size: 44, weight: .heavy, design: .rounded)).monospacedDigit()
-                    Text("per ticket · 3 decisions in one pass")
+                    Text(
+                        model.finished
+                            ? "\(model.backlogDone) tickets in \(String(format: "%.1f", model.activeSeconds)) s"
+                            : "\(model.backlogDone) / \(TriageModel.backlog.count) · \(String(format: "%.1f", model.activeSeconds)) s"
+                    )
+                    .font(.system(size: 36, weight: .heavy, design: .rounded)).monospacedDigit()
+                    Text(String(format: "%.0f ms per ticket · 3 decisions each", median))
                         .font(.system(size: 13)).foregroundStyle(.secondary)
                 }
             }
@@ -58,7 +62,6 @@ struct ContentView: View {
                 .onSubmit { model.submitDraft() }
             Button(model.running ? "Pause stream" : "Resume stream") { model.toggleStream() }
             Button("Restart") { model.restart() }
-            if model.busy { ProgressView().controlSize(.small) }
         }
         .padding(.horizontal, 28).padding(.vertical, 14)
     }
@@ -79,16 +82,18 @@ struct IncomingLane: View {
             if let current = model.current {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 6) {
-                        ProgressView().controlSize(.small)
-                        Text("clef-flash is reading…").font(.system(size: 12, weight: .semibold)).foregroundStyle(.blue)
+                        ProgressView().controlSize(.small).opacity(model.running ? 1 : 0)
+                        Text("\(TriageModel.model.short) is reading…").font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.blue)
                     }
-                    Text(current.text).font(.system(size: 14)).fixedSize(horizontal: false, vertical: true)
+                    // fixed two-line slot: the text swaps in place every ~80 ms without the card resizing
+                    Text(current.text).font(.system(size: 14)).lineLimit(2)
+                        .frame(maxWidth: .infinity, minHeight: 38, alignment: .topLeading)
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color.blue.opacity(0.12)))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.blue, lineWidth: 2))
-                .id(current.id)
             }
             ForEach(model.incoming) { ticket in
                 Text(ticket.text).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(2)
@@ -99,10 +104,10 @@ struct IncomingLane: View {
                         RoundedRectangle(cornerRadius: 10).stroke(
                             ticket.typed ? Color.accentColor : .clear, lineWidth: 2)
                     )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             Spacer(minLength: 0)
         }
+        .transaction { $0.animation = nil }  // the queue advances faster than any animation could finish
         .padding(14)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue.opacity(0.05)))
@@ -122,7 +127,7 @@ struct DecidedFeed: View {
                 ForEach(TriageModel.Team.allCases) { team in
                     HStack(spacing: 5) {
                         Circle().fill(team.color).frame(width: 8, height: 8)
-                        Text(team.title).font(.system(size: 13))
+                        Text(team.title).font(.system(size: 13)).lineLimit(1).fixedSize()
                         Text("\(model.count(for: team))").font(.system(size: 13, weight: .semibold)).monospacedDigit()
                     }
                     .padding(.horizontal, 9).padding(.vertical, 4)
@@ -133,7 +138,7 @@ struct DecidedFeed: View {
                 LazyVStack(spacing: 8) {
                     ForEach(model.tickets.reversed()) { ticket in
                         TicketRow(ticket: ticket)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .transition(.opacity)
                     }
                 }
             }
