@@ -66,7 +66,7 @@ public struct UnlimitedOcrDocument: Sendable {
                 numbers = []
                 current = ""
             case "]":
-                if let value = Double(current) { numbers.append(value) }
+                if let value = Double(current.trimmingCharacters(in: .whitespaces)) { numbers.append(value) }
                 if inside, numbers.count == 4 {
                     rects.append(
                         CGRect(
