@@ -245,6 +245,44 @@ packed tokens) 63 / 113 ms. The upstream PyTorch runtime on the same Mac (MPS, f
 the Swift host against the Python reference. [Sources/IssueTriageDemo](Sources/IssueTriageDemo/README.md) labels 1,000
 GitHub issues live with Kai (type, owning team, priority, flags: five decisions per issue in one call).
 
+## Decision 3.0
+
+`D3Manager` runs vLLM Semantic Router's [Decision 3.0](https://huggingface.co/collections/vllm-sr/decision-30) d3
+models (Apache-2.0, v3.1.0) on the GPU through Core ML: d3-lite 0.85B, d3-nano 2.2B and d3-mini 4.5B (Qwen3.5 hybrid
+with a vision tower). A request is a state (text or JSON), optional images, and any number of named questions (choice,
+yes/no, score); as upstream, each question is its own row and gets a probability for every option. Images go through
+the fp32 vision tower once per request (the clef-vision preprocessor and host math), and the text graph (fp16 compute,
+int8 weights) runs per question in the smallest of three length buckets. Answers vs the upstream PyTorch runtime:
+
+| | text (100 q) | images (24–48 q) | video (28 answers, Python host) | per text question (M5 Pro) |
+|---|---|---|---|---|
+| d3-lite | 2 flips | 1 flip | 0 flips | ~46 ms |
+| d3-nano | 0 flips | 0 flips | 1 flip | ~65 ms |
+| d3-mini | 1 flip | 0 flips | 0 flips | ~160 ms |
+
+The pinned snapshots download from [FluidInference/d3-coreml](https://huggingface.co/FluidInference/d3-coreml) (`lite/`
+3.2 GB, `nano/` 9.1 GB, `mini/` 16 GB) on first use (macOS 15 / iOS 18).
+
+```swift
+let model = try await D3Manager.load(from: try await D3ModelStore.ensure(.lite))
+try await model.warm()
+let answers = try await model.answer(
+    state: .string("The order arrived damaged yesterday. The customer has a receipt and asks for a replacement today."),
+    images: [],  // or [try await model.encode(cgImage)]
+    questions: [
+        ("route", .choice("Which team should handle this request?", options: [
+            ("returns", "Refunds, replacements and damaged deliveries"), ("billing", "Payments, invoices and charges"),
+        ])),
+        ("receipt", .noul("Does the customer have a receipt?")),
+        ("urgency", .score("How urgent is this request?", levels: ["Routine", "Soon", "Today"])),
+    ])
+print(answers[0].best, answers[1].yes, answers[2].score)
+```
+
+That request takes 139 ms with d3-lite on an M5 Pro. `swift run -c release D3Check example lite|nano|mini` downloads a
+snapshot and answers it; `D3Check parity <model directory> <fixtures dir>` checks the Swift host against the Python
+Core ML host on marked browser screenshots (0 token mismatches, 0 flips).
+
 ## Vela 2.0 routing, safety and spans
 
 `Vela2Manager` runs vLLM Semantic Router × KR Labs'
