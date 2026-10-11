@@ -93,7 +93,8 @@ public enum ClefVisionError: Error, LocalizedError, Sendable {
         switch self {
         case .invalidAsset(let m): return "Invalid asset: \(m)"
         case .invalidInput(let m): return "Invalid input: \(m)"
-        case .tooLong(let tokens, let bucket): return "Record needs \(tokens) tokens; the largest bucket holds \(bucket)"
+        case .tooLong(let tokens, let bucket):
+            return "Record needs \(tokens) tokens; the largest bucket holds \(bucket)"
         case .tooManyFields(let q, let o): return "Record has \(q) questions / \(o) options; the head holds 16 / 64"
         case .checksumMismatch(let m): return "Checksum mismatch: \(m)"
         case .download(let m): return "Download failed: \(m)"
@@ -142,10 +143,13 @@ struct ClefVisionConfig: Sendable {
 
     init(json: [String: Any]) throws {
         func int(_ key: String, in dict: [String: Any]) throws -> Int {
-            guard let value = (dict[key] as? NSNumber)?.intValue else { throw ClefVisionError.invalidAsset("config.json: \(key)") }
+            guard let value = (dict[key] as? NSNumber)?.intValue else {
+                throw ClefVisionError.invalidAsset("config.json: \(key)")
+            }
             return value
         }
-        guard let tokenizer = json["tokenizer"] as? [String: Any], let embeddings = json["embeddings"] as? [String: Any],
+        guard let tokenizer = json["tokenizer"] as? [String: Any],
+            let embeddings = json["embeddings"] as? [String: Any],
             let shape = embeddings["shape"] as? [NSNumber], shape.count == 2,
             let packages = json["packages"] as? [String: Any], let lm = packages["lm"] as? [[String: Any]],
             let visionPkg = packages["vision"] as? [String: Any],
@@ -155,7 +159,11 @@ struct ClefVisionConfig: Sendable {
         else { throw ClefVisionError.invalidAsset("config.json is missing sections") }
         // one head package per LM bucket (list), or a single package (object) in older manifests
         let heads: [[String: Any]]
-        if let list = packages["head"] as? [[String: Any]] { heads = list } else if let one = packages["head"] as? [String: Any] { heads = [one] } else {
+        if let list = packages["head"] as? [[String: Any]] {
+            heads = list
+        } else if let one = packages["head"] as? [String: Any] {
+            heads = [one]
+        } else {
             throw ClefVisionError.invalidAsset("config.json: packages.head")
         }
         guard let head = heads.first else { throw ClefVisionError.invalidAsset("config.json: no head package") }
@@ -177,12 +185,40 @@ struct ClefVisionConfig: Sendable {
         let visionRope = (visionCfg["rope_parameters"] as? [String: Any])?["rope_theta"] as? NSNumber
         vision = VisionShape(
             patches: try int("patches", in: visionPkg), patchSize: try int("patch_size", in: visionCfg),
-            mergeSize: try int("spatial_merge_size", in: visionCfg), temporalPatch: try int("temporal_patch_size", in: visionCfg),
-            hidden: try int("hidden_size", in: visionCfg), headDim: try int("hidden_size", in: visionCfg) / (try int("num_heads", in: visionCfg)),
-            depthPositions: try int("num_position_embeddings", in: visionCfg), ropeTheta: visionRope?.doubleValue ?? 10_000)
+            mergeSize: try int("spatial_merge_size", in: visionCfg),
+            temporalPatch: try int("temporal_patch_size", in: visionCfg),
+            hidden: try int("hidden_size", in: visionCfg),
+            headDim: try int("hidden_size", in: visionCfg) / (try int("num_heads", in: visionCfg)),
+            depthPositions: try int("num_position_embeddings", in: visionCfg),
+            ropeTheta: visionRope?.doubleValue ?? 10_000)
         self.image = ImageProcessing(
             minPixels: try int("min_pixels", in: image), maxPixels: try int("max_pixels", in: image),
             mean: mean.map(\.floatValue), std: std.map(\.floatValue),
             rescale: (image["rescale_factor"] as? NSNumber)?.floatValue ?? 1 / 255)
+    }
+}
+
+extension ClefVisionConfig {
+    /// Direct construction for other Qwen3.5 vision checkpoints (d3) that reuse the preprocessor and host math.
+    init(
+        imageTokenID: Int, visionStartID: Int, visionEndID: Int, padID: Int, vocabSize: Int, hiddenSize: Int,
+        rotaryDim: Int, ropeTheta: Double, mropeSection: [Int], lmBuckets: [Int], vision: VisionShape,
+        image: ImageProcessing
+    ) {
+        self.imageTokenID = imageTokenID
+        self.visionStartID = visionStartID
+        self.visionEndID = visionEndID
+        self.padID = padID
+        self.vocabSize = vocabSize
+        self.hiddenSize = hiddenSize
+        self.rotaryDim = rotaryDim
+        self.ropeTheta = ropeTheta
+        self.mropeSection = mropeSection
+        self.lmBuckets = lmBuckets
+        headLength = 0
+        headMaxQuestions = 0
+        headMaxOptions = 0
+        self.vision = vision
+        self.image = image
     }
 }

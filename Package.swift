@@ -72,6 +72,7 @@ let package = Package(
         .executableTarget(name: "ClefCompareDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh"]),
         .executableTarget(name: "InternDecisionCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "Decision2Check", dependencies: ["FluidUse"]),
+        .executableTarget(name: "D3Check", dependencies: ["FluidUse"]),
         .executableTarget(
             name: "IssueTriageDemo", dependencies: ["FluidUse"], exclude: ["README.md", "fetch-issues.sh"]),
         .executableTarget(name: "Vela2Check", dependencies: ["FluidUse"]),
