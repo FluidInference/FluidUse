@@ -7,8 +7,8 @@ import Observation
 /// frame at 60 fps.
 /// - JEV-9B: three yes/no questions about close-ups just ahead of him (enemy? pipe or step? gap?); any yes -> long
 ///   running jump, else run. Mirrors model-lab `jev-9b-coreml/conversion/mario.py`.
-/// - Tiny: the 0.46M-parameter student picks run / jump / hop / wait from the pixels around Mario (model-lab
-///   `mario-tiny`).
+/// - Student: a small pixel model (~9M parameters) picks run / jump / hop / wait from the pixels around Mario
+///   (model-lab `mario-tiny`).
 @available(macOS 15.0, *)
 @MainActor
 @Observable
@@ -24,7 +24,7 @@ final class MarioPlayer {
 
     enum Brain: String, CaseIterable, Identifiable {
         case jev = "JEV-9B · 3 questions"
-        case tiny = "Tiny · 0.46M params"
+        case tiny = "Student · pixels"
         var id: String { rawValue }
     }
 
@@ -69,37 +69,49 @@ final class MarioPlayer {
     var x = 40
     var status = "Loading…"
     var finished = false
-    var brain: Brain = ProcessInfo.processInfo.environment["JEV_MARIO_BRAIN"] == "tiny" ? .tiny : .jev
-    var moveProbabilities: [Float] = []  // tiny: per TinyMarioPolicy.moves
+    var brain: Brain = ProcessInfo.processInfo.environment["JEV_MARIO_BRAIN"] == "student" ? .tiny : .jev
+    var moveProbabilities: [Float] = []  // student: per MarioStudentPolicy.moves
+    var studentParameters = ""
 
     private var manager: JevManager?
-    private var tiny: TinyMarioPolicy?
-    private var history: [Data] = []  // last 5 frames' pixels (the tiny student also sees 4 frames back)
+    private var tiny: MarioStudentPolicy?
+    private var history: [Data] = []  // last 5 frames' pixels (the student also sees 4 frames back)
     private var bridge: MarioBridge?
     private var loop: Task<Void, Never>?
     private var started = false
 
     /// Starts the first game; SwiftUI may re-run the view's `.task`, so later calls are ignored (use `restart`).
-    func start(modelDirectory: URL, bridgeCommand: [String]) {
+    func start(modelDirectory: URL?, bridgeCommand: [String]) {
         guard !started else { return }
         started = true
         run(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand)
     }
 
-    private func run(modelDirectory: URL, bridgeCommand: [String]) {
+    private func run(modelDirectory: URL?, bridgeCommand: [String]) {
         loop?.cancel()
         loop = Task {
             do {
                 let loadStarted = Date()
                 switch brain {
                 case .jev where manager == nil:
-                    status = "Loading JEV-9B (Core ML)…"
-                    manager = try await JevManager.load(from: modelDirectory, bucket: 256)
-                case .tiny where tiny == nil:
-                    guard let path = ProcessInfo.processInfo.environment["TINY_MARIO_MODEL"] else {
-                        throw DemoError.noTinyModel
+                    status =
+                        modelDirectory == nil
+                        ? "Downloading JEV-9B Core ML (~13 GB, first use only)…" : "Loading JEV-9B…"
+                    let directory: URL
+                    if let modelDirectory {
+                        directory = modelDirectory
+                    } else {
+                        directory = try await JevModelStore.ensure()
                     }
-                    tiny = try await TinyMarioPolicy(package: URL(fileURLWithPath: path))
+                    status = "Loading JEV-9B (Core ML)…"
+                    manager = try await JevManager.load(from: directory, bucket: 256)
+                case .tiny where tiny == nil:
+                    guard let path = ProcessInfo.processInfo.environment["MARIO_STUDENT_MODEL"] else {
+                        throw DemoError.noStudentModel
+                    }
+                    let policy = try await MarioStudentPolicy(package: URL(fileURLWithPath: path))
+                    studentParameters = policy.parameterLabel
+                    tiny = policy
                 default: break
                 }
                 status = String(format: "\(brain.rawValue) ready in %.1f s", Date().timeIntervalSince(loadStarted))
@@ -113,11 +125,11 @@ final class MarioPlayer {
     }
 
     enum DemoError: Error, LocalizedError {
-        case noTinyModel
-        var errorDescription: String? { "Set TINY_MARIO_MODEL to the TinyMario.mlpackage path" }
+        case noStudentModel
+        var errorDescription: String? { "Set MARIO_STUDENT_MODEL to the student's .mlpackage path" }
     }
 
-    func restart(modelDirectory: URL, bridgeCommand: [String]) {
+    func restart(modelDirectory: URL?, bridgeCommand: [String]) {
         finished = false
         decisions = 0
         run(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand)
@@ -136,7 +148,7 @@ final class MarioPlayer {
                 moveProbabilities = try tiny.decide(now: step.pixels, before: history[0], marioX: step.screenX)
                 lastMilliseconds = Date().timeIntervalSince(started) * 1000
                 let best = moveProbabilities.indices.max { moveProbabilities[$0] < moveProbabilities[$1] } ?? 0
-                move = TinyMarioPolicy.moves[best]
+                move = MarioStudentPolicy.moves[best]
                 decisions += 1
                 print(String(format: "%3d  x %4d  %@  %.2f ms", decisions, step.x, move.rawValue, lastMilliseconds))
                 step = try await perform(move, from: step, bridge: bridge)

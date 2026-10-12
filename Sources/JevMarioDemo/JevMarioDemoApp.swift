@@ -1,39 +1,25 @@
 import FluidUse
 import SwiftUI
 
-/// JEV-9B (Core ML) plays Super Mario Bros. 1-1.
+/// JEV-9B or the small pixel student (Core ML) plays Super Mario Bros.
 ///
-///     JEV_MODEL_DIR=<bundle> swift run -c release JevMarioDemo     # or Sources/JevMarioDemo/demo.sh
+///     swift run -c release JevMarioDemo                                   # JEV-9B (downloaded on first use)
+///     JEV_MARIO_BRAIN=student MARIO_STUDENT_MODEL=<.mlpackage> swift run -c release JevMarioDemo
 ///
-/// The model bundle defaults to the pinned Hugging Face download (`JevModelStore`). The emulator runs in
-/// `nes_bridge.py` through `uv` (`JEV_MARIO_BRIDGE` overrides the command).
+/// JEV-9B loads from `JEV_MODEL_DIR` or the pinned Hugging Face download (`JevModelStore`), only when picked. The
+/// emulator runs in `nes_bridge.py` through `uv` (`JEV_MARIO_BRIDGE` overrides the command).
 @main
 @available(macOS 15.0, *)
 struct JevMarioDemoApp: App {
-    @State private var modelDirectory: URL?
-    @State private var error: String?
-
     init() { setvbuf(stdout, nil, _IOLBF, 0) }  // the decision log is tailed live (demo.sh)
 
     var body: some Scene {
-        WindowGroup("JEV-9B plays Mario") {
-            Group {
-                if let modelDirectory {
-                    ContentView(modelDirectory: modelDirectory, bridgeCommand: Self.bridgeCommand)
-                } else {
-                    Text(error ?? "Downloading JEV-9B Core ML (~10 GB, first run only)…").padding(40)
-                }
-            }
-            .task {
-                guard modelDirectory == nil else { return }
-                if let path = ProcessInfo.processInfo.environment["JEV_MODEL_DIR"] {
-                    modelDirectory = URL(fileURLWithPath: path)
-                    return
-                }
-                do { modelDirectory = try await JevModelStore.ensure() } catch {
-                    self.error = error.localizedDescription
-                }
-            }
+        WindowGroup("Mario on Core ML") {
+            ContentView(
+                modelDirectory: ProcessInfo.processInfo.environment["JEV_MODEL_DIR"].flatMap {
+                    $0.isEmpty ? nil : URL(fileURLWithPath: $0)
+                },
+                bridgeCommand: Self.bridgeCommand)
         }
         .windowResizability(.contentSize)
     }

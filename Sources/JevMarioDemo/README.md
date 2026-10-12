@@ -24,6 +24,20 @@ move plays at 60 fps.
 The model only answers the three questions. It reaches the flag in 70 decisions (deterministic), at about 1.2 s
 per decision on an M5 Pro.
 
+## Student brain
+
+The picker's second option is a small pixel model from model-lab `mario-tiny`: a MobileNetV3 with RAM tile / enemy
+auxiliary targets, ~9M parameters, 17 MB Core ML, ~0.4 ms per decision on the Neural Engine. It imitates a search
+expert and picks run / jump / hop / wait from the screen around Mario (now and 4 frames earlier). Over 32 levels × 3
+start offsets it reaches the flag in 12/96 runs (8 levels at least once; 1-1 and 6-1 every time).
+
+```bash
+JEV_MARIO_BRAIN=student MARIO_STUDENT_MODEL=/path/to/MarioStudent.mlpackage swift run -c release JevMarioDemo
+MARIO_LEVEL=6-1 JEV_MARIO_BRAIN=student MARIO_STUDENT_MODEL=... swift run -c release JevMarioDemo   # another level
+```
+
+In the app it reaches the 1-1 flag in 32 decisions at ~0.65 ms each.
+
 ## Run
 
 ```bash

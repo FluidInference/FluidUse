@@ -4,7 +4,7 @@ import SwiftUI
 @available(macOS 15.0, *)
 struct ContentView: View {
     @State private var player = MarioPlayer()
-    let modelDirectory: URL
+    let modelDirectory: URL?  // JEV-9B bundle; nil = download on first use
     let bridgeCommand: [String]
 
     var body: some View {
@@ -33,9 +33,11 @@ struct ContentView: View {
                 .pickerStyle(.segmented).labelsHidden()
                 .disabled(!player.finished)
                 if player.brain == .tiny {
-                    Text("Every move: a 0.46M-parameter CNN looks at the pixels around Mario")
-                        .font(.callout).foregroundStyle(.secondary)
-                    ForEach(Array(TinyMarioPolicy.moves.enumerated()), id: \.offset) { i, move in
+                    Text(
+                        "Every move: a \(player.studentParameters.isEmpty ? "small" : player.studentParameters + "-parameter") model looks at the pixels around Mario"
+                    )
+                    .font(.callout).foregroundStyle(.secondary)
+                    ForEach(Array(MarioStudentPolicy.moves.enumerated()), id: \.offset) { i, move in
                         let p = i < player.moveProbabilities.count ? player.moveProbabilities[i] : 0
                         HStack {
                             Text(move.rawValue).font(.headline).frame(width: 50, alignment: .leading)

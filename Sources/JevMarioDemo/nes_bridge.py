@@ -4,10 +4,11 @@ Requests (one JSON line each): {"cmd": "reset"} or {"cmd": "step", "buttons": <N
 Reply: one JSON line {"x", "screen_x", "screen_y", "on_ground", "done", "flag", "time"} followed by the frame as
 240*256*3 raw RGB bytes. The decisions are made by the Swift app (JEV-9B on Core ML); this only emulates.
 
-Needs gym-super-mario-bros 7.4.0 (it bundles the NES ROM; install it yourself, local use only), nes-py, gym 0.26.2,
+MARIO_LEVEL picks the level (default 1-1). Needs gym-super-mario-bros 7.4.0 (it bundles the NES ROM; install it yourself, local use only), nes-py, gym 0.26.2,
 numpy<2 -- `demo.sh` runs it through `uv run --with ...`.
 """
 import json
+import os
 import sys
 import warnings
 
@@ -27,7 +28,8 @@ def reply(env, obs, done, info):
 
 
 def main():
-    env = SuperMarioBrosEnv(rom_mode="vanilla", lost_levels=False, target=(1, 1))
+    world, stage = (int(v) for v in os.environ.get("MARIO_LEVEL", "1-1").split("-"))
+    env = SuperMarioBrosEnv(rom_mode="vanilla", lost_levels=False, target=(world, stage))
     obs, done, info = env.reset(), False, {}
     for line in sys.stdin:
         request = json.loads(line)
