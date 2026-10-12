@@ -73,7 +73,7 @@ final class MarioPlayer {
     var moveProbabilities: [Float] = []  // student: per MarioStudentPolicy.moves
     var studentParameters = ""
     /// Max speed: no 60 fps pacing, the emulator runs as fast as the bridge and the model allow.
-    var turbo = ProcessInfo.processInfo.environment["MARIO_TURBO"] == "1"
+    var turbo = false
     var gameFPS: Double = 0  // emulator frames per second over the last second
     private var frameTimes: [Date] = []
     var studentPlacement = ""
@@ -86,13 +86,14 @@ final class MarioPlayer {
     private var started = false
 
     /// Starts the first game; SwiftUI may re-run the view's `.task`, so later calls are ignored (use `restart`).
+    /// Loads the model and the emulator at launch; nothing plays until Play.
     func start(modelDirectory: URL?, bridgeCommand: [String]) {
         guard !started else { return }
         started = true
-        run(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand)
+        run(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand, playing: false)
     }
 
-    private func run(modelDirectory: URL?, bridgeCommand: [String]) {
+    private func run(modelDirectory: URL?, bridgeCommand: [String], playing: Bool = true) {
         let previous = loop
         previous?.cancel()
         loop = Task {
@@ -125,6 +126,11 @@ final class MarioPlayer {
                 }
                 status = String(format: "\(brain.rawValue) ready in %.1f s", Date().timeIntervalSince(loadStarted))
                 if bridge == nil { bridge = try MarioBridge(command: bridgeCommand) }
+                guard playing else {
+                    finished = true
+                    status += " · pick a level and press Play"
+                    return
+                }
                 try await play()
             } catch is CancellationError {
             } catch {
@@ -144,41 +150,19 @@ final class MarioPlayer {
         run(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand)
     }
 
-    /// Levels to play in order as (level, idle frames before the start), from MARIO_PLAYLIST ("1-1:0,3-2:41", idle
-    /// optional) or MARIO_LEVEL. The student's default playlist is every level it has reached the flag on.
-    static var playlist: [(level: String, idle: Int)] {
-        let env = ProcessInfo.processInfo.environment
-        let spec = env["MARIO_PLAYLIST"].flatMap { $0.isEmpty ? nil : $0 } ?? env["MARIO_LEVEL"] ?? "1-1"
-        return spec.split(separator: ",").map { entry in
-            let parts = entry.split(separator: ":")
-            return (String(parts[0]), parts.count > 1 ? Int(parts[1]) ?? 0 : 0)
-        }
-    }
-
     var level = ""
     var results: [(level: String, flag: Bool)] = []
-    /// Levels picked in the panel, played in world order; idle start offsets come from MARIO_PLAYLIST ("3-2:41").
-    var selected: Set<String> = Set(MarioPlayer.playlist.map(\.level))
+    /// The level Play starts (one level per press).
+    var choice = ProcessInfo.processInfo.environment["MARIO_LEVEL"].flatMap { $0.isEmpty ? nil : $0 } ?? "1-1"
     static let allLevels = (1...8).flatMap { w in (1...4).map { "\(w)-\($0)" } }
-    private static let idles = Dictionary(
-        MarioPlayer.playlist.map { ($0.level, $0.idle) }, uniquingKeysWith: { a, _ in a })
 
     private func play() async throws {
-        results = []
-        let queue = Self.allLevels.filter(selected.contains).map { (level: $0, idle: Self.idles[$0] ?? 0) }
-        for (index, entry) in queue.enumerated() {
-            try Task.checkCancellation()
-            level = entry.level
-            decisions = 0
-            let flag = try await playLevel(entry.level, idle: entry.idle)
-            results.append((entry.level, flag))
-            print("LEVEL \(entry.level)\(entry.idle > 0 ? " (start +\(entry.idle))" : ""): \(status)")
-            if index < queue.count - 1 { try await Task.sleep(for: .seconds(turbo ? 0.4 : 1.5)) }
-        }
+        level = choice
+        decisions = 0
+        let flag = try await playLevel(choice, idle: 0)
+        results.append((choice, flag))
         finished = true
-        let flags = results.filter(\.flag).count
-        status = "\(flags)/\(results.count) levels reached the flag"
-        print("PLAYLIST: \(status)")
+        print("LEVEL \(choice): \(status)")
     }
 
     private func playLevel(_ level: String, idle: Int) async throws -> Bool {

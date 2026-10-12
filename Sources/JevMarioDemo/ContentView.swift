@@ -7,13 +7,6 @@ struct ContentView: View {
     let modelDirectory: URL?  // JEV-9B bundle; nil = download on first use
     let bridgeCommand: [String]
 
-    /// One level at a time from the menu (MARIO_PLAYLIST still sets a multi-level run at launch).
-    var levelChoice: Binding<String> {
-        Binding(
-            get: { MarioPlayer.allLevels.first(where: player.selected.contains) ?? "1-1" },
-            set: { player.selected = [$0] })
-    }
-
     var body: some View {
         HStack(alignment: .top, spacing: 24) {
             VStack(alignment: .leading, spacing: 10) {
@@ -106,7 +99,7 @@ struct ContentView: View {
                         .foregroundStyle(player.turbo ? .orange : .secondary)
                 }
                 HStack {
-                    Picker("Level", selection: levelChoice) {
+                    Picker("Level", selection: $player.choice) {
                         ForEach(MarioPlayer.allLevels, id: \.self) { Text($0).tag($0) }
                     }
                     .frame(width: 130)
