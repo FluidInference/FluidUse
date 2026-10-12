@@ -31,7 +31,8 @@ def main() -> None:
                 d = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            width = max(10, shutil.get_terminal_size().columns - 30)
+            # label (9) + space + bar + space + the widest right-hand text (15), so nothing clips at any window width
+            width = max(10, shutil.get_terminal_size().columns - 9 - 2 - 15 - 2)
             p_mhz, p_use = d["pcpu_usage"]
             e_mhz, e_use = d["ecpu_usage"]
             g_mhz, g_use = d["gpu_usage"]

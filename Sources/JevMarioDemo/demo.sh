@@ -17,10 +17,11 @@ swift build -c release --product JevMarioDemo --package-path "$ROOT"
 if ! tmux has-session -t jev-mario 2>/dev/null; then
   tmux new-session -d -s jev-mario -x 160 -y 60 "python3 '$ROOT/Sources/ClefFlashDemo/bars.py'"
   tmux set-option -t jev-mario remain-on-exit on
+  tmux set-option -t jev-mario window-size latest  # follow the Ghostty window, not the detached 160-column default
   tmux split-window -v -t jev-mario "tail -n 300 -F '$LOG'"
   tmux set-hook -t jev-mario client-attached 'resize-pane -t jev-mario:0.0 -y 10'
   tmux set-hook -t jev-mario client-resized 'resize-pane -t jev-mario:0.0 -y 10'
-  open -na /Applications/Ghostty.app --args -e "$(command -v tmux)" attach -t jev-mario
+  open -na /Applications/Ghostty.app --args --window-width=150 --window-height=44 -e "$(command -v tmux)" attach -t jev-mario
 fi
 pkill -x JevMarioDemo 2>/dev/null || true
 MARIO_LEVEL="${MARIO_LEVEL:-1-1}" JEV_MODEL_DIR="$BUNDLE" JEV_MARIO_BRAIN="${JEV_MARIO_BRAIN:-}" MARIO_STUDENT_MODEL="${MARIO_STUDENT_MODEL:-}" \
