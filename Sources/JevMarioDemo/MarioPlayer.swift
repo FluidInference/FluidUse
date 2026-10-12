@@ -70,12 +70,15 @@ final class MarioPlayer {
     var status = "Loading…"
     var finished = false
     var brain: Brain = ProcessInfo.processInfo.environment["JEV_MARIO_BRAIN"] == "student" ? .tiny : .jev
-    var moveProbabilities: [Float] = []  // student: per MarioStudentPolicy.moves
+    var moveProbabilities: [Float] = []  // student: per studentMoves
+    var studentMoves: [String] = []
+    var studentMove = ""
     var studentParameters = ""
     /// Max speed: no 60 fps pacing, the emulator runs as fast as the bridge and the model allow.
-    var turbo = false
+    var turbo = ProcessInfo.processInfo.environment["MARIO_TURBO"] == "1"  // starting position of the switch (default off)
     var gameFPS: Double = 0  // emulator frames per second over the last second
-    private var frameTimes: [Date] = []
+    private var frameLog: [(Date, Int)] = []
+    private var levelFrames = 0
     var studentPlacement = ""
 
     private var manager: JevManager?
@@ -119,6 +122,7 @@ final class MarioPlayer {
                     }
                     let policy = try await MarioStudentPolicy(package: URL(fileURLWithPath: path))
                     studentParameters = policy.parameterLabel
+                    studentMoves = policy.moves
                     studentPlacement = policy.placement
                     print("student: \(policy.parameterLabel) params, \(policy.placement)")
                     tiny = policy
@@ -126,7 +130,9 @@ final class MarioPlayer {
                 }
                 status = String(format: "\(brain.rawValue) ready in %.1f s", Date().timeIntervalSince(loadStarted))
                 if bridge == nil { bridge = try MarioBridge(command: bridgeCommand) }
-                guard playing else {
+                // MARIO_AUTOPLAY=1 (benchmarks only, off by default): press Play once after loading
+                let autoplay = !playing && ProcessInfo.processInfo.environment["MARIO_AUTOPLAY"] == "1"
+                guard playing || autoplay else {
                     finished = true
                     status += " · pick a level and press Play"
                     return
@@ -168,6 +174,15 @@ final class MarioPlayer {
     private func playLevel(_ level: String, idle: Int) async throws -> Bool {
         guard let bridge else { return false }
         var step = try await bridge.reset(level: level, idle: idle)
+        levelFrames = 0
+        let levelStarted = Date()
+        defer {
+            let seconds = Date().timeIntervalSince(levelStarted)
+            print(
+                String(
+                    format: "level %@: %d frames in %.1f s = %.0f fps (%.1fx real time)", level, levelFrames,
+                    seconds, Double(levelFrames) / seconds, Double(levelFrames) / seconds / 60))
+        }
         show(step)
         history = Array(repeating: step.pixels, count: 5)
         while !step.done {
@@ -178,10 +193,16 @@ final class MarioPlayer {
                 moveProbabilities = try tiny.decide(now: step.pixels, before: history[0], marioX: step.screenX)
                 lastMilliseconds = Date().timeIntervalSince(started) * 1000
                 let best = moveProbabilities.indices.max { moveProbabilities[$0] < moveProbabilities[$1] } ?? 0
-                move = MarioStudentPolicy.moves[best]
+                studentMove = tiny.moves[best]
                 decisions += 1
-                print(String(format: "%3d  x %4d  %@  %.2f ms", decisions, step.x, move.rawValue, lastMilliseconds))
-                step = try await perform(move, from: step, bridge: bridge)
+                print(String(format: "%3d  x %4d  %@  %.2f ms", decisions, step.x, studentMove, lastMilliseconds))
+                if tiny.everyMacro {
+                    step = try await performMacro(
+                        MarioStudentPolicy.solverMacros[studentMove] ?? [], from: step, bridge: bridge)
+                } else {
+                    move = Move(rawValue: studentMove) ?? .run
+                    step = try await perform(move, from: step, bridge: bridge)
+                }
                 continue
             }
             guard let manager else { return false }
@@ -215,6 +236,57 @@ final class MarioPlayer {
         return step.flag
     }
 
+    /// A solver-style 8-frame macro. Max speed: one batched bridge call and one redraw per macro. Otherwise frame by
+    /// frame at 60 fps, holding the last input while the game has control (pipe entry, area change).
+    private func performMacro(
+        _ buttons: [UInt8], from start: MarioBridge.Step, bridge: MarioBridge
+    ) async throws
+        -> MarioBridge.Step
+    {
+        guard !buttons.isEmpty else { return start }
+        try Task.checkCancellation()
+        if turbo {
+            let (step, before) = try await bridge.run(buttons)
+            show(step)
+            history = [before, before, before, before, step.pixels]
+            countFrames(step.frames)
+            return step
+        }
+        var step = start
+        var index = 0
+        var held = 0
+        while !step.done {
+            let press: UInt8
+            if index < buttons.count {
+                press = buttons[index]
+                index += 1
+            } else if !step.control && held < 300 {
+                press = buttons[buttons.count - 1]
+                held += 1
+            } else {
+                break
+            }
+            let tick = Date()
+            try Task.checkCancellation()
+            step = try await bridge.step(press)
+            show(step)
+            history = Array(history.dropFirst()) + [step.pixels]
+            countFrames(1)
+            let elapsed = Date().timeIntervalSince(tick)
+            if elapsed < 1 / 60 { try await Task.sleep(for: .seconds(1 / 60 - elapsed)) }
+        }
+        return step
+    }
+
+    /// Emulator frames per second over the last second (counts batched frames too).
+    private func countFrames(_ n: Int) {
+        levelFrames += n
+        let now = Date()
+        frameLog.append((now, n))
+        frameLog.removeAll { now.timeIntervalSince($0.0) > 1 }
+        gameFPS = Double(frameLog.reduce(0) { $0 + $1.1 })
+    }
+
     /// Play the move at 60 fps, then keep running until Mario lands (max 90 frames).
     private func perform(
         _ move: Move, from start: MarioBridge.Step, bridge: MarioBridge
@@ -241,11 +313,8 @@ final class MarioPlayer {
             step = try await bridge.step(press)
             show(step)
             history = Array(history.dropFirst()) + [step.pixels]
-            let now = Date()
-            frameTimes.append(now)
-            frameTimes.removeAll { now.timeIntervalSince($0) > 1 }
-            gameFPS = Double(frameTimes.count)
-            let elapsed = now.timeIntervalSince(tick)
+            countFrames(1)
+            let elapsed = Date().timeIntervalSince(tick)
             if !turbo, elapsed < 1 / 60 { try await Task.sleep(for: .seconds(1 / 60 - elapsed)) }
         }
         return step

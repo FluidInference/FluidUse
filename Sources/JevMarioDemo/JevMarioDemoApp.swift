@@ -29,9 +29,11 @@ struct JevMarioDemoApp: App {
         if let custom = ProcessInfo.processInfo.environment["JEV_MARIO_BRIDGE"] {
             return custom.split(separator: " ").map(String.init)
         }
-        let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("nes_bridge.py")
+        let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent(
+            "retro_bridge.py")
         return [
-            "uv", "run", "--no-project", "--python", "3.12", "--with", "gym-super-mario-bros==7.4.0", "--with",
+            "uv", "run", "--no-project", "--python", "3.12", "--with", "stable-retro", "--with",
+            "gym-super-mario-bros==7.4.0", "--with",
             "nes-py",
             "--with", "gym==0.26.2", "--with", "numpy<2", "python", script.path,
         ]

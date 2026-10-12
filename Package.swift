@@ -72,7 +72,7 @@ let package = Package(
         .executableTarget(name: "ClefTextCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "JevCheck", dependencies: ["FluidUse"]),
         .executableTarget(
-            name: "JevMarioDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "nes_bridge.py"]),
+            name: "JevMarioDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "nes_bridge.py", "retro_bridge.py"]),
         .executableTarget(name: "ClefCompareDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh"]),
         .executableTarget(name: "InternDecisionCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "Decision2Check", dependencies: ["FluidUse"]),

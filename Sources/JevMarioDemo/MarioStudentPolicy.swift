@@ -1,13 +1,33 @@
 import CoreML
 import Foundation
 
-/// The pixel student (model-lab `mario-tiny`, e.g. the ~9M-parameter MobileNetV3 trained with RAM tile / enemy
-/// targets): the screen around Mario now and 4 frames earlier -> logits over run / jump / hop / wait (the first 4
-/// outputs; multi-head models append survival logits). Under 1 ms per decision on the Neural Engine.
+/// The pixel student (model-lab `mario-tiny`, a ~9M-parameter MobileNetV3 trained with RAM tile / enemy targets):
+/// the screen around Mario now and 4 frames earlier -> logits over its moves (named in the package metadata; the first
+/// `moves.count` outputs). A 4-move model (run / jump / hop / wait) decides when Mario lands; an 11-move model
+/// (trained on the level solver) decides every 8 frames. Under 1 ms per decision on the Neural Engine.
 @available(macOS 15.0, *)
 @MainActor
 final class MarioStudentPolicy {
-    static let moves: [MarioPlayer.Move] = [.run, .jump, .hop, .wait]
+    /// Move names in output order, from the package metadata.
+    let moves: [String]
+    /// Solver-style model: 8-frame macros, one decision per macro.
+    var everyMacro: Bool { moves.count > 4 }
+
+    static let right: UInt8 = 0x80, left: UInt8 = 0x40, down: UInt8 = 0x20, a: UInt8 = 0x01, b: UInt8 = 0x02
+    /// The level solver's macros (model-lab mario-tiny/solver.py), 8 frames each.
+    static let solverMacros: [String: [UInt8]] = [
+        "run": Array(repeating: right | b, count: 8),
+        "walk": Array(repeating: right, count: 8),
+        "hold": Array(repeating: right | b | a, count: 8),
+        "jump": [right | b] + Array(repeating: right | b | a, count: 7),
+        "hop": [right | b] + Array(repeating: right | b | a, count: 2) + Array(repeating: right | b, count: 5),
+        "up": [0] + Array(repeating: a, count: 7),
+        "left": Array(repeating: left | b, count: 8),
+        "leftjump": [left] + Array(repeating: left | a, count: 7),
+        "wait": Array(repeating: 0, count: 8),
+        "swim": Array(repeating: right | a, count: 2) + Array(repeating: right, count: 6),
+        "down": Array(repeating: down, count: 8),
+    ]
     static let cropLeft = 32, cropWidth = 192, scale = 2  // 2 blocks behind Mario to 10 ahead, half resolution
     private let model: MLModel
     /// Parameter count from the package metadata (export_coreml.py), e.g. "9.0M".
@@ -25,6 +45,7 @@ final class MarioStudentPolicy {
         let metadata = model.modelDescription.metadata[.creatorDefinedKey] as? [String: String]
         let count = Double(metadata?["parameters"] ?? "") ?? 0
         parameterLabel = count >= 1e6 ? String(format: "%.1fM", count / 1e6) : String(format: "%.0fK", count / 1e3)
+        moves = (metadata?["moves"] ?? "run,jump,hop,wait").split(separator: ",").map(String.init)
         placement = await Self.placement(of: compiled)
     }
 
@@ -76,7 +97,7 @@ final class MarioStudentPolicy {
         }
         let result = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: ["crop": input]))
         guard let logits = result.featureValue(for: "logits")?.multiArrayValue else { return [] }
-        let values = (0..<Self.moves.count).map { Float(logits[$0].floatValue) }
+        let values = (0..<moves.count).map { Float(logits[$0].floatValue) }
         let peak = values.max() ?? 0
         let exps = values.map { expf($0 - peak) }
         let sum = exps.reduce(0, +)

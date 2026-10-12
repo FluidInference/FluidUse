@@ -48,11 +48,11 @@ struct ContentView: View {
                     if !player.studentPlacement.isEmpty {
                         Label(player.studentPlacement, systemImage: "cpu").font(.callout.bold()).foregroundStyle(.green)
                     }
-                    ForEach(Array(MarioStudentPolicy.moves.enumerated()), id: \.offset) { i, move in
+                    ForEach(Array(player.studentMoves.enumerated()), id: \.offset) { i, move in
                         let p = i < player.moveProbabilities.count ? player.moveProbabilities[i] : 0
                         HStack {
-                            Text(move.rawValue).font(.headline).frame(width: 50, alignment: .leading)
-                            Bar(value: p, color: move == player.move ? .orange : .gray)
+                            Text(move).font(.callout.bold()).frame(width: 70, alignment: .leading)
+                            Bar(value: p, color: move == player.studentMove ? .orange : .gray)
                             Text(String(format: "%.2f", p)).font(.system(.caption, design: .monospaced))
                         }
                     }
@@ -79,8 +79,9 @@ struct ContentView: View {
                     }
                 }
                 HStack(alignment: .firstTextBaseline) {
-                    Text(player.move.rawValue.uppercased()).font(.system(size: 34, weight: .bold, design: .rounded))
-                        .foregroundStyle(player.move == .run ? .green : .orange)
+                    let shown = player.brain == .tiny ? player.studentMove : player.move.rawValue
+                    Text(shown.uppercased()).font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(shown == "run" ? .green : .orange)
                     Spacer()
                     VStack(alignment: .trailing) {
                         Text(
