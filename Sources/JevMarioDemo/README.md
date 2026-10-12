@@ -27,16 +27,27 @@ per decision on an M5 Pro.
 ## Student brain
 
 The picker's second option is a small pixel model from model-lab `mario-tiny`: a MobileNetV3 with RAM tile / enemy
-auxiliary targets, ~9M parameters, 17 MB Core ML, ~0.4 ms per decision on the Neural Engine. It imitates a search
-expert and picks run / jump / hop / wait from the screen around Mario (now and 4 frames earlier). Over 32 levels × 3
-start offsets it reaches the flag in 12/96 runs (8 levels at least once; 1-1 and 6-1 every time).
+auxiliary targets, ~9M parameters, 17 MB Core ML, ~0.5 ms per decision on the Neural Engine. The current model (r10)
+is trained on a beam-search solver's routes for all 32 levels plus DAgger, and picks one of 11 eight-frame moves from
+the screen around Mario (now and 4 frames earlier).
+
+Lookahead (on by default, toggle in the app, `MARIO_LOOKAHEAD=0` to start off): before each move the app saves the
+emulator state and simulates candidates in the student's order (the move, then the student's next 6 moves, each a
+Core ML decision); it plays the first that survives and gains ground, else the one that lasts longest. A stalled
+continuation also tries the move repeated (a swim stroke only rises if repeated). Over 32 levels × 3 start offsets:
+
+| | Flags /96 | Levels cleared at least once | Every start |
+|---|---|---|---|
+| Student alone | 53 | 23 | 12 |
+| Student + lookahead | 78 | 30 | 21 |
+
+The maze castles 4-4 and 8-4 stay unsolved. With lookahead it is the student plus emulator simulation, not the network
+alone. Speed (release, uncapped): 1-1 5.5x real time (532 simulated moves), 7-1 2.0x, 5-2 1.9x (4,269).
 
 ```bash
-JEV_MARIO_BRAIN=student MARIO_STUDENT_MODEL=/path/to/MarioStudent.mlpackage swift run -c release JevMarioDemo
-MARIO_LEVEL=6-1 JEV_MARIO_BRAIN=student MARIO_STUDENT_MODEL=... swift run -c release JevMarioDemo   # another level
+JEV_MARIO_BRAIN=student MARIO_STUDENT_MODEL=/path/to/MarioStudentR10.mlpackage swift run -c release JevMarioDemo
+MARIO_LEVEL=5-2 JEV_MARIO_BRAIN=student MARIO_STUDENT_MODEL=... swift run -c release JevMarioDemo   # another level
 ```
-
-In the app it reaches the 1-1 flag in 32 decisions at ~0.65 ms each.
 
 ## Run
 

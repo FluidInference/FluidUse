@@ -15,6 +15,8 @@ actor MarioBridge {
         let time: Int
         let frames: Int  // emulator frames this request advanced
         let control: Bool  // the player has control (false during pipe entry / area change)
+        let area: Int  // RAM 0x750 & 0x7F
+        let transition: Bool  // this request held input through a game-controlled transition (pipe)
     }
 
     struct Meta: Decodable {
@@ -28,6 +30,8 @@ actor MarioBridge {
         let frames: Int?
         let images: Int?
         let control: Bool?
+        let area: Int?
+        let transition: Bool?
     }
 
     static let width = 256, height = 240
@@ -62,29 +66,51 @@ actor MarioBridge {
         return (step, before ?? step.pixels)
     }
 
-    private func request(_ line: String) throws -> (Step, Data?) {
-        input.fileHandleForWriting.write(Data((line + "\n").utf8))
-        let reader = output.fileHandleForReading
-        var metaLine = Data()
-        while true {
-            let byte = reader.readData(ofLength: 1)
-            guard let b = byte.first else { throw BridgeError.closed }
-            if b == UInt8(ascii: "\n") { break }
-            metaLine.append(b)
+    /// Save state slot for the student's lookahead (one slot); the reply carries no image.
+    func save() throws { try command(#"{"cmd":"save"}"#) }
+
+    func load() throws { try command(#"{"cmd":"load"}"#) }
+
+    private var buffer = Data()
+
+    /// Bytes from the bridge's stdout, read in chunks (one read per byte was the bottleneck at ~4 ms per call).
+    private func read(count: Int) throws -> Data {
+        while buffer.count < count {
+            let chunk = output.fileHandleForReading.availableData
+            guard !chunk.isEmpty else { throw BridgeError.closed }
+            buffer.append(chunk)
         }
+        let out = buffer.prefix(count)
+        buffer.removeFirst(count)
+        return Data(out)
+    }
+
+    private func readLine() throws -> Data {
+        while true {
+            if let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+                let line = buffer[buffer.startIndex..<newline]
+                buffer.removeSubrange(buffer.startIndex...newline)
+                return Data(line)
+            }
+            let chunk = output.fileHandleForReading.availableData
+            guard !chunk.isEmpty else { throw BridgeError.closed }
+            buffer.append(chunk)
+        }
+    }
+
+    private func meta(_ line: String) throws -> Meta {
+        input.fileHandleForWriting.write(Data((line + "\n").utf8))
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let meta = try decoder.decode(Meta.self, from: metaLine)
+        return try decoder.decode(Meta.self, from: readLine())
+    }
+
+    private func command(_ line: String) throws { _ = try meta(line) }
+
+    private func request(_ line: String) throws -> (Step, Data?) {
+        let meta = try meta(line)
         let size = Self.width * Self.height * 3
-        func readImage() throws -> Data {
-            var pixels = Data()
-            while pixels.count < size {
-                let chunk = reader.readData(ofLength: size - pixels.count)
-                guard !chunk.isEmpty else { throw BridgeError.closed }
-                pixels.append(chunk)
-            }
-            return pixels
-        }
+        func readImage() throws -> Data { try read(count: size) }
         let pixels = try readImage()
         let before = (meta.images ?? 1) > 1 ? try readImage() : nil
         guard let provider = CGDataProvider(data: pixels as CFData),
@@ -97,7 +123,7 @@ actor MarioBridge {
         let step = Step(
             frame: frame, pixels: pixels, x: meta.x, screenX: meta.screenX, screenY: meta.screenY,
             onGround: meta.onGround, done: meta.done, flag: meta.flag, time: meta.time, frames: meta.frames ?? 1,
-            control: meta.control ?? true)
+            control: meta.control ?? true, area: meta.area ?? 0, transition: meta.transition ?? false)
         return (step, before)
     }
 

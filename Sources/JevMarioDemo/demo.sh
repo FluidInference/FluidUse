@@ -28,7 +28,7 @@ if ! tmux has-session -t jev-mario 2>/dev/null; then
   GHOSTTY_PID=$(pgrep -n -x ghostty || true)
 fi
 pkill -x JevMarioDemo 2>/dev/null || true
-MARIO_PLAYLIST="${MARIO_PLAYLIST:-}" MARIO_TURBO="${MARIO_TURBO:-}" MARIO_LEVEL="${MARIO_LEVEL:-1-1}" JEV_MODEL_DIR="$BUNDLE" JEV_MARIO_BRAIN="${JEV_MARIO_BRAIN:-}" MARIO_STUDENT_MODEL="${MARIO_STUDENT_MODEL:-}" \
+MARIO_PLAYLIST="${MARIO_PLAYLIST:-}" MARIO_TURBO="${MARIO_TURBO:-}" MARIO_LOOKAHEAD="${MARIO_LOOKAHEAD:-}" MARIO_LEVEL="${MARIO_LEVEL:-1-1}" JEV_MODEL_DIR="$BUNDLE" JEV_MARIO_BRAIN="${JEV_MARIO_BRAIN:-}" MARIO_STUDENT_MODEL="${MARIO_STUDENT_MODEL:-}" \
   "$ROOT/.build/release/JevMarioDemo" > "$LOG" 2> "$LOG.stderr" &
 APP_PID=$!
 # T layout: the game window centred across the top, the terminal full width underneath (bars | log)

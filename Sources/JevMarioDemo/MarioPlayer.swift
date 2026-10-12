@@ -82,6 +82,12 @@ final class MarioPlayer {
     private var frameLog: [(Date, Int)] = []
     private var levelFrames = 0
     var studentPlacement = ""
+    /// Student lookahead (model-lab mario-tiny `student_retro.py play --lookahead 6`): candidate moves are simulated on
+    /// an emulator save state before each real move. MARIO_LOOKAHEAD=0 starts with it off.
+    var lookahead = ProcessInfo.processInfo.environment["MARIO_LOOKAHEAD"] != "0"
+    var simulated = 0  // moves simulated for the last real move
+    var simulatedTotal = 0
+    static let lookaheadDepth = 6
 
     private var manager: JevManager?
     private var tiny: MarioStudentPolicy?
@@ -167,6 +173,7 @@ final class MarioPlayer {
     private func play() async throws {
         level = choice
         decisions = 0
+        simulatedTotal = 0
         let flag = try await playLevel(choice, idle: 0)
         results.append((choice, flag))
         finished = true
@@ -194,10 +201,15 @@ final class MarioPlayer {
                 let started = Date()
                 moveProbabilities = try tiny.decide(now: step.pixels, before: history[0], marioX: step.screenX)
                 lastMilliseconds = Date().timeIntervalSince(started) * 1000
-                let best = moveProbabilities.indices.max { moveProbabilities[$0] < moveProbabilities[$1] } ?? 0
-                studentMove = tiny.moves[best]
+                let ranked = moveProbabilities.indices.sorted { moveProbabilities[$0] > moveProbabilities[$1] }
+                    .map { tiny.moves[$0] }
+                studentMove = ranked.first ?? "run"
                 decisions += 1
                 print(String(format: "%3d  x %4d  %@  %.2f ms", decisions, step.x, studentMove, lastMilliseconds))
+                if tiny.everyMacro && lookahead {
+                    studentMove = try await look(from: step, ranked: ranked, tiny: tiny, bridge: bridge)
+                    simulatedTotal += simulated
+                }
                 if tiny.everyMacro {
                     step = try await performMacro(
                         MarioStudentPolicy.solverMacros[studentMove] ?? [], from: step, bridge: bridge)
@@ -235,7 +247,58 @@ final class MarioPlayer {
         status =
             step.flag
             ? "Reached the flag in \(decisions) decisions" : "Mario died at x \(step.x) after \(decisions) decisions"
+        if brain == .tiny && lookahead { status += " · \(simulatedTotal) moves simulated" }
         return step.flag
+    }
+
+    /// The first candidate (in the student's order) that, simulated on a save state with the student's next 6 moves,
+    /// survives and gains ground: x +16 px, another area, or a pipe (entering a side pipe drops x). If the student's
+    /// continuation stalls, the same move repeated for 18 moves is tried too (a swim stroke only rises if repeated).
+    /// Else the candidate that lasts longest, then gets furthest. Restores the save state before returning.
+    private func look(
+        from step: MarioBridge.Step, ranked: [String], tiny: MarioStudentPolicy, bridge: MarioBridge
+    ) async throws -> String {
+        try await bridge.save()
+        simulated = 0
+        var best = ranked.first ?? "run"
+        var bestScore = (-1, -1)
+        for move in ranked {
+            for repeating in [false, true] {
+                try Task.checkCancellation()
+                try await bridge.load()
+                let horizon = repeating ? 3 * Self.lookaheadDepth : Self.lookaheadDepth
+                var (sim, before) = try await bridge.run(MarioStudentPolicy.solverMacros[move] ?? [])
+                var transition = sim.transition
+                var lasted = 0
+                simulated += 1
+                while !sim.done && lasted < horizon {
+                    var next = move
+                    if !repeating {
+                        let started = Date()
+                        let p = try tiny.decide(now: sim.pixels, before: before, marioX: sim.screenX)
+                        print(String(format: "      sim  %.2f ms", Date().timeIntervalSince(started) * 1000))
+                        next = tiny.moves[p.indices.max { p[$0] < p[$1] } ?? 0]
+                    }
+                    (sim, before) = try await bridge.run(MarioStudentPolicy.solverMacros[next] ?? [])
+                    transition = transition || sim.transition
+                    lasted += 1
+                    simulated += 1
+                }
+                let dead = sim.done && !sim.flag
+                let moved = sim.x > step.x + 16 || sim.area != step.area || transition
+                if sim.flag || (!sim.done && lasted >= horizon && moved) {
+                    try await bridge.load()
+                    return move
+                }
+                let score = (dead && lasted == 0 ? -1 : lasted, sim.x < 0xF000 ? sim.x : 0)
+                if score > bestScore {
+                    best = move
+                    bestScore = score
+                }
+            }
+        }
+        try await bridge.load()
+        return best
     }
 
     /// A solver-style 8-frame macro. Max speed: one batched bridge call and one redraw per macro. Otherwise frame by

@@ -48,6 +48,12 @@ struct ContentView: View {
                     if !player.studentPlacement.isEmpty {
                         Label(player.studentPlacement, systemImage: "cpu").font(.callout.bold()).foregroundStyle(.green)
                     }
+                    Toggle("Lookahead: try moves on a save state first", isOn: $player.lookahead).toggleStyle(.switch)
+                        .font(.callout)
+                    if player.lookahead {
+                        Text("\(player.simulated) moves simulated for this move · \(player.simulatedTotal) this level")
+                            .font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                    }
                     ForEach(Array(player.studentMoves.enumerated()), id: \.offset) { i, move in
                         let p = i < player.moveProbabilities.count ? player.moveProbabilities[i] : 0
                         HStack {
