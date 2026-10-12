@@ -12,15 +12,44 @@ final class MarioStudentPolicy {
     private let model: MLModel
     /// Parameter count from the package metadata (export_coreml.py), e.g. "9.0M".
     let parameterLabel: String
+    /// Where Core ML runs the model's ops (MLComputePlan), e.g. "Neural Engine · 185/185 ops".
+    private(set) var placement = ""
+    private let compiledURL: URL
 
     init(package: URL) async throws {
         let compiled = try await MLModel.compileModel(at: package)
+        compiledURL = compiled
         let configuration = MLModelConfiguration()
         configuration.computeUnits = .cpuAndNeuralEngine
         model = try await MLModel.load(contentsOf: compiled, configuration: configuration)
         let metadata = model.modelDescription.metadata[.creatorDefinedKey] as? [String: String]
         let count = Double(metadata?["parameters"] ?? "") ?? 0
         parameterLabel = count >= 1e6 ? String(format: "%.1fM", count / 1e6) : String(format: "%.0fK", count / 1e3)
+        placement = await Self.placement(of: compiled)
+    }
+
+    /// Ops per preferred compute device from Core ML's compute plan (activity meters do not see the Neural Engine).
+    static func placement(of compiled: URL) async -> String {
+        let configuration = MLModelConfiguration()
+        configuration.computeUnits = .cpuAndNeuralEngine
+        guard let plan = try? await MLComputePlan.load(contentsOf: compiled, configuration: configuration),
+            case .program(let program) = plan.modelStructure, let main = program.functions["main"]
+        else { return "" }
+        var ane = 0
+        var gpu = 0
+        var cpu = 0
+        for op in main.block.operations where op.operatorName != "const" {
+            switch plan.deviceUsage(for: op)?.preferred {
+            case .neuralEngine: ane += 1
+            case .gpu: gpu += 1
+            case .cpu: cpu += 1
+            default: break
+            }
+        }
+        let total = ane + gpu + cpu
+        guard total > 0 else { return "" }
+        if ane == total { return "Neural Engine · \(ane)/\(total) ops" }
+        return "Neural Engine \(ane) · GPU \(gpu) · CPU \(cpu) ops"
     }
 
     /// Probabilities per move in `moves` order. `now` / `before` are raw 256x240 RGB frames.

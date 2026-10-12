@@ -72,6 +72,7 @@ final class MarioPlayer {
     var brain: Brain = ProcessInfo.processInfo.environment["JEV_MARIO_BRAIN"] == "student" ? .tiny : .jev
     var moveProbabilities: [Float] = []  // student: per MarioStudentPolicy.moves
     var studentParameters = ""
+    var studentPlacement = ""
 
     private var manager: JevManager?
     private var tiny: MarioStudentPolicy?
@@ -111,6 +112,8 @@ final class MarioPlayer {
                     }
                     let policy = try await MarioStudentPolicy(package: URL(fileURLWithPath: path))
                     studentParameters = policy.parameterLabel
+                    studentPlacement = policy.placement
+                    print("student: \(policy.parameterLabel) params, \(policy.placement)")
                     tiny = policy
                 default: break
                 }

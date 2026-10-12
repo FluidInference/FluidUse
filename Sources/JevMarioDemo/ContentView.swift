@@ -37,6 +37,9 @@ struct ContentView: View {
                         "Every move: a \(player.studentParameters.isEmpty ? "small" : player.studentParameters + "-parameter") model looks at the pixels around Mario"
                     )
                     .font(.callout).foregroundStyle(.secondary)
+                    if !player.studentPlacement.isEmpty {
+                        Label(player.studentPlacement, systemImage: "cpu").font(.callout.bold()).foregroundStyle(.green)
+                    }
                     ForEach(Array(MarioStudentPolicy.moves.enumerated()), id: \.offset) { i, move in
                         let p = i < player.moveProbabilities.count ? player.moveProbabilities[i] : 0
                         HStack {
