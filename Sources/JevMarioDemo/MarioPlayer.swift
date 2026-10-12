@@ -77,7 +77,8 @@ final class MarioPlayer {
     var studentMove = ""
     var studentParameters = ""
     /// Max speed: no 60 fps pacing, the emulator runs as fast as the bridge and the model allow.
-    var turbo = ProcessInfo.processInfo.environment["MARIO_TURBO"] == "1"  // starting position of the switch (default off)
+    /// MARIO_TURBO=1 starts with the switch on (default off).
+    var turbo = ProcessInfo.processInfo.environment["MARIO_TURBO"] == "1"
     var gameFPS: Double = 0  // emulator frames per second over the last second
     private var frameLog: [(Date, Int)] = []
     private var levelFrames = 0
