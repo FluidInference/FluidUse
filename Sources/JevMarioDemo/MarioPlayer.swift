@@ -160,8 +160,6 @@ final class MarioPlayer {
     /// Levels picked in the panel, played in world order; idle start offsets come from MARIO_PLAYLIST ("3-2:41").
     var selected: Set<String> = Set(MarioPlayer.playlist.map(\.level))
     static let allLevels = (1...8).flatMap { w in (1...4).map { "\(w)-\($0)" } }
-    /// Levels the student reached the flag on from every start offset (32 levels x 3 starts).
-    static let reliable: Set<String> = ["1-1", "6-1"]
     private static let idles = Dictionary(
         MarioPlayer.playlist.map { ($0.level, $0.idle) }, uniquingKeysWith: { a, _ in a })
 
