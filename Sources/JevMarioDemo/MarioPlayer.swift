@@ -142,9 +142,40 @@ final class MarioPlayer {
         run(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand)
     }
 
+    /// Levels to play in order as (level, idle frames before the start), from MARIO_PLAYLIST ("1-1:0,3-2:41", idle
+    /// optional) or MARIO_LEVEL. The student's default playlist is every level it has reached the flag on.
+    static var playlist: [(level: String, idle: Int)] {
+        let env = ProcessInfo.processInfo.environment
+        let spec = env["MARIO_PLAYLIST"].flatMap { $0.isEmpty ? nil : $0 } ?? env["MARIO_LEVEL"] ?? "1-1"
+        return spec.split(separator: ",").map { entry in
+            let parts = entry.split(separator: ":")
+            return (String(parts[0]), parts.count > 1 ? Int(parts[1]) ?? 0 : 0)
+        }
+    }
+
+    var level = ""
+    var results: [(level: String, flag: Bool)] = []
+
     private func play() async throws {
-        guard let bridge else { return }
-        var step = try await bridge.reset()
+        results = []
+        for (index, entry) in Self.playlist.enumerated() {
+            try Task.checkCancellation()
+            level = entry.level
+            decisions = 0
+            let flag = try await playLevel(entry.level, idle: entry.idle)
+            results.append((entry.level, flag))
+            print("LEVEL \(entry.level)\(entry.idle > 0 ? " (start +\(entry.idle))" : ""): \(status)")
+            if index < Self.playlist.count - 1 { try await Task.sleep(for: .seconds(turbo ? 0.4 : 1.5)) }
+        }
+        finished = true
+        let flags = results.filter(\.flag).count
+        status = "\(flags)/\(results.count) levels reached the flag"
+        print("PLAYLIST: \(status)")
+    }
+
+    private func playLevel(_ level: String, idle: Int) async throws -> Bool {
+        guard let bridge else { return false }
+        var step = try await bridge.reset(level: level, idle: idle)
         show(step)
         history = Array(repeating: step.pixels, count: 5)
         while !step.done {
@@ -161,7 +192,7 @@ final class MarioPlayer {
                 step = try await perform(move, from: step, bridge: bridge)
                 continue
             }
-            guard let manager else { return }
+            guard let manager else { return false }
             thinking = true
             let started = Date()
             var probs: [String: Float] = [:]
@@ -186,11 +217,10 @@ final class MarioPlayer {
                 String(format: "%3d  x %4d  %@  %@  %.0f ms", decisions, step.x, move.rawValue, line, lastMilliseconds))
             step = try await perform(move, from: step, bridge: bridge)
         }
-        finished = true
         status =
             step.flag
             ? "Reached the flag in \(decisions) decisions" : "Mario died at x \(step.x) after \(decisions) decisions"
-        print(status)
+        return step.flag
     }
 
     /// Play the move at 60 fps, then keep running until Mario lands (max 90 frames).

@@ -42,7 +42,10 @@ actor MarioBridge {
 
     deinit { process.terminate() }
 
-    func reset() throws -> Step { try request(#"{"cmd":"reset"}"#) }
+    func reset(level: String? = nil, idle: Int = 0) throws -> Step {
+        guard let level else { return try request(#"{"cmd":"reset","idle":\#(idle)}"#) }
+        return try request(#"{"cmd":"reset","level":"\#(level)","idle":\#(idle)}"#)
+    }
 
     func step(_ buttons: UInt8) throws -> Step { try request(#"{"cmd":"step","buttons":\#(buttons)}"#) }
 

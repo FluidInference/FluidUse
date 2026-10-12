@@ -23,6 +23,15 @@ struct ContentView: View {
                     }
                 }
                 .frame(width: 768)
+                HStack {
+                    Text(player.level.isEmpty ? "" : "World \(player.level)").font(.title3.bold())
+                    Spacer()
+                    ForEach(Array(player.results.enumerated()), id: \.offset) { _, r in
+                        Text(r.level).font(.system(.caption, design: .monospaced))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(r.flag ? Color.green.opacity(0.35) : Color.red.opacity(0.35), in: Capsule())
+                    }
+                }
                 ProgressView(value: Double(min(player.x, MarioPlayer.flagX)), total: Double(MarioPlayer.flagX))
                 Text(player.status).foregroundStyle(.secondary)
             }
