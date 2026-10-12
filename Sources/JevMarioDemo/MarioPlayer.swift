@@ -93,8 +93,10 @@ final class MarioPlayer {
     }
 
     private func run(modelDirectory: URL?, bridgeCommand: [String]) {
-        loop?.cancel()
+        let previous = loop
+        previous?.cancel()
         loop = Task {
+            await previous?.value  // the old game stops before this one resets the emulator
             do {
                 let loadStarted = Date()
                 switch brain {
@@ -155,17 +157,25 @@ final class MarioPlayer {
 
     var level = ""
     var results: [(level: String, flag: Bool)] = []
+    /// Levels picked in the panel, played in world order; idle start offsets come from MARIO_PLAYLIST ("3-2:41").
+    var selected: Set<String> = Set(MarioPlayer.playlist.map(\.level))
+    static let allLevels = (1...8).flatMap { w in (1...4).map { "\(w)-\($0)" } }
+    /// Levels the student reached the flag on from every start offset (32 levels x 3 starts).
+    static let reliable: Set<String> = ["1-1", "6-1"]
+    private static let idles = Dictionary(
+        MarioPlayer.playlist.map { ($0.level, $0.idle) }, uniquingKeysWith: { a, _ in a })
 
     private func play() async throws {
         results = []
-        for (index, entry) in Self.playlist.enumerated() {
+        let queue = Self.allLevels.filter(selected.contains).map { (level: $0, idle: Self.idles[$0] ?? 0) }
+        for (index, entry) in queue.enumerated() {
             try Task.checkCancellation()
             level = entry.level
             decisions = 0
             let flag = try await playLevel(entry.level, idle: entry.idle)
             results.append((entry.level, flag))
             print("LEVEL \(entry.level)\(entry.idle > 0 ? " (start +\(entry.idle))" : ""): \(status)")
-            if index < Self.playlist.count - 1 { try await Task.sleep(for: .seconds(turbo ? 0.4 : 1.5)) }
+            if index < queue.count - 1 { try await Task.sleep(for: .seconds(turbo ? 0.4 : 1.5)) }
         }
         finished = true
         let flags = results.filter(\.flag).count
@@ -245,6 +255,7 @@ final class MarioPlayer {
                 break
             }
             let tick = Date()
+            try Task.checkCancellation()
             step = try await bridge.step(press)
             show(step)
             history = Array(history.dropFirst()) + [step.pixels]

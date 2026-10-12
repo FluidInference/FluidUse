@@ -21,7 +21,8 @@ struct JevMarioDemoApp: App {
                 },
                 bridgeCommand: Self.bridgeCommand)
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 1180, height: 680)
+        .windowResizability(.contentMinSize)
     }
 
     static var bridgeCommand: [String] {

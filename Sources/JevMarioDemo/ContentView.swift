@@ -22,7 +22,7 @@ struct ContentView: View {
                             .background(.black.opacity(0.6)).foregroundStyle(.white).padding(8)
                     }
                 }
-                .frame(width: 768)
+                .frame(minWidth: 384, maxWidth: .infinity)
                 HStack {
                     Text(player.level.isEmpty ? "" : "World \(player.level)").font(.title3.bold())
                     Spacer()
@@ -40,7 +40,6 @@ struct ContentView: View {
                     ForEach(MarioPlayer.Brain.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden()
-                .disabled(!player.finished)
                 if player.brain == .tiny {
                     Text(
                         "Every move: a \(player.studentParameters.isEmpty ? "small" : player.studentParameters + "-parameter") model looks at the pixels around Mario"
@@ -99,13 +98,68 @@ struct ContentView: View {
                         .font(.system(.body, design: .monospaced))
                         .foregroundStyle(player.turbo ? .orange : .secondary)
                 }
-                Button("Restart") { player.restart(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand) }
-                    .disabled(!player.finished)
+                LevelGrid(selected: $player.selected, reliable: MarioPlayer.reliable, results: player.results)
+                Button(player.finished ? "Play selected" : "Restart with selected") {
+                    player.restart(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(player.selected.isEmpty)
             }
             .frame(width: 340)
         }
         .padding(24)
         .task { player.start(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand) }
+    }
+}
+
+/// All 32 levels as toggles (4 per world); a dot marks levels the student clears from every start, and finished
+/// levels show green (flag) or red.
+@available(macOS 15.0, *)
+struct LevelGrid: View {
+    @Binding var selected: Set<String>
+    let reliable: Set<String>
+    let results: [(level: String, flag: Bool)]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Levels").font(.headline)
+                Spacer()
+                Button("Reliable") { selected = reliable }.buttonStyle(.link)
+                Button("All") { selected = Set(MarioPlayer.allLevels) }.buttonStyle(.link)
+                Button("None") { selected = [] }.buttonStyle(.link)
+            }
+            Grid(horizontalSpacing: 4, verticalSpacing: 4) {
+                ForEach(0..<4) { row in
+                    GridRow {
+                        ForEach(0..<8) { col in
+                            cell(MarioPlayer.allLevels[col * 4 + row])
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    func cell(_ level: String) -> some View {
+        let on = selected.contains(level)
+        let outcome = results.last { $0.level == level }?.flag
+        return Button {
+            if on { selected.remove(level) } else { selected.insert(level) }
+        } label: {
+            HStack(spacing: 2) {
+                Text(level).font(.system(.caption, design: .monospaced))
+                if reliable.contains(level) { Circle().fill(.green).frame(width: 4, height: 4) }
+            }
+            .frame(maxWidth: .infinity, minHeight: 22)
+            .background(
+                outcome.map { $0 ? Color.green.opacity(0.35) : Color.red.opacity(0.3) }
+                    ?? (on ? Color.accentColor.opacity(0.35) : Color.secondary.opacity(0.12)),
+                in: RoundedRectangle(cornerRadius: 5)
+            )
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(on ? Color.accentColor : .clear, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 }
 
