@@ -3,6 +3,7 @@
 # on top and the decision log below.
 #   Sources/JevMarioDemo/demo.sh [bundle dir]      (or JEV_MODEL_DIR; default: download FluidInference/jev-9b-coreml)
 #   JEV_MARIO_BRAIN=student MARIO_STUDENT_MODEL=<.mlpackage> Sources/JevMarioDemo/demo.sh   the small pixel student
+#   MONITOR=asitop ...   top pane runs `sudo asitop` (asks for your password there; shows ANE power) instead of bars.py
 # The emulator bridge runs through uv with gym-super-mario-bros (it bundles the NES ROM; local use only).
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -15,12 +16,18 @@ command -v uv >/dev/null || { echo "uv is required for the emulator bridge (http
 swift build -c release --product JevMarioDemo --package-path "$ROOT"
 : > "$LOG"
 if ! tmux has-session -t jev-mario 2>/dev/null; then
-  tmux new-session -d -s jev-mario -x 160 -y 60 "python3 '$ROOT/Sources/ClefFlashDemo/bars.py'"
+  if [[ "${MONITOR:-}" == asitop ]]; then
+    TOP="sudo asitop --interval 1"
+  else
+    TOP="python3 '$ROOT/Sources/ClefFlashDemo/bars.py'"
+  fi
+  tmux new-session -d -s jev-mario -x 160 -y 60 "$TOP"
   tmux set-option -t jev-mario remain-on-exit on
   tmux set-option -t jev-mario window-size latest  # follow the Ghostty window, not the detached 160-column default
   tmux split-window -v -t jev-mario "tail -n 300 -F '$LOG'"
-  tmux set-hook -t jev-mario client-attached 'resize-pane -t jev-mario:0.0 -y 10'
-  tmux set-hook -t jev-mario client-resized 'resize-pane -t jev-mario:0.0 -y 10'
+  TOP_ROWS=$([[ "${MONITOR:-}" == asitop ]] && echo 28 || echo 10)
+  tmux set-hook -t jev-mario client-attached "resize-pane -t jev-mario:0.0 -y $TOP_ROWS"
+  tmux set-hook -t jev-mario client-resized "resize-pane -t jev-mario:0.0 -y $TOP_ROWS"
   open -na /Applications/Ghostty.app --args --window-width=150 --window-height=44 -e "$(command -v tmux)" attach -t jev-mario
 fi
 pkill -x JevMarioDemo 2>/dev/null || true
