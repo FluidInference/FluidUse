@@ -72,6 +72,10 @@ final class MarioPlayer {
     var brain: Brain = ProcessInfo.processInfo.environment["JEV_MARIO_BRAIN"] == "student" ? .tiny : .jev
     var moveProbabilities: [Float] = []  // student: per MarioStudentPolicy.moves
     var studentParameters = ""
+    /// Max speed: no 60 fps pacing, the emulator runs as fast as the bridge and the model allow.
+    var turbo = ProcessInfo.processInfo.environment["MARIO_TURBO"] == "1"
+    var gameFPS: Double = 0  // emulator frames per second over the last second
+    private var frameTimes: [Date] = []
     var studentPlacement = ""
 
     private var manager: JevManager?
@@ -214,8 +218,12 @@ final class MarioPlayer {
             step = try await bridge.step(press)
             show(step)
             history = Array(history.dropFirst()) + [step.pixels]
-            let elapsed = Date().timeIntervalSince(tick)
-            if elapsed < 1 / 60 { try await Task.sleep(for: .seconds(1 / 60 - elapsed)) }
+            let now = Date()
+            frameTimes.append(now)
+            frameTimes.removeAll { now.timeIntervalSince($0) > 1 }
+            gameFPS = Double(frameTimes.count)
+            let elapsed = now.timeIntervalSince(tick)
+            if !turbo, elapsed < 1 / 60 { try await Task.sleep(for: .seconds(1 / 60 - elapsed)) }
         }
         return step
     }

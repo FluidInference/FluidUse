@@ -13,10 +13,11 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 
 BAR = "█"
 COLORS = {"P-CPU": "\033[38;5;75m", "E-CPU": "\033[38;5;111m", "GPU": "\033[38;5;214m", "GPU W": "\033[38;5;203m",
-          "ANE W": "\033[38;5;120m"}
+          "ANE W": "\033[38;5;120m", "ANE": "\033[38;5;84m"}
 RESET, DIM, BOLD = "\033[0m", "\033[2m", "\033[1m"
 
 
@@ -72,7 +73,43 @@ class AneMeter:
                 self.watts, self.peak = watts, max(self.peak, watts)
 
 
+class AneBusy:
+    """Neural Engine busy time from the demo's own decision log (`... 0.55 ms` per line): the model's ops all run on
+    the ANE (MLComputePlan), so model milliseconds over the last second = ANE busy %. No sudo, no hardware counter."""
+
+    def __init__(self, path: str, window: float = 1.0):
+        self.window, self.events, self.placement = window, [], ""
+        try:  # the placement line is printed once at load, possibly before this pane started
+            self.placement = next((l.split(",", 1)[-1].strip() for l in open(path) if "Neural Engine" in l), "")
+        except OSError:
+            pass
+        self.process = subprocess.Popen(["tail", "-n", "0", "-F", path], stdout=subprocess.PIPE, text=True,
+                                        stderr=subprocess.DEVNULL)
+        threading.Thread(target=self.read, daemon=True).start()
+
+    def read(self):
+        for line in self.process.stdout:
+            parts = line.split()
+            if "Neural Engine" in line and "ops" in line:
+                self.placement = line.split(",", 1)[-1].strip()
+            if len(parts) >= 2 and parts[-1] == "ms":
+                try:
+                    self.events.append((time.time(), float(parts[-2])))
+                except ValueError:
+                    pass
+
+    def stats(self) -> tuple[float, float, float]:
+        """(busy fraction, median ms per decision, decisions per second) over the window."""
+        now = time.time()
+        self.events = [e for e in self.events if now - e[0] <= max(self.window, 5.0)]
+        recent = [ms for t, ms in self.events if now - t <= self.window]
+        busy = sum(recent) / (self.window * 1000)
+        ms = sorted(recent)[len(recent) // 2] if recent else 0.0
+        return busy, ms, len(recent) / self.window
+
+
 def main() -> None:
+    busy = AneBusy(sys.argv[sys.argv.index("--log") + 1]) if "--log" in sys.argv else None
     ane = None
     if "--ane" in sys.argv:
         print("ANE power needs `sudo powermetrics`:", flush=True)
@@ -87,8 +124,8 @@ def main() -> None:
                 d = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            # label (9) + space + bar + space + the widest right-hand text (15), so nothing clips at any window width
-            width = max(10, shutil.get_terminal_size().columns - 9 - 2 - 15 - 2)
+            # label (9) + space + bar + space + the widest right-hand text, so nothing clips at any window width
+            width = max(10, shutil.get_terminal_size().columns - 9 - 2 - (24 if busy else 15) - 2)
             p_mhz, p_use = d["pcpu_usage"]
             e_mhz, e_use = d["ecpu_usage"]
             g_mhz, g_use = d["gpu_usage"]
@@ -103,6 +140,15 @@ def main() -> None:
                 bar("GPU", g_use, f"{g_use * 100:5.1f}%  {g_mhz:4d} MHz", width),
                 bar("GPU W", g_watts / gpu_watts_max, f"{g_watts:5.1f} W", width),
             ]
+            if busy is not None:
+                fraction, ms, rate = busy.stats()
+                # the bar is drawn at least one cell while the model runs: busy time is a fraction of a percent
+                cells = max(1 if rate else 0, int(round(fraction * width)))
+                rows.append(f"  {BOLD}{'ANE':<6}{RESET} {COLORS['ANE']}{BAR * cells}{RESET}{DIM}{'·' * (width - cells)}{RESET} "
+                            f"{fraction * 100:5.2f}%  {ms:4.2f} ms × {rate:.0f}/s")
+                if busy.placement:
+                    ops = busy.placement.split("·")[-1].strip()
+                    rows.append(f"  {DIM}ANE % = model time per second · {ops} on the Neural Engine{RESET}")
             if ane is not None:
                 # no utilisation counter exists for the ANE; power vs. a 2 W scale (or the session peak) stands in
                 scale = max(2.0, ane.peak)

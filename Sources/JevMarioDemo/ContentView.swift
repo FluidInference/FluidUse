@@ -44,7 +44,7 @@ struct ContentView: View {
                         let p = i < player.moveProbabilities.count ? player.moveProbabilities[i] : 0
                         HStack {
                             Text(move.rawValue).font(.headline).frame(width: 50, alignment: .leading)
-                            ProgressView(value: Double(p)).tint(move == player.move ? .orange : .gray)
+                            Bar(value: p, color: move == player.move ? .orange : .gray)
                             Text(String(format: "%.2f", p)).font(.system(.caption, design: .monospaced))
                         }
                     }
@@ -65,7 +65,7 @@ struct ContentView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(q.id).font(.headline)
                             let p = player.probabilities[q.id] ?? 0
-                            ProgressView(value: Double(p)).tint(p > q.threshold ? .orange : .gray)
+                            Bar(value: p, color: p > q.threshold ? .orange : .gray)
                             Text(String(format: "P(yes) %.2f", p)).font(.system(.caption, design: .monospaced))
                         }
                     }
@@ -83,6 +83,13 @@ struct ContentView: View {
                         Text("decision \(player.decisions)").foregroundStyle(.secondary)
                     }
                 }
+                HStack {
+                    Toggle("Max speed", isOn: $player.turbo).toggleStyle(.switch)
+                    Spacer()
+                    Text(String(format: "%.0f fps · %.1f× real time", player.gameFPS, player.gameFPS / 60))
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(player.turbo ? .orange : .secondary)
+                }
                 Button("Restart") { player.restart(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand) }
                     .disabled(!player.finished)
             }
@@ -90,5 +97,22 @@ struct ContentView: View {
         }
         .padding(24)
         .task { player.start(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand) }
+    }
+}
+
+/// A probability bar that redraws instantly (ProgressView animates and lags behind sub-second decisions).
+struct Bar: View {
+    let value: Float
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.quaternary)
+                Capsule().fill(color).frame(width: geo.size.width * CGFloat(min(max(value, 0), 1)))
+            }
+        }
+        .frame(height: 8)
+        .transaction { $0.animation = nil }
     }
 }

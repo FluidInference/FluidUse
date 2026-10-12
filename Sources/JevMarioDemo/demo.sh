@@ -17,17 +17,38 @@ command -v uv >/dev/null || { echo "uv is required for the emulator bridge (http
 swift build -c release --product JevMarioDemo --package-path "$ROOT"
 : > "$LOG"
 if ! tmux has-session -t jev-mario 2>/dev/null; then
-  TOP="python3 '$ROOT/Sources/ClefFlashDemo/bars.py'$([[ "${MONITOR:-}" == ane ]] && echo ' --ane')"
+  TOP="python3 '$ROOT/Sources/ClefFlashDemo/bars.py' --log '$LOG'"
+  [[ "${MONITOR:-}" == ane ]] && TOP="$TOP --ane" || true
   tmux new-session -d -s jev-mario -x 160 -y 60 "$TOP"
   tmux set-option -t jev-mario remain-on-exit on
   tmux set-option -t jev-mario window-size latest  # follow the Ghostty window, not the detached 160-column default
-  tmux split-window -v -t jev-mario "tail -n 300 -F '$LOG'"
-  TOP_ROWS=$([[ "${MONITOR:-}" == ane ]] && echo 12 || echo 10)
-  tmux set-hook -t jev-mario client-attached "resize-pane -t jev-mario:0.0 -y $TOP_ROWS"
-  tmux set-hook -t jev-mario client-resized "resize-pane -t jev-mario:0.0 -y $TOP_ROWS"
-  open -na /Applications/Ghostty.app --args --window-width=150 --window-height=44 -e "$(command -v tmux)" attach -t jev-mario
+  tmux split-window -h -t jev-mario "tail -n 300 -F '$LOG'"  # bars left, decision log right
+  open -na /Applications/Ghostty.app --args -e "$(command -v tmux)" attach -t jev-mario
+  sleep 1
+  GHOSTTY_PID=$(pgrep -n -x ghostty || true)
 fi
 pkill -x JevMarioDemo 2>/dev/null || true
-MARIO_LEVEL="${MARIO_LEVEL:-1-1}" JEV_MODEL_DIR="$BUNDLE" JEV_MARIO_BRAIN="${JEV_MARIO_BRAIN:-}" MARIO_STUDENT_MODEL="${MARIO_STUDENT_MODEL:-}" \
+MARIO_TURBO="${MARIO_TURBO:-}" MARIO_LEVEL="${MARIO_LEVEL:-1-1}" JEV_MODEL_DIR="$BUNDLE" JEV_MARIO_BRAIN="${JEV_MARIO_BRAIN:-}" MARIO_STUDENT_MODEL="${MARIO_STUDENT_MODEL:-}" \
   "$ROOT/.build/release/JevMarioDemo" > "$LOG" 2> "$LOG.stderr" &
-echo "demo pid $! · log $LOG · first move after ~40 s of model loading (plus a ~13 GB download on first run)"
+APP_PID=$!
+# T layout: the game window centred across the top, the terminal full width underneath (bars | log)
+(
+  for _ in {1..40}; do
+    osascript -e "tell application \"System Events\" to count windows of (first process whose unix id is $APP_PID)" 2>/dev/null \
+      | grep -q '^[1-9]' && break
+    sleep 0.5
+  done
+  read -r _ _ SCREEN_W SCREEN_H < <(osascript -e 'tell application "Finder" to get bounds of window of desktop' | tr -d ',')
+  MENU=33
+  GAME_BOTTOM=$(osascript -e "tell application \"System Events\" to tell front window of (first process whose unix id is $APP_PID)" \
+    -e "set {w, h} to size" -e "set position to {($SCREEN_W - w) div 2, $MENU}" -e "return $MENU + h" -e "end tell" 2>/dev/null)
+  [[ -n "${GHOSTTY_PID:-}" && -n "$GAME_BOTTOM" ]] || exit 0
+  for _ in {1..20}; do  # Ghostty opens its window asynchronously and may re-place it once; re-apply until it sticks
+    WIDTH=$(osascript -e "tell application \"System Events\" to tell front window of (first process whose unix id is $GHOSTTY_PID)" \
+      -e "set {position, size} to {{0, $GAME_BOTTOM}, {$SCREEN_W, $SCREEN_H - $GAME_BOTTOM}}" -e "return item 1 of (get size)" \
+      -e "end tell" 2>/dev/null)
+    [[ "$WIDTH" == "$SCREEN_W" ]] && break
+    sleep 0.5
+  done
+) &
+echo "demo pid $APP_PID · log $LOG · first move after ~40 s of model loading (plus a ~13 GB download on first run)"
