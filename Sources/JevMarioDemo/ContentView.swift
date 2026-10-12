@@ -26,6 +26,11 @@ struct ContentView: View {
                 HStack {
                     Text(player.level.isEmpty ? "" : "World \(player.level)").font(.title3.bold())
                     Spacer()
+                    if !player.results.isEmpty {
+                        Text("\(player.results.filter(\.flag).count) flags").font(.title3.monospacedDigit())
+                    }
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 40), spacing: 4)], alignment: .leading, spacing: 4) {
                     ForEach(Array(player.results.enumerated()), id: \.offset) { _, r in
                         Text(r.level).font(.system(.caption, design: .monospaced))
                             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -99,7 +104,9 @@ struct ContentView: View {
                     }
                 }
                 HStack {
-                    Toggle(String(format: "%.0f× speed", MarioPlayer.speedCap), isOn: $player.turbo).toggleStyle(
+                    Toggle(
+                        MarioPlayer.speedCap.isFinite ? String(format: "%.0f× speed", MarioPlayer.speedCap) : "Max speed",
+                        isOn: $player.turbo).toggleStyle(
                         .switch)
                     Spacer()
                     Text(String(format: "%.0f fps · %.1f× real time", player.gameFPS, player.gameFPS / 60))
@@ -113,6 +120,10 @@ struct ContentView: View {
                     .frame(width: 130)
                     Button("Play") { player.restart(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand) }
                         .buttonStyle(.borderedProminent)
+                    Button("Play all \(MarioPlayer.playlist.count)") {
+                        player.restart(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand, all: true)
+                    }
+                    .buttonStyle(.borderedProminent).tint(.orange)
                 }
             }
             .frame(width: 340)

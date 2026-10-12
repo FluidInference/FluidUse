@@ -57,8 +57,8 @@ final class MarioPlayer {
         .wait: Array(repeating: 0, count: 6),
     ]
     static let flagX = 3160
-    /// Fast mode's cap on game speed, in multiples of real time (MARIO_SPEED_CAP; uncapped the student runs ~20-40x).
-    static let speedCap = Double(ProcessInfo.processInfo.environment["MARIO_SPEED_CAP"] ?? "") ?? 5
+    /// Optional cap on max speed, in multiples of real time (MARIO_SPEED_CAP); none by default.
+    static let speedCap = Double(ProcessInfo.processInfo.environment["MARIO_SPEED_CAP"] ?? "") ?? .infinity
 
     // published state
     var frame: CGImage?
@@ -158,7 +158,8 @@ final class MarioPlayer {
         var errorDescription: String? { "Set MARIO_STUDENT_MODEL to the student's .mlpackage path" }
     }
 
-    func restart(modelDirectory: URL?, bridgeCommand: [String]) {
+    func restart(modelDirectory: URL?, bridgeCommand: [String], all: Bool = false) {
+        playAll = all
         finished = false
         decisions = 0
         run(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand)
@@ -169,15 +170,41 @@ final class MarioPlayer {
     /// The level Play starts (one level per press).
     var choice = ProcessInfo.processInfo.environment["MARIO_LEVEL"].flatMap { $0.isEmpty ? nil : $0 } ?? "1-1"
     static let allLevels = (1...8).flatMap { w in (1...4).map { "\(w)-\($0)" } }
+    /// "Play all": the levels the student + lookahead clears from the start every time (deterministic emulator; model-lab
+    /// mario-tiny r10, idle 0). MARIO_PLAYLIST="1-1,6-1,..." overrides.
+    static let playlist =
+        ProcessInfo.processInfo.environment["MARIO_PLAYLIST"].flatMap {
+            $0.isEmpty ? nil : $0.split(separator: ",").map(String.init)
+        }
+        ?? [
+            "1-1", "1-2", "1-3", "1-4", "2-3", "2-4", "3-1", "3-2", "3-3", "3-4", "4-1", "4-2", "5-2", "5-3", "5-4",
+            "6-1", "6-2", "6-3", "6-4", "7-1", "7-3", "8-1", "8-2",
+        ]
+    private var playAll = false
+    var runStarted: Date?
+    var runSeconds: Double = 0
 
     private func play() async throws {
-        level = choice
-        decisions = 0
-        simulatedTotal = 0
-        let flag = try await playLevel(choice, idle: 0)
-        results.append((choice, flag))
+        let levels = playAll ? Self.playlist : [choice]
+        if playAll { results = [] }
+        let started = Date()
+        runStarted = started
+        for (index, next) in levels.enumerated() {
+            level = next
+            decisions = 0
+            simulatedTotal = 0
+            let flag = try await playLevel(next, idle: 0)
+            results.append((next, flag))
+            runSeconds = Date().timeIntervalSince(started)
+            print("LEVEL \(next): \(status)")
+            if index < levels.count - 1 { try await Task.sleep(for: .seconds(1)) }  // a beat on the flag
+        }
+        if playAll {
+            let flags = results.filter(\.flag).count
+            status = String(format: "%d/%d levels reached the flag in %.0f s", flags, levels.count, runSeconds)
+            print("RUN: \(status)")
+        }
         finished = true
-        print("LEVEL \(choice): \(status)")
     }
 
     private func playLevel(_ level: String, idle: Int) async throws -> Bool {
@@ -316,7 +343,7 @@ final class MarioPlayer {
             show(step)
             history = [before, before, before, before, step.pixels]
             countFrames(step.frames)
-            // cap game time at speedCap x real time (60 fps x cap)
+            // cap game time at speedCap x real time (60 fps x cap); uncapped by default
             let budget = Double(step.frames) / (60 * Self.speedCap)
             let elapsed = Date().timeIntervalSince(tick)
             if elapsed < budget { try await Task.sleep(for: .seconds(budget - elapsed)) }
