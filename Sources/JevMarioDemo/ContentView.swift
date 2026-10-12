@@ -93,7 +93,8 @@ struct ContentView: View {
                     }
                 }
                 HStack {
-                    Toggle("Max speed", isOn: $player.turbo).toggleStyle(.switch)
+                    Toggle(String(format: "%.0f× speed", MarioPlayer.speedCap), isOn: $player.turbo).toggleStyle(
+                        .switch)
                     Spacer()
                     Text(String(format: "%.0f fps · %.1f× real time", player.gameFPS, player.gameFPS / 60))
                         .font(.system(.body, design: .monospaced))

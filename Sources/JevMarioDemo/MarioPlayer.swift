@@ -57,6 +57,8 @@ final class MarioPlayer {
         .wait: Array(repeating: 0, count: 6),
     ]
     static let flagX = 3160
+    /// Fast mode's cap on game speed, in multiples of real time (MARIO_SPEED_CAP; uncapped the student runs ~20-40x).
+    static let speedCap = Double(ProcessInfo.processInfo.environment["MARIO_SPEED_CAP"] ?? "") ?? 10
 
     // published state
     var frame: CGImage?
@@ -246,10 +248,15 @@ final class MarioPlayer {
         guard !buttons.isEmpty else { return start }
         try Task.checkCancellation()
         if turbo {
+            let tick = Date()
             let (step, before) = try await bridge.run(buttons)
             show(step)
             history = [before, before, before, before, step.pixels]
             countFrames(step.frames)
+            // cap game time at speedCap x real time (60 fps x cap)
+            let budget = Double(step.frames) / (60 * Self.speedCap)
+            let elapsed = Date().timeIntervalSince(tick)
+            if elapsed < budget { try await Task.sleep(for: .seconds(budget - elapsed)) }
             return step
         }
         var step = start
