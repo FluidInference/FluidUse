@@ -332,6 +332,27 @@ print(draft.reply, draft.timing.totalSeconds)                           // "Cong
 `Sources/ShortReplyDemo/demo.sh --x` launches it with a macmon + log terminal
 ([Sources/ShortReplyDemo](Sources/ShortReplyDemo/README.md)).
 
+## Document OCR (multi-page)
+
+`UnlimitedOcrManager` runs Baidu's [Unlimited-OCR](https://huggingface.co/FluidInference/unlimited-ocr-coreml)
+(DeepSeek-OCR architecture, 3B MoE / ~0.5B active, MIT) on the GPU through Core ML: up to 8 document pages go in as
+one prompt and the whole document comes out of a single generation as markdown with layout boxes. Its R-SWA cache
+(full prefix + a ring of the last 128 generated tokens) is Core ML state, so speed stays flat over a long read. The
+pinned, checksummed bundle (~3.8 GB) downloads from the Hub on first use (macOS 15 / iOS 18).
+
+```swift
+let ocr = try await UnlimitedOcrManager.load(from: try await UnlimitedOcrModelStore.ensure())
+let pages = try (0..<min(pdf.pageCount, ocr.maxPages)).map { try UnlimitedOcrPagePreprocessor.page(from: pdf.page(at: $0)!) }
+var text = ""
+for try await event in ocr.read(pages: pages) { if case .text(let delta) = event { text += delta } }
+print(UnlimitedOcrDocument(parsing: text).markdown)
+```
+
+Token-for-token identical to upstream's fp32 `generate` on Baidu's paper (865 tokens for one page, 2,461 for three
+pages in one pass). On an M5 Pro: ~100 ms per page to encode, ~21 ms per output token; the first 8 pages of the paper
+(6,727 tokens) take 160 s. `UnlimitedOcrDemo` reads a dropped PDF and highlights the block being written on each
+page ([Sources/UnlimitedOcrDemo](Sources/UnlimitedOcrDemo/README.md)).
+
 ## Demo
 
 ```bash
