@@ -12,7 +12,7 @@ public enum UnlimitedOcrModelStore {
     }
 
     public static let repository = "FluidInference/unlimited-ocr-coreml"
-    public static let revision = "9921f1f46054870446009ddc3ebd01f23bec0027"
+    public static let revision = "51046f081ace85b77c8287ad7b56d504b91eb3d2"
     static let assets: [Asset] = [
         Asset(path: "config.json", sha256: "210d30d4698482e1672cbbb83846d88b5ca2b67333a3fbbbefa056663080945b"),
         Asset(path: "embeddings.f16", sha256: "5d1df8b73bdff79c672f53ddc000451158cd16cd04ed143a1c0054b30ca03455"),
@@ -20,13 +20,13 @@ public enum UnlimitedOcrModelStore {
         Asset(path: "tokenizer.json", sha256: "a02f8fd5228c90256bb4f6554c34a579d48f909e5beb232dc4afad870b55a8b4"),
         Asset(
             path: "UnlimitedOcrDecoder.mlpackage/Data/com.apple.CoreML/model.mlmodel",
-            sha256: "bbd94029b3343cf3e5fa79d73feffd49f299fa6f445d30c51ef65df4905d37e0"),
+            sha256: "4a339171fbfd8ca84a1de4d39de77d53538feb7e4bb9759d3fb92b3d0ee20ee2"),
         Asset(
             path: "UnlimitedOcrDecoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
             sha256: "9dca216cc86a99767f5837c2b17e132c96001ec21006c12eae45830fbebc468e"),
         Asset(
             path: "UnlimitedOcrDecoder.mlpackage/Manifest.json",
-            sha256: "d972e5852f362d203d94eb3df0d2e124a7803c39045c162f94183e76d6cfeefe"),
+            sha256: "b0086733d3888c7cb881628e6a60d227a6f1c63f09c86db7ed21eb633e5dd3de"),
         Asset(
             path: "UnlimitedOcrPageEncoder.mlpackage/Data/com.apple.CoreML/model.mlmodel",
             sha256: "7dcce3bed4dcf35e3dde7bd2510aa7cbc7b1bd3ca8eff93d859d11456005fc9d"),
