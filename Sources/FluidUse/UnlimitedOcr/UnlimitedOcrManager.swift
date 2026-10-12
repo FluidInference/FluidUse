@@ -90,7 +90,7 @@ public actor UnlimitedOcrManager {
     /// Loads the decoder functions for the buckets these page counts need (default: all) and runs one prediction
     /// through each model, so the first real read does not pay Core ML's lazy GPU setup.
     public func warm(pages: [Int]? = nil) async throws {
-        let counts = pages ?? Array(1...max(1, maxPages))
+        let counts = pages ?? Array(1...max(1, maxPages))  // [] warms the page encoder only
         let blank = UnlimitedOcrPage(
             pixels: [Float](
                 repeating: 0, count: 3 * UnlimitedOcrPagePreprocessor.size * UnlimitedOcrPagePreprocessor.size))

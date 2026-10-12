@@ -9,7 +9,7 @@ import PDFKit
 @MainActor
 final class ReaderModel: ObservableObject {
     enum Phase: Equatable {
-        case loading, ready, loaded
+        case loading, ready, preparing, loaded
         case encoding(Int)
         case prefilling, reading, paused, done
         case failed(String)
@@ -27,6 +27,7 @@ final class ReaderModel: ObservableObject {
 
     private var manager: UnlimitedOcrManager?
     private var readTask: Task<Void, Never>?
+    private var prepareTask: Task<Void, Never>?
     private var pdfPages: [PDFPage] = []
     private var text = ""
     private var pausedAt: Date?
@@ -53,8 +54,10 @@ final class ReaderModel: ObservableObject {
                 directory = try await UnlimitedOcrModelStore.ensure()
             }
             status = "Loading the model (first launch compiles it, about a minute)…"
+            // Only the page encoder here; the decoder size for a document is prepared when it is opened
+            // (compiling every size up front took minutes).
             let manager = try await UnlimitedOcrManager.load(from: directory)
-            try await manager.warm()
+            try await manager.warm(pages: [])
             self.manager = manager
             maxPages = manager.maxPages
             print(
@@ -82,7 +85,23 @@ final class ReaderModel: ObservableObject {
         pdfPages = (0..<count).compactMap { pdf.page(at: $0) }
         pageImages = pdfPages.map { $0.thumbnail(of: NSSize(width: 900, height: 1200), for: .mediaBox) }
         reset()
-        phase = .loaded
+        guard let manager else { return }
+        phase = .preparing
+        status = "Preparing the model for \(count) page\(count == 1 ? "" : "s")…"
+        let started = Date()
+        prepareTask = Task { [weak self] in
+            do {
+                try await manager.warm(pages: [count])
+                guard let self, !Task.isCancelled else { return }
+                print(
+                    String(
+                        format: "[unlimited-ocr] ready for %d pages in %.1f s", count, Date().timeIntervalSince(started)
+                    ))
+                self.phase = .loaded
+            } catch {
+                self?.phase = .failed(error.localizedDescription)
+            }
+        }
     }
 
     /// Reads the loaded pages from the beginning.
@@ -113,6 +132,7 @@ final class ReaderModel: ObservableObject {
     }
 
     private func stop() {
+        prepareTask?.cancel()
         readTask?.cancel()
         readTask = nil
         if let manager { manager.resume() }

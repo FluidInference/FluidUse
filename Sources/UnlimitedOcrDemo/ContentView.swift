@@ -77,6 +77,7 @@ struct ContentView: View {
         switch model.phase {
         case .loading: "loading model"
         case .ready: "drop a PDF"
+        case .preparing: "preparing"
         case .loaded: "press Start"
         case .encoding: "looking at pages"
         case .prefilling: "reading pages in"
@@ -183,6 +184,9 @@ struct ContentView: View {
                 Text(model.status).foregroundStyle(.secondary)
             case .failed(let message):
                 Text(message).foregroundStyle(.red)
+            case .preparing:
+                ProgressView().controlSize(.small)
+                Text(model.status).foregroundStyle(.secondary)
             case .loaded:
                 Text(
                     "Press Start to read \(model.pageImages.count) page\(model.pageImages.count == 1 ? "" : "s") in one pass."
