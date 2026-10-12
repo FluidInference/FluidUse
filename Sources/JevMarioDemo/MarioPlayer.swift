@@ -1,0 +1,447 @@
+import CoreGraphics
+import FluidUse
+import Foundation
+import Observation
+
+/// The control loop. While Mario is on the ground the emulator pauses for a decision, then the move plays out frame by
+/// frame at 60 fps.
+/// - JEV-9B: three yes/no questions about close-ups just ahead of him (enemy? pipe or step? gap?); any yes -> long
+///   running jump, else run. Mirrors model-lab `jev-9b-coreml/conversion/mario.py`.
+/// - Student: a small pixel model (~9M parameters) picks run / jump / hop / wait from the pixels around Mario
+///   (model-lab `mario-tiny`).
+@available(macOS 15.0, *)
+@MainActor
+@Observable
+final class MarioPlayer {
+    struct Question: Identifiable {
+        let id: String  // panel label
+        let view: String
+        let text: String
+        let threshold: Float
+    }
+
+    enum Move: String { case run, jump, hop, wait }
+
+    enum Brain: String, CaseIterable, Identifiable {
+        case jev = "JEV-9B · 3 questions"
+        case tiny = "Student · pixels"
+        var id: String { rawValue }
+    }
+
+    /// (x offset from Mario, width, top relative to his feet, height) in screen px, and the state text.
+    static let views: [String: (dx: Int, width: Int, dy: Int, height: Int, state: String)] = [
+        "ahead": (16, 64, -48, 80, "Close-up of the area just ahead of Mario in a Super Mario Bros. level:"),
+        "above": (
+            16, 64, -48, 48,
+            "Close-up of the space just ahead of Mario in a Super Mario Bros. level, at the height of his body:"
+        ),
+        "ground": (16, 96, -32, 64, "Close-up of the ground in a Super Mario Bros. level:"),
+    ]
+    static let questions: [Question] = [
+        .init(
+            id: "enemy ahead", view: "ahead", text: "Is there an enemy (a brown Goomba or a Koopa) in this picture?",
+            threshold: 0.5),
+        .init(
+            id: "pipe / step ahead", view: "above",
+            text: "Is there a solid obstacle (a pipe, a block or a step) in this picture?", threshold: 0.5),
+        .init(
+            id: "gap ahead", view: "ground", text: "Is the brick floor in this picture interrupted by a gap?",
+            threshold: 0.5),
+    ]
+
+    static let right: UInt8 = 0b1000_0000, a: UInt8 = 0b0000_0001, b: UInt8 = 0b0000_0010
+    static let moves: [Move: [UInt8]] = [
+        .run: Array(repeating: right | b, count: 6),
+        .jump: [right | b] + Array(repeating: right | a | b, count: 22) + Array(repeating: right | b, count: 4),
+        .hop: [right | b] + Array(repeating: right | a | b, count: 8) + Array(repeating: right | b, count: 4),
+        .wait: Array(repeating: 0, count: 6),
+    ]
+    static let flagX = 3160
+    /// Optional cap on max speed, in multiples of real time (MARIO_SPEED_CAP); none by default.
+    static let speedCap = Double(ProcessInfo.processInfo.environment["MARIO_SPEED_CAP"] ?? "") ?? .infinity
+
+    // published state
+    var frame: CGImage?
+    var viewImages: [String: CGImage] = [:]
+    var probabilities: [String: Float] = [:]
+    var move: Move = .run
+    var thinking = false
+    var decisions = 0
+    var lastMilliseconds: Double = 0
+    var x = 40
+    var status = "Loading…"
+    var finished = false
+    var brain: Brain = ProcessInfo.processInfo.environment["JEV_MARIO_BRAIN"] == "student" ? .tiny : .jev
+    var moveProbabilities: [Float] = []  // student: per studentMoves
+    var studentMoves: [String] = []
+    var studentMove = ""
+    var studentParameters = ""
+    /// Max speed: no 60 fps pacing, the emulator runs as fast as the bridge and the model allow.
+    /// MARIO_TURBO=1 starts with the switch on (default off).
+    var turbo = ProcessInfo.processInfo.environment["MARIO_TURBO"] == "1"
+    var gameFPS: Double = 0  // emulator frames per second over the last second
+    private var frameLog: [(Date, Int)] = []
+    private var levelFrames = 0
+    var studentPlacement = ""
+    /// Student lookahead (model-lab mario-tiny `student_retro.py play --lookahead 6`): candidate moves are simulated on
+    /// an emulator save state before each real move. MARIO_LOOKAHEAD=0 starts with it off.
+    var lookahead = ProcessInfo.processInfo.environment["MARIO_LOOKAHEAD"] != "0"
+    var simulated = 0  // moves simulated for the last real move
+    var simulatedTotal = 0
+    static let lookaheadDepth = 6
+
+    private var manager: JevManager?
+    private var tiny: MarioStudentPolicy?
+    private var history: [Data] = []  // last 5 frames' pixels (the student also sees 4 frames back)
+    private var bridge: MarioBridge?
+    private var loop: Task<Void, Never>?
+    private var started = false
+
+    /// Starts the first game; SwiftUI may re-run the view's `.task`, so later calls are ignored (use `restart`).
+    /// Loads the model and the emulator at launch; nothing plays until Play.
+    func start(modelDirectory: URL?, bridgeCommand: [String]) {
+        guard !started else { return }
+        started = true
+        run(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand, playing: false)
+    }
+
+    private func run(modelDirectory: URL?, bridgeCommand: [String], playing: Bool = true) {
+        let previous = loop
+        previous?.cancel()
+        loop = Task {
+            await previous?.value  // the old game stops before this one resets the emulator
+            do {
+                let loadStarted = Date()
+                switch brain {
+                case .jev where manager == nil:
+                    status =
+                        modelDirectory == nil
+                        ? "Downloading JEV-9B Core ML (~13 GB, first use only)…" : "Loading JEV-9B…"
+                    let directory: URL
+                    if let modelDirectory {
+                        directory = modelDirectory
+                    } else {
+                        directory = try await JevModelStore.ensure()
+                    }
+                    status = "Loading JEV-9B (Core ML)…"
+                    manager = try await JevManager.load(from: directory, bucket: 256)
+                case .tiny where tiny == nil:
+                    guard let path = ProcessInfo.processInfo.environment["MARIO_STUDENT_MODEL"] else {
+                        throw DemoError.noStudentModel
+                    }
+                    let policy = try await MarioStudentPolicy(package: URL(fileURLWithPath: path))
+                    studentParameters = policy.parameterLabel
+                    studentMoves = policy.moves
+                    studentPlacement = policy.placement
+                    print("student: \(policy.parameterLabel) params, \(policy.placement)")
+                    tiny = policy
+                default: break
+                }
+                status = String(format: "\(brain.rawValue) ready in %.1f s", Date().timeIntervalSince(loadStarted))
+                if bridge == nil { bridge = try MarioBridge(command: bridgeCommand) }
+                // MARIO_AUTOPLAY=1 (benchmarks only, off by default): press Play once after loading
+                let autoplay = !playing && ProcessInfo.processInfo.environment["MARIO_AUTOPLAY"] == "1"
+                guard playing || autoplay else {
+                    finished = true
+                    status += " · pick a level and press Play"
+                    return
+                }
+                try await play()
+            } catch is CancellationError {
+            } catch {
+                status = "Error: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    enum DemoError: Error, LocalizedError {
+        case noStudentModel
+        var errorDescription: String? { "Set MARIO_STUDENT_MODEL to the student's .mlpackage path" }
+    }
+
+    func restart(modelDirectory: URL?, bridgeCommand: [String], all: Bool = false) {
+        playAll = all
+        finished = false
+        decisions = 0
+        run(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand)
+    }
+
+    var level = ""
+    var results: [(level: String, flag: Bool)] = []
+    /// The level Play starts (one level per press).
+    var choice = ProcessInfo.processInfo.environment["MARIO_LEVEL"].flatMap { $0.isEmpty ? nil : $0 } ?? "1-1"
+    static let allLevels = (1...8).flatMap { w in (1...4).map { "\(w)-\($0)" } }
+    /// "Play all": the levels the student + lookahead clears from the start every time (deterministic emulator; model-lab
+    /// mario-tiny r10, idle 0). MARIO_PLAYLIST="1-1,6-1,..." overrides.
+    static let playlist =
+        ProcessInfo.processInfo.environment["MARIO_PLAYLIST"].flatMap {
+            $0.isEmpty ? nil : $0.split(separator: ",").map(String.init)
+        }
+        ?? [
+            "1-1", "1-2", "1-3", "1-4", "2-3", "2-4", "3-1", "3-2", "3-3", "3-4", "4-1", "4-2", "5-2", "5-3", "5-4",
+            "6-1", "6-2", "6-3", "6-4", "7-1", "7-3", "8-1", "8-2",
+        ]
+    private var playAll = false
+    var runStarted: Date?
+    var runSeconds: Double = 0
+
+    private func play() async throws {
+        let levels = playAll ? Self.playlist : [choice]
+        if playAll { results = [] }
+        let started = Date()
+        runStarted = started
+        for (index, next) in levels.enumerated() {
+            level = next
+            decisions = 0
+            simulatedTotal = 0
+            let flag = try await playLevel(next, idle: 0)
+            results.append((next, flag))
+            runSeconds = Date().timeIntervalSince(started)
+            print("LEVEL \(next): \(status)")
+            if index < levels.count - 1 { try await Task.sleep(for: .seconds(1)) }  // a beat on the flag
+        }
+        if playAll {
+            let flags = results.filter(\.flag).count
+            status = String(format: "%d/%d levels reached the flag in %.0f s", flags, levels.count, runSeconds)
+            print("RUN: \(status)")
+        }
+        finished = true
+    }
+
+    private func playLevel(_ level: String, idle: Int) async throws -> Bool {
+        guard let bridge else { return false }
+        var step = try await bridge.reset(level: level, idle: idle)
+        levelFrames = 0
+        let levelStarted = Date()
+        defer {
+            let seconds = Date().timeIntervalSince(levelStarted)
+            print(
+                String(
+                    format: "level %@: %d frames in %.1f s = %.0f fps (%.1fx real time)", level, levelFrames,
+                    seconds, Double(levelFrames) / seconds, Double(levelFrames) / seconds / 60))
+        }
+        show(step)
+        history = Array(repeating: step.pixels, count: 5)
+        while !step.done {
+            try Task.checkCancellation()
+            // 1. decide (emulator paused)
+            if brain == .tiny, let tiny {
+                let started = Date()
+                moveProbabilities = try tiny.decide(now: step.pixels, before: history[0], marioX: step.screenX)
+                lastMilliseconds = Date().timeIntervalSince(started) * 1000
+                let ranked = moveProbabilities.indices.sorted { moveProbabilities[$0] > moveProbabilities[$1] }
+                    .map { tiny.moves[$0] }
+                studentMove = ranked.first ?? "run"
+                decisions += 1
+                print(String(format: "%3d  x %4d  %@  %.2f ms", decisions, step.x, studentMove, lastMilliseconds))
+                if tiny.everyMacro && lookahead {
+                    studentMove = try await look(from: step, ranked: ranked, tiny: tiny, bridge: bridge)
+                    simulatedTotal += simulated
+                }
+                if tiny.everyMacro {
+                    step = try await performMacro(
+                        MarioStudentPolicy.solverMacros[studentMove] ?? [], from: step, bridge: bridge)
+                } else {
+                    move = Move(rawValue: studentMove) ?? .run
+                    step = try await perform(move, from: step, bridge: bridge)
+                }
+                continue
+            }
+            guard let manager else { return false }
+            thinking = true
+            let started = Date()
+            var probs: [String: Float] = [:]
+            var images: [String: CGImage] = [:]
+            for (name, spec) in Self.views {
+                guard let image = Self.view(step.frame, x: step.screenX, y: step.screenY, spec: spec) else { continue }
+                images[name] = image
+                let asked = Self.questions.filter { $0.view == name }
+                let result = try await manager.decide(
+                    state: [.text(spec.state), .image(image)], questions: asked.map { JevQuestion(.noul, $0.text) })
+                for (q, d) in zip(asked, result.decisions) { probs[q.id] = d.yes ?? 0 }
+            }
+            lastMilliseconds = Date().timeIntervalSince(started) * 1000
+            viewImages = images
+            probabilities = probs
+            move = Self.questions.contains { (probs[$0.id] ?? 0) > $0.threshold } ? .jump : .run
+            decisions += 1
+            thinking = false
+            let line = Self.questions.map { String(format: "%@ %.2f", $0.id, probs[$0.id] ?? 0) }.joined(
+                separator: "  ")
+            print(
+                String(format: "%3d  x %4d  %@  %@  %.0f ms", decisions, step.x, move.rawValue, line, lastMilliseconds))
+            step = try await perform(move, from: step, bridge: bridge)
+        }
+        status =
+            step.flag
+            ? "Reached the flag in \(decisions) decisions" : "Mario died at x \(step.x) after \(decisions) decisions"
+        if brain == .tiny && lookahead { status += " · \(simulatedTotal) moves simulated" }
+        return step.flag
+    }
+
+    /// The first candidate (in the student's order) that, simulated on a save state with the student's next 6 moves,
+    /// survives and gains ground: x +16 px, another area, or a pipe (entering a side pipe drops x). If the student's
+    /// continuation stalls, the same move repeated for 18 moves is tried too (a swim stroke only rises if repeated).
+    /// Else the candidate that lasts longest, then gets furthest. Restores the save state before returning.
+    private func look(
+        from step: MarioBridge.Step, ranked: [String], tiny: MarioStudentPolicy, bridge: MarioBridge
+    ) async throws -> String {
+        try await bridge.save()
+        simulated = 0
+        var best = ranked.first ?? "run"
+        var bestScore = (-1, -1)
+        for move in ranked {
+            for repeating in [false, true] {
+                try Task.checkCancellation()
+                try await bridge.load()
+                let horizon = repeating ? 3 * Self.lookaheadDepth : Self.lookaheadDepth
+                var (sim, before) = try await bridge.run(MarioStudentPolicy.solverMacros[move] ?? [])
+                var transition = sim.transition
+                var lasted = 0
+                simulated += 1
+                while !sim.done && lasted < horizon {
+                    var next = move
+                    if !repeating {
+                        let started = Date()
+                        let p = try tiny.decide(now: sim.pixels, before: before, marioX: sim.screenX)
+                        print(String(format: "      sim  %.2f ms", Date().timeIntervalSince(started) * 1000))
+                        next = tiny.moves[p.indices.max { p[$0] < p[$1] } ?? 0]
+                    }
+                    (sim, before) = try await bridge.run(MarioStudentPolicy.solverMacros[next] ?? [])
+                    transition = transition || sim.transition
+                    lasted += 1
+                    simulated += 1
+                }
+                let dead = sim.done && !sim.flag
+                let moved = sim.x > step.x + 16 || sim.area != step.area || transition
+                if sim.flag || (!sim.done && lasted >= horizon && moved) {
+                    try await bridge.load()
+                    return move
+                }
+                let score = (dead && lasted == 0 ? -1 : lasted, sim.x < 0xF000 ? sim.x : 0)
+                if score > bestScore {
+                    best = move
+                    bestScore = score
+                }
+            }
+        }
+        try await bridge.load()
+        return best
+    }
+
+    /// A solver-style 8-frame macro. Max speed: one batched bridge call and one redraw per macro. Otherwise frame by
+    /// frame at 60 fps, holding the last input while the game has control (pipe entry, area change).
+    private func performMacro(
+        _ buttons: [UInt8], from start: MarioBridge.Step, bridge: MarioBridge
+    ) async throws
+        -> MarioBridge.Step
+    {
+        guard !buttons.isEmpty else { return start }
+        try Task.checkCancellation()
+        if turbo {
+            let tick = Date()
+            let (step, before) = try await bridge.run(buttons)
+            show(step)
+            history = [before, before, before, before, step.pixels]
+            countFrames(step.frames)
+            // cap game time at speedCap x real time (60 fps x cap); uncapped by default
+            let budget = Double(step.frames) / (60 * Self.speedCap)
+            let elapsed = Date().timeIntervalSince(tick)
+            if elapsed < budget { try await Task.sleep(for: .seconds(budget - elapsed)) }
+            return step
+        }
+        var step = start
+        var index = 0
+        var held = 0
+        while !step.done {
+            let press: UInt8
+            if index < buttons.count {
+                press = buttons[index]
+                index += 1
+            } else if !step.control && held < 300 {
+                press = buttons[buttons.count - 1]
+                held += 1
+            } else {
+                break
+            }
+            let tick = Date()
+            try Task.checkCancellation()
+            step = try await bridge.step(press)
+            show(step)
+            history = Array(history.dropFirst()) + [step.pixels]
+            countFrames(1)
+            let elapsed = Date().timeIntervalSince(tick)
+            if elapsed < 1 / 60 { try await Task.sleep(for: .seconds(1 / 60 - elapsed)) }
+        }
+        return step
+    }
+
+    /// Emulator frames per second over the last second (counts batched frames too).
+    private func countFrames(_ n: Int) {
+        levelFrames += n
+        let now = Date()
+        frameLog.append((now, n))
+        frameLog.removeAll { now.timeIntervalSince($0.0) > 1 }
+        gameFPS = Double(frameLog.reduce(0) { $0 + $1.1 })
+    }
+
+    /// Play the move at 60 fps, then keep running until Mario lands (max 90 frames).
+    private func perform(
+        _ move: Move, from start: MarioBridge.Step, bridge: MarioBridge
+    ) async throws
+        -> MarioBridge.Step
+    {
+        var step = start
+        let buttons = Self.moves[move] ?? []
+        var index = 0
+        var airborne = 0
+        while !step.done {
+            let press: UInt8
+            if index < buttons.count {
+                press = buttons[index]
+                index += 1
+            } else if !step.onGround && airborne < 90 {
+                press = Self.right | Self.b
+                airborne += 1
+            } else {
+                break
+            }
+            let tick = Date()
+            try Task.checkCancellation()
+            step = try await bridge.step(press)
+            show(step)
+            history = Array(history.dropFirst()) + [step.pixels]
+            countFrames(1)
+            let elapsed = Date().timeIntervalSince(tick)
+            if !turbo, elapsed < 1 / 60 { try await Task.sleep(for: .seconds(1 / 60 - elapsed)) }
+        }
+        return step
+    }
+
+    private func show(_ step: MarioBridge.Step) {
+        frame = step.frame
+        x = step.x
+    }
+
+    /// A close-up: Mario's feet are 32 px below the RAM y; upscaled 4x with nearest-neighbour (PIL NEAREST).
+    static func view(
+        _ frame: CGImage, x: Int, y: Int, spec: (dx: Int, width: Int, dy: Int, height: Int, state: String)
+    )
+        -> CGImage?
+    {
+        let x0 = min(max(x + spec.dx, 0), frame.width - spec.width)
+        let y0 = min(max(y + 32 + spec.dy, 0), frame.height - spec.height)
+        guard let crop = frame.cropping(to: CGRect(x: x0, y: y0, width: spec.width, height: spec.height)) else {
+            return nil
+        }
+        let scale = 4
+        guard
+            let context = CGContext(
+                data: nil, width: spec.width * scale, height: spec.height * scale, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+        else { return nil }
+        context.interpolationQuality = .none
+        context.draw(crop, in: CGRect(x: 0, y: 0, width: spec.width * scale, height: spec.height * scale))
+        return context.makeImage()
+    }
+}

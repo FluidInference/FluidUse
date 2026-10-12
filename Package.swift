@@ -69,8 +69,13 @@ let package = Package(
         .executableTarget(name: "ClefVisionCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "UnlimitedOcrCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "UnlimitedOcrDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
-        .executableTarget(name: "ClefFlashDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "bars.py"]),
+        .executableTarget(
+            name: "ClefFlashDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "bars.py"]),
         .executableTarget(name: "ClefTextCheck", dependencies: ["FluidUse"]),
+        .executableTarget(name: "JevCheck", dependencies: ["FluidUse"]),
+        .executableTarget(
+            name: "JevMarioDemo", dependencies: ["FluidUse"],
+            exclude: ["README.md", "demo.sh", "nes_bridge.py", "retro_bridge.py"]),
         .executableTarget(name: "ClefCompareDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh"]),
         .executableTarget(name: "InternDecisionCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "Decision2Check", dependencies: ["FluidUse"]),
@@ -81,7 +86,8 @@ let package = Package(
         .executableTarget(name: "GuardrailDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
         .executableTarget(name: "FrontDoorDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
         .executableTarget(name: "ShortReplyCheck", dependencies: ["FluidUse"]),
-        .executableTarget(name: "ShortReplyDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "mock-feed"]),
+        .executableTarget(
+            name: "ShortReplyDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "mock-feed"]),
         .executableTarget(name: "GLiClassServe", dependencies: ["FluidUse"]),
         .executableTarget(
             name: "KevGuessWhoDemo", dependencies: ["FluidUse", "SortAnything"], exclude: ["README.md", "demo.sh"]),
