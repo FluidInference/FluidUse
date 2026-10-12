@@ -16,16 +16,22 @@ LOG=${TMPDIR:-/tmp}/jev-mario-demo.log
 command -v uv >/dev/null || { echo "uv is required for the emulator bridge (https://docs.astral.sh/uv/)"; exit 1; }
 swift build -c release --product JevMarioDemo --package-path "$ROOT"
 : > "$LOG"
-if ! tmux has-session -t jev-mario 2>/dev/null; then
+# a session left from an earlier run may have lost its Ghostty window: start fresh so the window always opens
+tmux kill-session -t jev-mario 2>/dev/null || true
+if true; then
   TOP="python3 '$ROOT/Sources/ClefFlashDemo/bars.py' --log '$LOG'"
   [[ "${MONITOR:-}" == ane ]] && TOP="$TOP --ane" || true
   tmux new-session -d -s jev-mario -x 160 -y 60 "$TOP"
   tmux set-option -t jev-mario remain-on-exit on
   tmux set-option -t jev-mario window-size latest  # follow the Ghostty window, not the detached 160-column default
   tmux split-window -h -t jev-mario "tail -n 300 -F '$LOG'"  # bars left, decision log right
+  BEFORE=$(pgrep -n -x ghostty || true)
   open -na /Applications/Ghostty.app --args -e "$(command -v tmux)" attach -t jev-mario
-  sleep 1
-  GHOSTTY_PID=$(pgrep -n -x ghostty || true)
+  for _ in {1..20}; do  # the new Ghostty process can take a few seconds to appear
+    GHOSTTY_PID=$(pgrep -n -x ghostty || true)
+    [[ -n "$GHOSTTY_PID" && "$GHOSTTY_PID" != "$BEFORE" ]] && break
+    sleep 0.5
+  done
 fi
 pkill -x JevMarioDemo 2>/dev/null || true
 MARIO_PLAYLIST="${MARIO_PLAYLIST:-}" MARIO_TURBO="${MARIO_TURBO:-}" MARIO_LOOKAHEAD="${MARIO_LOOKAHEAD:-}" MARIO_LEVEL="${MARIO_LEVEL:-1-1}" JEV_MODEL_DIR="$BUNDLE" JEV_MARIO_BRAIN="${JEV_MARIO_BRAIN:-}" MARIO_STUDENT_MODEL="${MARIO_STUDENT_MODEL:-}" \
@@ -43,12 +49,15 @@ APP_PID=$!
   GAME_BOTTOM=$(osascript -e "tell application \"System Events\" to tell front window of (first process whose unix id is $APP_PID)" \
     -e "set {w, h} to size" -e "set position to {($SCREEN_W - w) div 2, $MENU}" -e "return $MENU + h" -e "end tell" 2>/dev/null)
   [[ -n "${GHOSTTY_PID:-}" && -n "$GAME_BOTTOM" ]] || exit 0
-  for _ in {1..20}; do  # Ghostty opens its window asynchronously and may re-place it once; re-apply until it sticks
+  STUCK=0
+  for _ in {1..40}; do  # Ghostty re-places its window after opening; keep re-applying until it held for ~3 s
     WIDTH=$(osascript -e "tell application \"System Events\" to tell front window of (first process whose unix id is $GHOSTTY_PID)" \
       -e "set {position, size} to {{0, $GAME_BOTTOM}, {$SCREEN_W, $SCREEN_H - $GAME_BOTTOM}}" -e "return item 1 of (get size)" \
       -e "end tell" 2>/dev/null)
-    [[ "$WIDTH" == "$SCREEN_W" ]] && break
+    [[ "$WIDTH" == "$SCREEN_W" ]] && STUCK=$((STUCK + 1)) || STUCK=0
+    (( STUCK >= 6 )) && break
     sleep 0.5
   done
+  osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $APP_PID) to true" 2>/dev/null
 ) &
 echo "demo pid $APP_PID · log $LOG · first move after ~40 s of model loading (plus a ~13 GB download on first run)"

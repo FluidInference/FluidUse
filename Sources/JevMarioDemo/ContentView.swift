@@ -40,7 +40,7 @@ struct ContentView: View {
                 ProgressView(value: Double(min(player.x, MarioPlayer.flagX)), total: Double(MarioPlayer.flagX))
                 Text(player.status).foregroundStyle(.secondary)
             }
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
                 Picker("Model", selection: $player.brain) {
                     ForEach(MarioPlayer.Brain.allCases) { Text($0.rawValue).tag($0) }
                 }
@@ -49,22 +49,24 @@ struct ContentView: View {
                     Text(
                         "Every move: a \(player.studentParameters.isEmpty ? "small" : player.studentParameters + "-parameter") model looks at the pixels around Mario"
                     )
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(.secondary)
                     if !player.studentPlacement.isEmpty {
                         Label(player.studentPlacement, systemImage: "cpu").font(.callout.bold()).foregroundStyle(.green)
                     }
                     Toggle("Lookahead: try moves on a save state first", isOn: $player.lookahead).toggleStyle(.switch)
-                        .font(.callout)
+                        .font(.callout).controlSize(.small)
                     if player.lookahead {
                         Text("\(player.simulated) moves simulated for this move · \(player.simulatedTotal) this level")
                             .font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
                     }
-                    ForEach(Array(player.studentMoves.enumerated()), id: \.offset) { i, move in
-                        let p = i < player.moveProbabilities.count ? player.moveProbabilities[i] : 0
-                        HStack {
-                            Text(move).font(.callout.bold()).frame(width: 70, alignment: .leading)
-                            Bar(value: p, color: move == player.studentMove ? .orange : .gray)
-                            Text(String(format: "%.2f", p)).font(.system(.caption, design: .monospaced))
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible())], spacing: 6) {
+                        ForEach(Array(player.studentMoves.enumerated()), id: \.offset) { i, move in
+                            let p = i < player.moveProbabilities.count ? player.moveProbabilities[i] : 0
+                            HStack(spacing: 6) {
+                                Text(move).font(.caption.bold()).frame(width: 56, alignment: .leading)
+                                Bar(value: p, color: move == player.studentMove ? .orange : .gray)
+                                Text(String(format: "%.2f", p)).font(.system(.caption2, design: .monospaced))
+                            }
                         }
                     }
                 } else {
@@ -91,22 +93,17 @@ struct ContentView: View {
                 }
                 HStack(alignment: .firstTextBaseline) {
                     let shown = player.brain == .tiny ? player.studentMove : player.move.rawValue
-                    Text(shown.uppercased()).font(.system(size: 34, weight: .bold, design: .rounded))
+                    Text(shown.uppercased()).font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundStyle(shown == "run" ? .green : .orange)
                     Spacer()
-                    VStack(alignment: .trailing) {
-                        Text(
-                            String(
-                                format: player.lastMilliseconds < 10 ? "%.2f ms" : "%.0f ms", player.lastMilliseconds)
-                        ).font(
-                            .system(.title3, design: .monospaced))
-                        Text("decision \(player.decisions)").foregroundStyle(.secondary)
-                    }
+                    Text(String(format: player.lastMilliseconds < 10 ? "%.2f ms" : "%.0f ms", player.lastMilliseconds))
+                        .font(.system(.body, design: .monospaced))
+                    Text("· #\(player.decisions)").foregroundStyle(.secondary)
                 }
                 HStack {
                     Toggle(
                         MarioPlayer.speedCap.isFinite ? String(format: "%.0f× speed", MarioPlayer.speedCap) : "Max speed",
-                        isOn: $player.turbo).toggleStyle(
+                        isOn: $player.turbo).controlSize(.small).toggleStyle(
                         .switch)
                     Spacer()
                     Text(String(format: "%.0f fps · %.1f× real time", player.gameFPS, player.gameFPS / 60))
@@ -128,7 +125,7 @@ struct ContentView: View {
             }
             .frame(width: 340)
         }
-        .padding(24)
+        .padding(16)
         .task { player.start(modelDirectory: modelDirectory, bridgeCommand: bridgeCommand) }
     }
 }
