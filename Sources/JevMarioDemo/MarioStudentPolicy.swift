@@ -1,4 +1,4 @@
-import CoreML
+@preconcurrency import CoreML
 import Foundation
 
 /// The pixel student (model-lab `mario-tiny`, a ~9M-parameter MobileNetV3 trained with RAM tile / enemy targets):
