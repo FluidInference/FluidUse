@@ -58,7 +58,7 @@ final class MarioPlayer {
     ]
     static let flagX = 3160
     /// Fast mode's cap on game speed, in multiples of real time (MARIO_SPEED_CAP; uncapped the student runs ~20-40x).
-    static let speedCap = Double(ProcessInfo.processInfo.environment["MARIO_SPEED_CAP"] ?? "") ?? 10
+    static let speedCap = Double(ProcessInfo.processInfo.environment["MARIO_SPEED_CAP"] ?? "") ?? 5
 
     // published state
     var frame: CGImage?
