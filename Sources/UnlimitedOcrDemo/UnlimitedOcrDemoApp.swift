@@ -31,6 +31,6 @@ struct RootView: View {
         ContentView()
             .environmentObject(model)
             .frame(minWidth: 1000, minHeight: 640)
-            .task { await model.start() }
+            .task { await model.boot() }
     }
 }

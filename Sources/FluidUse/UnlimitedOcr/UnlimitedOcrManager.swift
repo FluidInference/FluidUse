@@ -1,5 +1,6 @@
 import CoreML
 import Foundation
+import os
 
 /// Baidu Unlimited-OCR (3B MoE, ~0.5B active) on Core ML: several document pages in, structured markdown out, in one
 /// generation (upstream's "Multi page parsing." mode).
@@ -26,6 +27,9 @@ public actor UnlimitedOcrManager {
     private let embeddings: Data  // fp16 [vocab, hidden]
     private let tokenDecoder: UnlimitedOcrTokenDecoder
     private var buckets: [Int: Bucket] = [:]
+    /// Read by the generation loop every token; a lock rather than actor state because the loop holds the actor
+    /// without suspending, so an actor-isolated `pause()` would only run after the read ends.
+    private nonisolated let pauseFlag = OSAllocatedUnfairLock(initialState: false)
 
     /// Largest document, in pages, the bundle's biggest capacity bucket holds.
     public nonisolated let maxPages: Int
@@ -62,8 +66,7 @@ public actor UnlimitedOcrManager {
         self.encoder = encoder
         self.embeddings = embeddings
         self.tokenDecoder = tokenDecoder
-        let largest = config.capacities.max() ?? 0
-        maxPages = max(0, (largest - 1 - (config.promptSuffixIds["multi"]?.count ?? 0)) / config.pageTokens)
+        maxPages = config.maxPages
     }
 
     /// Compiles a package once into `compiled/` and loads it (optionally one function of a multifunction package).
@@ -84,12 +87,6 @@ public actor UnlimitedOcrManager {
         return try await MLModel.load(contentsOf: target, configuration: configuration)
     }
 
-    /// Smallest capacity bucket that holds a prefix of `tokens` tokens (prefill runs in whole chunks).
-    func capacity(forPrefix tokens: Int) -> Int? {
-        let padded = (tokens + config.chunk - 1) / config.chunk * config.chunk
-        return config.capacities.sorted().first { $0 >= padded }
-    }
-
     /// Loads the decoder functions for the buckets these page counts need (default: all) and runs one prediction
     /// through each model, so the first real read does not pay Core ML's lazy GPU setup.
     public func warm(pages: [Int]? = nil) async throws {
@@ -100,7 +97,7 @@ public actor UnlimitedOcrManager {
         _ = try encode(blank)
         var warmed = Set<Int>()
         for count in counts {
-            guard let capacity = capacity(forPrefix: prefixLength(pages: count, prompt: "multi")),
+            guard let capacity = config.capacity(forPrefix: config.prefixLength(pages: count, prompt: "multi")),
                 warmed.insert(capacity).inserted
             else { continue }
             let bucket = try await bucket(capacity)
@@ -110,11 +107,15 @@ public actor UnlimitedOcrManager {
                 let mask = try MLMultiArray(shape: [1, 1, c as NSNumber, (slots + c) as NSNumber], dataType: .float16)
                 let writeIdx = try MLMultiArray(shape: [c as NSNumber], dataType: .int32)
                 let outIndex = try MLMultiArray(shape: [1], dataType: .int32)
+                // MLMultiArray memory is not initialized.
+                x.dataPointer.initializeMemory(as: UInt8.self, repeating: 0, count: x.count * 2)
+                mask.dataPointer.initializeMemory(as: UInt8.self, repeating: 0, count: mask.count * 2)
                 for i in 0..<c { writeIdx.dataPointer.assumingMemoryBound(to: Int32.self)[i] = Int32(i) }
                 outIndex.dataPointer.assumingMemoryBound(to: Int32.self)[0] = 0
+                let state = model.makeState()
                 _ = try step(
-                    model, state: model.makeState(), x: x, positions: 0..<c, mask: mask, writeIdx: writeIdx,
-                    outIndex: outIndex)
+                    model, state: state, x: x, positions: 0..<c, mask: mask, writeIdx: writeIdx, outIndex: outIndex)
+                withExtendedLifetime(state) {}
             }
         }
     }
@@ -130,10 +131,6 @@ public actor UnlimitedOcrManager {
         let bucket = Bucket(capacity: capacity, prefill: prefill, decode: decode)
         buckets[capacity] = bucket
         return bucket
-    }
-
-    func prefixLength(pages: Int, prompt: String) -> Int {
-        1 + pages * config.pageTokens + (config.promptSuffixIds[prompt]?.count ?? 0)
     }
 
     /// Reads `pages` (from `UnlimitedOcrPagePreprocessor`) as one document. With one page the "single" prompt
@@ -156,18 +153,26 @@ public actor UnlimitedOcrManager {
         }
     }
 
+    /// Holds a running read between tokens until `resume()`; the K/V state and position are kept.
+    public nonisolated func pause() { pauseFlag.withLock { $0 = true } }
+
+    public nonisolated func resume() { pauseFlag.withLock { $0 = false } }
+
+    public nonisolated var isPaused: Bool { pauseFlag.withLock { $0 } }
+
     // MARK: - Generation
 
     private func run(
         pages: [UnlimitedOcrPage], prompt: String, maxNewTokens: Int?, emit: @Sendable (UnlimitedOcrEvent) -> Void
     ) async throws {
         guard !pages.isEmpty else { throw UnlimitedOcrError.invalidInput("no pages") }
+        resume()
         guard let suffix = config.promptSuffixIds[prompt] else {
             throw UnlimitedOcrError.invalidInput("unknown prompt \(prompt)")
         }
         let hidden = config.hiddenSize
-        let n = prefixLength(pages: pages.count, prompt: prompt)
-        guard let capacity = capacity(forPrefix: n) else {
+        let n = config.prefixLength(pages: pages.count, prompt: prompt)
+        guard let capacity = config.capacity(forPrefix: n) else {
             throw UnlimitedOcrError.invalidInput(
                 "\(pages.count) pages need \(n) prefix slots; bundle holds \(maxPages) pages")
         }
@@ -244,6 +249,7 @@ public actor UnlimitedOcrManager {
         if let maxNewTokens { limit = min(limit, maxNewTokens) }
         var produced = 0
         var stoppedAtEOS = false
+        var pausedSeconds = 0.0
         let decodeStart = Date()
         for t in 0..<limit {
             let banned = bannedTokens(sequence)
@@ -260,6 +266,11 @@ public actor UnlimitedOcrManager {
             }
             if t == limit - 1 { break }
             try Task.checkCancellation()
+            if isPaused {
+                let pauseStart = Date()
+                while isPaused { try await Task.sleep(nanoseconds: 50_000_000) }
+                pausedSeconds += Date().timeIntervalSince(pauseStart)
+            }
             let slot = capacity + t % config.ring
             if t > 0 { m1[capacity + (t - 1) % config.ring] = 0 }
             m1[slot] = -1e4
@@ -277,7 +288,8 @@ public actor UnlimitedOcrManager {
             .finished(
                 UnlimitedOcrStats(
                     pages: pages.count, promptTokens: n, outputTokens: produced, encodeMilliseconds: encodeMs,
-                    prefillMilliseconds: prefillMs, decodeMilliseconds: Date().timeIntervalSince(decodeStart) * 1000,
+                    prefillMilliseconds: prefillMs,
+                    decodeMilliseconds: (Date().timeIntervalSince(decodeStart) - pausedSeconds) * 1000,
                     stoppedAtEOS: stoppedAtEOS)))
     }
 

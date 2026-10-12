@@ -4,12 +4,14 @@ public enum UnlimitedOcrError: Error, LocalizedError, Sendable {
     case invalidAsset(String)
     case invalidInput(String)
     case prediction(String)
+    case download(String)
 
     public var errorDescription: String? {
         switch self {
         case .invalidAsset(let reason): "Invalid Unlimited-OCR asset: \(reason)"
         case .invalidInput(let reason): "Invalid Unlimited-OCR input: \(reason)"
         case .prediction(let reason): "Unlimited-OCR prediction failed: \(reason)"
+        case .download(let reason): "Unlimited-OCR download failed: \(reason)"
         }
     }
 }
@@ -55,6 +57,26 @@ struct UnlimitedOcrConfig: Decodable, Sendable {
         case ngramWindow = "ngram_window"
         case maxLength = "max_length"
         case decoder, encoder
+    }
+}
+
+extension UnlimitedOcrConfig {
+    /// BOS + 273 tokens per page + the prompt text.
+    func prefixLength(pages: Int, prompt: String) -> Int {
+        1 + pages * pageTokens + (promptSuffixIds[prompt]?.count ?? 0)
+    }
+
+    /// Smallest capacity bucket that holds a prefix of `tokens` tokens (prefill runs in whole chunks).
+    func capacity(forPrefix tokens: Int) -> Int? {
+        let padded = (tokens + chunk - 1) / chunk * chunk
+        return capacities.sorted().first { $0 >= padded }
+    }
+
+    /// Most pages one read can take with the multi-page prompt.
+    var maxPages: Int {
+        var pages = 0
+        while capacity(forPrefix: prefixLength(pages: pages + 1, prompt: "multi")) != nil { pages += 1 }
+        return pages
     }
 }
 

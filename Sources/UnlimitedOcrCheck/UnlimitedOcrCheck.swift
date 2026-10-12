@@ -5,7 +5,8 @@ import ImageIO
 import PDFKit
 
 // Runs UnlimitedOcrManager on page images or a PDF and optionally diffs against a reference output.md.
-//   UnlimitedOcrCheck <bundle dir> <page.png ... | doc.pdf> [--ref output.md] [--max-new N] [--first-page K --pages N]
+//   UnlimitedOcrCheck <bundle dir | hub> <page.png ... | doc.pdf> [--ref output.md] [--out text.md] [--max-new N]
+//       [--first-page K --pages N] [--npy pixels.npy] [--cache dir]
 @main
 struct UnlimitedOcrCheck {
     static func option(_ name: String, _ args: inout [String]) -> String? {
@@ -33,6 +34,9 @@ struct UnlimitedOcrCheck {
         let refPath = option("--ref", &args)
         let outPath = option("--out", &args)
         let npyPath = option("--npy", &args)
+        let cachePath = option("--cache", &args)
+        let warmAll = args.contains("--warm-all")
+        args.removeAll { $0 == "--warm-all" }
         let maxNew = option("--max-new", &args).flatMap(Int.init)
         let firstPage = option("--first-page", &args).flatMap(Int.init) ?? 1
         let pageCount = option("--pages", &args).flatMap(Int.init)
@@ -42,10 +46,16 @@ struct UnlimitedOcrCheck {
         }
         if npyPath != nil { args.append("-") }
         guard args.count >= 2 else {
-            print("usage: UnlimitedOcrCheck <bundle dir> <page.png ... | doc.pdf> [--ref output.md] [--max-new N]")
+            print(
+                "usage: UnlimitedOcrCheck <bundle dir | hub> <page.png ... | doc.pdf> [--ref output.md] [--out text.md]"
+            )
             exit(2)
         }
-        let bundle = URL(fileURLWithPath: args[0])
+        // "hub" downloads the pinned bundle (into --cache <dir> or the FluidUse cache).
+        let bundle =
+            args[0] == "hub"
+            ? try await UnlimitedOcrModelStore.ensure(cacheDirectory: cachePath.map { URL(fileURLWithPath: $0) })
+            : URL(fileURLWithPath: args[0])
         let inputs = args.dropFirst().map { URL(fileURLWithPath: $0) }
 
         var pixels: [UnlimitedOcrPage] = []
@@ -69,7 +79,7 @@ struct UnlimitedOcrCheck {
 
         let loadStart = Date()
         let manager = try await UnlimitedOcrManager.load(from: bundle)
-        try await manager.warm(pages: [pixels.count])
+        try await manager.warm(pages: warmAll ? nil : [pixels.count])
         print(String(format: "loaded in %.1f s, %d page(s)", Date().timeIntervalSince(loadStart), pixels.count))
 
         var text = ""

@@ -3,14 +3,15 @@ import FluidUse
 import Foundation
 import PDFKit
 
-/// Drives one read: PDF -> page tensors -> UnlimitedOcrManager stream -> parsed document for the UI.
+/// Drives one read: PDF -> page tensors -> UnlimitedOcrManager stream -> parsed document for the UI. Opening a PDF
+/// only loads its pages; `start()` reads them, `togglePause()` holds / continues the generation.
 @available(macOS 15.0, *)
 @MainActor
 final class ReaderModel: ObservableObject {
     enum Phase: Equatable {
-        case loading, ready
+        case loading, ready, loaded
         case encoding(Int)
-        case prefilling, reading, done
+        case prefilling, reading, paused, done
         case failed(String)
     }
 
@@ -22,23 +23,37 @@ final class ReaderModel: ObservableObject {
     @Published var tokensPerSecond = 0.0
     @Published var elapsed = 0.0
     @Published var maxPages = 0
+    @Published var status = "Loading the model…"
 
     private var manager: UnlimitedOcrManager?
     private var readTask: Task<Void, Never>?
+    private var pdfPages: [PDFPage] = []
     private var text = ""
+    private var pausedAt: Date?
+    private var pausedTotal = 0.0
 
-    static var bundleURL: URL {
-        if let path = ProcessInfo.processInfo.environment["UNLIMITED_OCR_BUNDLE"], !path.isEmpty {
-            return URL(fileURLWithPath: path)
+    var canStart: Bool {
+        switch phase {
+        case .loaded, .done: return !pdfPages.isEmpty
+        case .failed: return manager != nil && !pdfPages.isEmpty
+        default: return false
         }
-        return FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(
-            "Documents/unlimited-ocr-work/bundle")
     }
 
-    func start() async {
+    var canPause: Bool { phase == .reading || phase == .paused }
+
+    func boot() async {
         do {
             let started = Date()
-            let manager = try await UnlimitedOcrManager.load(from: Self.bundleURL)
+            let directory: URL
+            if let path = ProcessInfo.processInfo.environment["UNLIMITED_OCR_BUNDLE"], !path.isEmpty {
+                directory = URL(fileURLWithPath: path)
+            } else {
+                status = "Downloading Unlimited-OCR Core ML (\(UnlimitedOcrModelStore.repository), ~3.8 GB)…"
+                directory = try await UnlimitedOcrModelStore.ensure()
+            }
+            status = "Loading the model (first launch compiles it, about a minute)…"
+            let manager = try await UnlimitedOcrManager.load(from: directory)
             try await manager.warm()
             self.manager = manager
             maxPages = manager.maxPages
@@ -55,26 +70,62 @@ final class ReaderModel: ObservableObject {
         }
     }
 
+    /// Loads the PDF's pages (up to `maxPages`) without reading them.
     func open(_ url: URL) {
-        guard let manager, let pdf = PDFDocument(url: url) else {
+        guard manager != nil, let pdf = PDFDocument(url: url) else {
             phase = .failed("Could not open \(url.lastPathComponent)")
             return
         }
-        readTask?.cancel()
+        stop()
         let count = min(pdf.pageCount, maxPages)
         title = url.deletingPathExtension().lastPathComponent
-        pageImages = (0..<count).compactMap {
-            pdf.page(at: $0)?.thumbnail(of: NSSize(width: 900, height: 1200), for: .mediaBox)
+        pdfPages = (0..<count).compactMap { pdf.page(at: $0) }
+        pageImages = pdfPages.map { $0.thumbnail(of: NSSize(width: 900, height: 1200), for: .mediaBox) }
+        reset()
+        phase = .loaded
+    }
+
+    /// Reads the loaded pages from the beginning.
+    func start() {
+        guard let manager, canStart else { return }
+        stop()
+        reset()
+        let pages = pdfPages
+        readTask = Task { [weak self] in
+            await self?.read(pages, with: manager)
         }
+    }
+
+    func togglePause() {
+        guard let manager else { return }
+        if phase == .reading {
+            phase = .paused
+            pausedAt = Date()
+            manager.pause()
+            print("[unlimited-ocr] paused at \(outputTokens) tokens")
+        } else if phase == .paused {
+            if let pausedAt { pausedTotal += Date().timeIntervalSince(pausedAt) }
+            pausedAt = nil
+            phase = .reading
+            manager.resume()
+            print("[unlimited-ocr] resumed")
+        }
+    }
+
+    private func stop() {
+        readTask?.cancel()
+        readTask = nil
+        if let manager { manager.resume() }
+    }
+
+    private func reset() {
         text = ""
         document = UnlimitedOcrDocument(parsing: "")
         outputTokens = 0
         tokensPerSecond = 0
         elapsed = 0
-        let pdfPages = (0..<count).compactMap { pdf.page(at: $0) }
-        readTask = Task { [weak self] in
-            await self?.read(pdfPages, with: manager)
-        }
+        pausedAt = nil
+        pausedTotal = 0
     }
 
     private func read(_ pdfPages: [PDFPage], with manager: UnlimitedOcrManager) async {
@@ -93,7 +144,7 @@ final class ReaderModel: ObservableObject {
                         String(
                             format: "[unlimited-ocr] %d pages encoded + prefilled (%d tokens) in %.2f s",
                             pdfPages.count, tokens, Date().timeIntervalSince(started)))
-                    phase = .reading
+                    if phase != .paused { phase = .reading }
                     decodeStart = Date()
                 case .text(let delta):
                     text += delta
@@ -103,14 +154,15 @@ final class ReaderModel: ObservableObject {
                         lastParse = Date()
                     }
                     if let decodeStart {
-                        tokensPerSecond = Double(outputTokens) / max(0.001, Date().timeIntervalSince(decodeStart))
+                        let active = Date().timeIntervalSince(decodeStart) - pausedTotal
+                        tokensPerSecond = Double(outputTokens) / max(0.001, active)
                     }
-                    elapsed = Date().timeIntervalSince(started)
+                    elapsed = Date().timeIntervalSince(started) - pausedTotal
                 case .finished(let stats):
                     document = UnlimitedOcrDocument(parsing: text)
                     outputTokens = stats.outputTokens
                     tokensPerSecond = 1000 / stats.millisecondsPerToken
-                    elapsed = Date().timeIntervalSince(started)
+                    elapsed = Date().timeIntervalSince(started) - pausedTotal
                     phase = .done
                     print(
                         String(

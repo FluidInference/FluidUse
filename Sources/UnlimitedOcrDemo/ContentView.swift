@@ -46,8 +46,19 @@ struct ContentView: View {
             }
             Spacer()
             statusView
-            Button("Open PDF…") { openPanel() }
-                .disabled(model.phase == .loading)
+            HStack(spacing: 8) {
+                Button("Open PDF…") { openPanel() }
+                    .disabled(model.phase == .loading || model.canPause)
+                Button(model.phase == .done ? "Restart" : "Start") { model.start() }
+                    .keyboardShortcut(.return, modifiers: [])
+                    .disabled(!model.canStart)
+                Button(model.phase == .paused ? "Resume" : "Pause") { model.togglePause() }
+                    .keyboardShortcut(.space, modifiers: [])
+                    .disabled(!model.canPause)
+                    .frame(minWidth: 76)
+            }
+            .controlSize(.large)
+            .focusable(false)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -66,9 +77,11 @@ struct ContentView: View {
         switch model.phase {
         case .loading: "loading model"
         case .ready: "drop a PDF"
+        case .loaded: "press Start"
         case .encoding: "looking at pages"
         case .prefilling: "reading pages in"
         case .reading: "writing"
+        case .paused: "paused"
         case .done: "done"
         case .failed: "error"
         }
@@ -104,7 +117,7 @@ struct ContentView: View {
 
     private func pageView(index: Int, image: NSImage) -> some View {
         let blocks = index < model.document.pages.count ? model.document.pages[index].blocks : []
-        let reading = model.phase == .reading && index == currentPage
+        let reading = (model.phase == .reading || model.phase == .paused) && index == currentPage
         return Image(nsImage: image)
             .resizable()
             .aspectRatio(contentMode: .fit)
@@ -127,7 +140,7 @@ struct ContentView: View {
                 }
             }
             .shadow(radius: 2)
-            .opacity(index <= currentPage || model.phase != .reading ? 1 : 0.55)
+            .opacity(index <= currentPage || !model.canPause ? 1 : 0.55)
     }
 
     // MARK: Markdown output
@@ -136,7 +149,7 @@ struct ContentView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    if model.pageImages.isEmpty {
+                    if model.document.pages.isEmpty {
                         placeholder
                     }
                     ForEach(model.document.pages) { page in
@@ -167,9 +180,17 @@ struct ContentView: View {
             switch model.phase {
             case .loading:
                 ProgressView().controlSize(.small)
-                Text("Loading the model…").foregroundStyle(.secondary)
+                Text(model.status).foregroundStyle(.secondary)
             case .failed(let message):
                 Text(message).foregroundStyle(.red)
+            case .loaded:
+                Text(
+                    "Press Start to read \(model.pageImages.count) page\(model.pageImages.count == 1 ? "" : "s") in one pass."
+                )
+                .foregroundStyle(.secondary)
+            case .encoding, .prefilling:
+                ProgressView().controlSize(.small)
+                Text("Taking in all \(model.pageImages.count) pages…").foregroundStyle(.secondary)
             default:
                 Text("Drop a PDF here (up to \(model.maxPages) pages per read).").foregroundStyle(.secondary)
             }
