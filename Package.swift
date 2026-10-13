@@ -80,7 +80,7 @@ let package = Package(
             ]),
         .executableTarget(name: "UnlimitedOcrCheck", dependencies: ["FluidUse", "UnlimitedOcrMLX"]),
         .executableTarget(
-            name: "UnlimitedOcrDemo", dependencies: ["FluidUse", "UnlimitedOcrMLX"], exclude: ["README.md"]),
+            name: "UnlimitedOcrDemo", dependencies: ["FluidUse", "UnlimitedOcrMLX"], exclude: ["README.md", "demo.sh"]),
         .executableTarget(
             name: "ClefFlashDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "bars.py"]),
         .executableTarget(name: "ClefTextCheck", dependencies: ["FluidUse"]),

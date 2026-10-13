@@ -4,8 +4,8 @@ Drop a PDF: its pages (up to 8) are read by Baidu Unlimited-OCR in **one generat
 page thumbnails highlight the layout block being written while the markdown streams in.
 
 ```bash
-swift run -c release UnlimitedOcrDemo
-UNLIMITED_OCR_PDF=paper.pdf swift run -c release UnlimitedOcrDemo   # open a PDF at launch
+Sources/UnlimitedOcrDemo/demo.sh paper.pdf   # app + Ghostty window: CPU / GPU bars on top, block-by-block log below
+swift run -c release UnlimitedOcrDemo        # app only (MLX builds need Xcode's Metal toolchain: DEVELOPER_DIR=…/Xcode.app)
 ```
 
 The pinned bundle ([FluidInference/unlimited-ocr-coreml](https://huggingface.co/FluidInference/unlimited-ocr-coreml),

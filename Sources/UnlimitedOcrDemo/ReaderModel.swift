@@ -31,6 +31,7 @@ final class ReaderModel: ObservableObject {
     private var pdfPages: [PDFPage] = []
     private var text = ""
     private var pausedAt: Date?
+    private var loggedBlocks = 0
     private var pausedTotal = 0.0
 
     var canStart: Bool {
@@ -128,6 +129,24 @@ final class ReaderModel: ObservableObject {
         elapsed = 0
         pausedAt = nil
         pausedTotal = 0
+        loggedBlocks = 0
+    }
+
+    /// One colored log line per finished layout block (the side terminal's `tail -F`).
+    private func logFinishedBlocks(final: Bool = false) {
+        let blocks = document.pages.flatMap { page in page.blocks.map { (page.id, $0) } }
+        let done = final ? blocks.count : max(0, blocks.count - 1)  // the last block may still be streaming
+        guard done > loggedBlocks else { return }
+        for (page, block) in blocks[loggedBlocks..<done] {
+            let snippet = block.content.replacingOccurrences(of: "\n", with: " ").prefix(44)
+            print(
+                String(
+                    format: "\u{1B}[2m%6.1fs\u{1B}[0m  \u{1B}[38;5;214mp%-2d\u{1B}[0m \u{1B}[38;5;75m%-13@\u{1B}[0m %@"
+                        + "  \u{1B}[2m%d tok · %.0f tok/s\u{1B}[0m",
+                    elapsed, page + 1, block.label as NSString, String(snippet) as NSString, outputTokens,
+                    tokensPerSecond))
+        }
+        loggedBlocks = done
     }
 
     private func read(_ pdfPages: [PDFPage], with manager: UnlimitedOcrFastManager) async {
@@ -154,6 +173,7 @@ final class ReaderModel: ObservableObject {
                     if Date().timeIntervalSince(lastParse) > 0.05 {
                         document = UnlimitedOcrDocument(parsing: text)
                         lastParse = Date()
+                        logFinishedBlocks()
                     }
                     if let decodeStart {
                         let active = Date().timeIntervalSince(decodeStart) - pausedTotal
@@ -162,6 +182,7 @@ final class ReaderModel: ObservableObject {
                     elapsed = Date().timeIntervalSince(started) - pausedTotal
                 case .finished(let stats):
                     document = UnlimitedOcrDocument(parsing: text)
+                    logFinishedBlocks(final: true)
                     outputTokens = stats.outputTokens
                     tokensPerSecond = 1000 / stats.millisecondsPerToken
                     elapsed = Date().timeIntervalSince(started) - pausedTotal
