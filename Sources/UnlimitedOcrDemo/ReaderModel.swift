@@ -25,6 +25,8 @@ final class ReaderModel: ObservableObject {
     @Published var elapsed = 0.0
     @Published var maxPages = 0
     @Published var status = "Loading the model…"
+    /// Turbo decoder (routed experts 4-bit): ~15% faster; small differences in formulas / tables vs the default.
+    @Published private(set) var turbo = ProcessInfo.processInfo.environment["UNLIMITED_OCR_TURBO"] == "1"
 
     private var manager: UnlimitedOcrFastManager?
     private var readTask: Task<Void, Never>?
@@ -58,27 +60,52 @@ final class ReaderModel: ObservableObject {
     func boot() async {
         do {
             let started = Date()
-            let directory: URL
-            if let path = ProcessInfo.processInfo.environment["UNLIMITED_OCR_BUNDLE"], !path.isEmpty {
-                directory = URL(fileURLWithPath: path)
-            } else {
-                status = "Downloading Unlimited-OCR (\(UnlimitedOcrModelStore.repository), ~3.9 GB)…"
-                directory = try await UnlimitedOcrModelStore.ensure(runtime: .mlx)
-            }
-            status = "Loading the model…"
-            // Core ML page encoder + MLX text decoder (no per-size buckets, so nothing to prepare per document).
-            let manager = try await UnlimitedOcrFastManager.load(from: directory)
-            try await manager.warm()
-            self.manager = manager
-            maxPages = manager.maxPages
+            try await loadManager()
             print(
                 String(
-                    format: "[unlimited-ocr] loaded in %.1f s, up to %d pages per read",
-                    Date().timeIntervalSince(started), maxPages))
+                    format: "[unlimited-ocr] loaded in %.1f s (%@ decoder), up to %d pages per read",
+                    Date().timeIntervalSince(started), turbo ? "turbo" : "8-bit", maxPages))
             phase = .ready
             if let path = ProcessInfo.processInfo.environment["UNLIMITED_OCR_PDF"], !path.isEmpty {
                 open(URL(fileURLWithPath: path))
             }
+        } catch {
+            phase = .failed(error.localizedDescription)
+        }
+    }
+
+    private func loadManager() async throws {
+        let directory: URL
+        if let path = ProcessInfo.processInfo.environment["UNLIMITED_OCR_BUNDLE"], !path.isEmpty {
+            directory = URL(fileURLWithPath: path)
+        } else {
+            status = "Downloading Unlimited-OCR (\(UnlimitedOcrModelStore.repository))…"
+            directory = try await UnlimitedOcrModelStore.ensure(runtime: turbo ? .mlxTurbo : .mlx)
+        }
+        status = "Loading the \(turbo ? "turbo" : "8-bit") decoder…"
+        // Core ML page encoder + MLX text decoder (no per-size buckets, so nothing to prepare per document).
+        manager = nil
+        let manager = try await UnlimitedOcrFastManager.load(from: directory, turbo: turbo)
+        try await manager.warm()
+        self.manager = manager
+        maxPages = manager.maxPages
+    }
+
+    /// Switches between the 8-bit and turbo decoders (not while a read is running).
+    func setTurbo(_ on: Bool) async {
+        guard on != turbo, !canPause, phase != .loading else { return }
+        let restore = phase
+        stop()
+        turbo = on
+        phase = .loading
+        do {
+            let started = Date()
+            try await loadManager()
+            print(
+                String(
+                    format: "[unlimited-ocr] switched to the %@ decoder in %.1f s", on ? "turbo" : "8-bit",
+                    Date().timeIntervalSince(started)))
+            phase = pdfPages.isEmpty ? .ready : (restore == .done ? .done : .loaded)
         } catch {
             phase = .failed(error.localizedDescription)
         }

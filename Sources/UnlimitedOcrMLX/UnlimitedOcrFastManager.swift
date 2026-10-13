@@ -46,8 +46,10 @@ public actor UnlimitedOcrFastManager {
     /// 32K context for output.
     public nonisolated let maxPages = 16
 
+    /// - Parameter turbo: load `mlx-turbo/` (routed experts 4-bit): ~10-17% faster decode, text within ~1 point of the
+    ///   default 8-bit decoder on long documents.
     public static func load(
-        from directory: URL, computeUnits: MLComputeUnits = .cpuAndGPU
+        from directory: URL, computeUnits: MLComputeUnits = .cpuAndGPU, turbo: Bool = false
     ) async throws
         -> UnlimitedOcrFastManager
     {
@@ -70,7 +72,7 @@ public actor UnlimitedOcrFastManager {
         let encoder = try await MLModel.load(contentsOf: compiled, configuration: configuration)
         // MLX keeps freed buffers for reuse; cap that pool so long reads don't park GBs of stale cache copies.
         Memory.cacheLimit = 512 * 1024 * 1024
-        let decoder = try OcrDecoder.load(directory: directory.appendingPathComponent("mlx"))
+        let decoder = try OcrDecoder.load(directory: directory.appendingPathComponent(turbo ? "mlx-turbo" : "mlx"))
         return UnlimitedOcrFastManager(config: config, encoder: encoder, decoder: decoder, tokenDecoder: tokenDecoder)
     }
 

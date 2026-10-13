@@ -6,11 +6,21 @@ import MLXNN
 /// `mlx/config.json` of the Unlimited-OCR bundle.
 struct UnlimitedOcrMLXConfig: Decodable, Sendable {
     struct Quantization: Decodable, Sendable {
+        struct Spec: Decodable, Sendable {
+            let groupSize: Int
+            let bits: Int
+            enum CodingKeys: String, CodingKey {
+                case groupSize = "group_size"
+                case bits
+            }
+        }
         let groupSize: Int
         let bits: Int
+        /// Routed experts (`switch_mlp`) when quantized differently (turbo: 4-bit, group 32).
+        let experts: Spec?
         enum CodingKeys: String, CodingKey {
             case groupSize = "group_size"
-            case bits
+            case bits, experts
         }
     }
     let quantization: Quantization?
@@ -235,8 +245,10 @@ final class OcrDecoder: Module {
         let decoder = OcrDecoder(config)
         let weights = try loadArrays(url: directory.appendingPathComponent("decoder.safetensors"))
         if let q = config.quantization {
-            quantize(model: decoder, groupSize: q.groupSize, bits: q.bits) { path, _ in
-                weights["\(path).scales"] != nil
+            quantize(model: decoder) { path, _ -> (groupSize: Int, bits: Int)? in
+                guard weights["\(path).scales"] != nil else { return nil }
+                if path.contains(".switch_mlp."), let e = q.experts { return (e.groupSize, e.bits) }
+                return (q.groupSize, q.bits)
             }
         }
         try decoder.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])

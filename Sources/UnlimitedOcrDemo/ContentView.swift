@@ -40,13 +40,20 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("A whole PDF, read in one pass — on this Mac")
                     .font(.system(size: 22, weight: .semibold))
-                Text("Baidu Unlimited-OCR · 3B MoE · MLX + Core ML · offline")
+                Text("Baidu Unlimited-OCR · 3B MoE · MLX + Core ML\(model.turbo ? " (turbo)" : "") · offline")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
             Spacer()
             statusView
             HStack(spacing: 8) {
+                Toggle(
+                    "Turbo",
+                    isOn: Binding(get: { model.turbo }, set: { on in Task { await model.setTurbo(on) } })
+                )
+                .toggleStyle(.switch)
+                .help("Routed experts in 4-bit: ~15% faster, small differences in formulas and tables")
+                .disabled(model.canPause || model.phase == .loading)
                 Button("Open PDF…") { openPanel() }
                     .disabled(model.phase == .loading || model.canPause)
                 Button(model.hasStarted ? "Restart" : "Start") { model.start() }
@@ -59,6 +66,7 @@ struct ContentView: View {
             }
             .controlSize(.large)
             .focusable(false)
+            .fixedSize()  // controls keep their width; the title wraps instead
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

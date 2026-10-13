@@ -37,8 +37,9 @@ struct UnlimitedOcrCheck {
         let npyPath = option("--npy", &args)
         let cachePath = option("--cache", &args)
         let warmAll = args.contains("--warm-all")
-        let useMLX = args.contains("--mlx")
-        args.removeAll { $0 == "--warm-all" || $0 == "--mlx" }
+        let turbo = args.contains("--turbo")
+        let useMLX = args.contains("--mlx") || turbo
+        args.removeAll { $0 == "--warm-all" || $0 == "--mlx" || $0 == "--turbo" }
         let maxNew = option("--max-new", &args).flatMap(Int.init)
         let firstPage = option("--first-page", &args).flatMap(Int.init) ?? 1
         let pageCount = option("--pages", &args).flatMap(Int.init)
@@ -57,7 +58,8 @@ struct UnlimitedOcrCheck {
         let bundle =
             args[0] == "hub"
             ? try await UnlimitedOcrModelStore.ensure(
-                runtime: useMLX ? .mlx : .coreML, cacheDirectory: cachePath.map { URL(fileURLWithPath: $0) })
+                runtime: turbo ? .mlxTurbo : useMLX ? .mlx : .coreML,
+                cacheDirectory: cachePath.map { URL(fileURLWithPath: $0) })
             : URL(fileURLWithPath: args[0])
         let inputs = args.dropFirst().map { URL(fileURLWithPath: $0) }
 
@@ -83,7 +85,7 @@ struct UnlimitedOcrCheck {
         let loadStart = Date()
         let events: AsyncThrowingStream<UnlimitedOcrEvent, Error>
         if useMLX {
-            let manager = try await UnlimitedOcrFastManager.load(from: bundle)
+            let manager = try await UnlimitedOcrFastManager.load(from: bundle, turbo: turbo)
             try await manager.warm()
             events = manager.read(pages: pixels, maxNewTokens: maxNew)
         } else {

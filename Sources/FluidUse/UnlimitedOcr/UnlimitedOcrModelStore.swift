@@ -11,6 +11,8 @@ public enum UnlimitedOcrModelStore {
         case coreML
         /// MLX decoder (~3.9 GB with the encoder).
         case mlx
+        /// MLX turbo decoder, routed experts 4-bit (~2.9 GB with the encoder).
+        case mlxTurbo
     }
 
     struct Asset {
@@ -20,7 +22,7 @@ public enum UnlimitedOcrModelStore {
     }
 
     public static let repository = "FluidInference/unlimited-ocr-mlx-coreml"
-    public static let revision = "c32f06c59de0bce324e9581b74a67654cee48545"
+    public static let revision = "9d5f274c989a49f11049eeee77ed8511be3f3596"
     static let assets: [Asset] = [
         Asset(path: "config.json", sha256: "210d30d4698482e1672cbbb83846d88b5ca2b67333a3fbbbefa056663080945b"),
         Asset(
@@ -43,6 +45,12 @@ public enum UnlimitedOcrModelStore {
         Asset(
             path: "mlx/decoder.safetensors", sha256: "155e9ff5f5e89969ac43f5e3b6efa10961eeaa23cfd46efdc0dd52b29115aad3",
             runtime: .mlx),
+        Asset(
+            path: "mlx-turbo/config.json", sha256: "29c036899dc05ba588c44d0e1546bda2f3316c7dcf96584ffe1b0490ba189245",
+            runtime: .mlxTurbo),
+        Asset(
+            path: "mlx-turbo/decoder.safetensors",
+            sha256: "64111bfd978cc13c11c22105149b4232ec5ae8f5e13c2cabcf1660d66ac2bc02", runtime: .mlxTurbo),
         Asset(
             path: "UnlimitedOcrPageEncoder.mlpackage/Data/com.apple.CoreML/model.mlmodel",
             sha256: "7dcce3bed4dcf35e3dde7bd2510aa7cbc7b1bd3ca8eff93d859d11456005fc9d"),
