@@ -69,8 +69,8 @@ final class RSWACache {
         }
         precondition(n == 1, "R-SWA cache: one generated token per call after prefill")
         let slot = prefixLength + (offset - prefixLength) % ring
-        keys[0..., 0..., slot ..< slot + 1] = k
-        values[0..., 0..., slot ..< slot + 1] = v
+        keys[0..., 0..., slot..<slot + 1] = k
+        values[0..., 0..., slot..<slot + 1] = v
         filled = min(filled + 1, ring)
         let visible = prefixLength + filled
         return (keys[0..., 0..., ..<visible], values[0..., 0..., ..<visible])
