@@ -53,6 +53,7 @@ final class RSWACache {
     private(set) var offset = 0
     private var prefixLength = 0
     private var filled = 0  // ring slots written so far (<= ring)
+    private var lastStepFilledSlot = false
 
     init(ring: Int) { self.ring = ring }
 
@@ -71,9 +72,18 @@ final class RSWACache {
         let slot = prefixLength + (offset - prefixLength) % ring
         keys[0..., 0..., slot..<slot + 1] = k
         values[0..., 0..., slot..<slot + 1] = v
+        lastStepFilledSlot = filled < ring
         filled = min(filled + 1, ring)
         let visible = prefixLength + filled
         return (keys[0..., 0..., ..<visible], values[0..., 0..., ..<visible])
+    }
+
+    /// Undo the last one-token step (a speculative step whose token was then banned). Its slot is simply rewritten by
+    /// the redo, which lands in the same slot.
+    func rollback() {
+        offset -= 1
+        if lastStepFilledSlot { filled -= 1 }
+        lastStepFilledSlot = false
     }
 }
 
@@ -215,6 +225,9 @@ final class OcrDecoder: Module {
     }
 
     func embed(_ ids: [Int]) -> MLXArray { model.embedTokens(MLXArray(ids.map(Int32.init))[.newAxis]) }
+
+    /// Embedding of a token that is still on the GPU (pipelined decode), shape [1, 1, H].
+    func embed(token: MLXArray) -> MLXArray { model.embedTokens(token.reshaped(1, 1)) }
 
     static func load(directory: URL) throws -> OcrDecoder {
         let config = try JSONDecoder().decode(
