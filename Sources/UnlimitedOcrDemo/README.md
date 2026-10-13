@@ -8,7 +8,7 @@ Sources/UnlimitedOcrDemo/demo.sh paper.pdf   # app + Ghostty window: CPU / GPU b
 swift run -c release UnlimitedOcrDemo        # app only (MLX builds need Xcode's Metal toolchain: DEVELOPER_DIR=…/Xcode.app)
 ```
 
-The pinned bundle ([FluidInference/unlimited-ocr-coreml](https://huggingface.co/FluidInference/unlimited-ocr-coreml),
+The pinned bundle ([FluidInference/unlimited-ocr-mlx-coreml](https://huggingface.co/FluidInference/unlimited-ocr-mlx-coreml),
 ~3.8 GB) downloads on first launch; `UNLIMITED_OCR_BUNDLE=<dir>` uses a local one. The first launch also compiles
 the packages (about a minute), later launches load in ~12 s.
 

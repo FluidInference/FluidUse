@@ -1,6 +1,6 @@
 import Foundation
 
-/// Downloads the pinned Unlimited-OCR bundle (FluidInference/unlimited-ocr-coreml). Both runtimes share the Core ML page
+/// Downloads the pinned Unlimited-OCR bundle (FluidInference/unlimited-ocr-mlx-coreml). Both runtimes share the Core ML page
 /// encoder, tokenizer and config; `.coreML` adds the 8-bit Core ML decoder + embedding table (`UnlimitedOcrManager`),
 /// `.mlx` the MLX decoder (`UnlimitedOcrFastManager`, ~5x faster decode). Files are checksummed once per revision.
 public enum UnlimitedOcrModelStore {
@@ -19,7 +19,7 @@ public enum UnlimitedOcrModelStore {
         var runtime: Runtime? = nil  // nil = needed by both
     }
 
-    public static let repository = "FluidInference/unlimited-ocr-coreml"
+    public static let repository = "FluidInference/unlimited-ocr-mlx-coreml"
     public static let revision = "c32f06c59de0bce324e9581b74a67654cee48545"
     static let assets: [Asset] = [
         Asset(path: "config.json", sha256: "210d30d4698482e1672cbbb83846d88b5ca2b67333a3fbbbefa056663080945b"),

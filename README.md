@@ -334,7 +334,7 @@ print(draft.reply, draft.timing.totalSeconds)                           // "Cong
 
 ## Document OCR (multi-page)
 
-`UnlimitedOcrManager` runs Baidu's [Unlimited-OCR](https://huggingface.co/FluidInference/unlimited-ocr-coreml)
+`UnlimitedOcrManager` runs Baidu's [Unlimited-OCR](https://huggingface.co/FluidInference/unlimited-ocr-mlx-coreml)
 (DeepSeek-OCR architecture, 3B MoE / ~0.5B active, MIT) on the GPU through Core ML: up to 8 document pages go in as
 one prompt and the whole document comes out of a single generation as markdown with layout boxes. Its R-SWA cache
 (full prefix + a ring of the last 128 generated tokens) is Core ML state, so speed stays flat over a long read. The
