@@ -2,6 +2,7 @@
 # Unlimited-OCR reader demo, plus one Ghostty window: live CPU / GPU bars (ClefFlashDemo/bars.py over macmon, no sudo;
 # asitop crashes on M5 Pro / macOS 27) on top and the demo's block-by-block log below.
 #   Sources/UnlimitedOcrDemo/demo.sh [doc.pdf]      (UNLIMITED_OCR_BUNDLE for a local bundle; default: Hub download)
+#   Turbo decoder by default; UNLIMITED_OCR_TURBO=0 for the 8-bit one.
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PDF=${1:-${UNLIMITED_OCR_PDF:-}}
@@ -24,5 +25,6 @@ if [[ -z "$(tmux list-clients -t unlimited-ocr 2>/dev/null)" ]]; then
   open -na /Applications/Ghostty.app --args -e "$(command -v tmux)" attach -t unlimited-ocr
 fi
 pkill -x UnlimitedOcrDemo 2>/dev/null || true
-UNLIMITED_OCR_PDF="$PDF" UNLIMITED_OCR_BUNDLE="${UNLIMITED_OCR_BUNDLE:-}" "$ROOT/.build/release/UnlimitedOcrDemo" > "$LOG" 2> "$LOG.stderr" &
+UNLIMITED_OCR_PDF="$PDF" UNLIMITED_OCR_BUNDLE="${UNLIMITED_OCR_BUNDLE:-}" UNLIMITED_OCR_TURBO="${UNLIMITED_OCR_TURBO:-1}" \
+  "$ROOT/.build/release/UnlimitedOcrDemo" > "$LOG" 2> "$LOG.stderr" &
 echo "demo pid $! · log $LOG · press Start (Return) in the app"

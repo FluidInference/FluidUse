@@ -26,7 +26,8 @@ final class ReaderModel: ObservableObject {
     @Published var maxPages = 0
     @Published var status = "Loading the model…"
     /// Turbo decoder (routed experts 4-bit): ~15% faster; small differences in formulas / tables vs the default.
-    @Published private(set) var turbo = ProcessInfo.processInfo.environment["UNLIMITED_OCR_TURBO"] == "1"
+    /// On by default in the demo; UNLIMITED_OCR_TURBO=0 starts with the 8-bit decoder.
+    @Published private(set) var turbo = ProcessInfo.processInfo.environment["UNLIMITED_OCR_TURBO"] != "0"
 
     private var manager: UnlimitedOcrFastManager?
     private var readTask: Task<Void, Never>?
@@ -179,12 +180,14 @@ final class ReaderModel: ObservableObject {
         let done = final ? blocks.count : max(0, blocks.count - 1)  // the last block may still be streaming
         guard done > loggedBlocks else { return }
         for (page, block) in blocks[loggedBlocks..<done] {
-            let snippet = block.content.replacingOccurrences(of: "\n", with: " ").prefix(44)
+            // Fits a ~68-column side terminal: time, page, block type, start of the text, tokens/s.
+            var snippet = String(block.content.replacingOccurrences(of: "\n", with: " ").prefix(28))
+            snippet = snippet.padding(toLength: 28, withPad: " ", startingAt: 0)
             print(
                 String(
-                    format: "\u{1B}[2m%6.1fs\u{1B}[0m  \u{1B}[38;5;214mp%-2d\u{1B}[0m \u{1B}[38;5;75m%-13@\u{1B}[0m %@"
-                        + "  \u{1B}[2m%d tok · %.0f tok/s\u{1B}[0m",
-                    elapsed, page + 1, block.label as NSString, String(snippet) as NSString, outputTokens,
+                    format: "\u{1B}[2m%5.1fs\u{1B}[0m \u{1B}[38;5;214mp%-2d\u{1B}[0m \u{1B}[38;5;75m%-11@\u{1B}[0m %@"
+                        + " \u{1B}[2m%3.0f tok/s\u{1B}[0m",
+                    elapsed, page + 1, String(block.label.prefix(11)) as NSString, snippet as NSString,
                     tokensPerSecond))
         }
         loggedBlocks = done

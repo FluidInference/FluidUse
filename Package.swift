@@ -11,6 +11,7 @@ let package = Package(
         .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.15.8"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "3.32.3"),
         .package(url: "https://github.com/ml-explore/mlx-swift", .upToNextMinor(from: "0.32.3")),
+        .package(url: "https://github.com/mgriebling/SwiftMath", from: "1.7.3"),
     ],
     targets: [
         .target(
@@ -80,7 +81,9 @@ let package = Package(
             ]),
         .executableTarget(name: "UnlimitedOcrCheck", dependencies: ["FluidUse", "UnlimitedOcrMLX"]),
         .executableTarget(
-            name: "UnlimitedOcrDemo", dependencies: ["FluidUse", "UnlimitedOcrMLX"], exclude: ["README.md", "demo.sh"]),
+            name: "UnlimitedOcrDemo",
+            dependencies: ["FluidUse", "UnlimitedOcrMLX", .product(name: "SwiftMath", package: "SwiftMath")],
+            exclude: ["README.md", "demo.sh"]),
         .executableTarget(
             name: "ClefFlashDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "bars.py"]),
         .executableTarget(name: "ClefTextCheck", dependencies: ["FluidUse"]),

@@ -211,21 +211,26 @@ struct ContentView: View {
     private func blockView(_ block: UnlimitedOcrDocument.Block) -> some View {
         switch block.label {
         case "title":
-            Text(block.content).font(.system(size: 20, weight: .bold))
+            MathText(content: block.content, size: 20).font(.system(size: 20, weight: .bold))
         case "sub_title":
-            Text(block.content).font(.system(size: 16, weight: .semibold))
-        case "table", "equation", "code", "formula":
+            MathText(content: block.content, size: 16).font(.system(size: 16, weight: .semibold))
+        case "equation", "formula":
+            EquationView(content: block.content)
+        case "table":
+            TableView(content: block.content)
+        case "code":
             Text(block.content)
                 .font(.system(size: 12, design: .monospaced))
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.08)))
-        case "image", "figure":
+        case "image", "figure", "chart":
             Label("figure", systemImage: "photo").font(.system(size: 12)).foregroundStyle(.secondary)
-        case "image_caption", "table_caption", "footnote", "page_footer", "page_header", "header", "footer":
-            Text(block.content).font(.system(size: 12)).foregroundStyle(.secondary)
+        case "image_caption", "table_caption", "footnote", "page_footnote", "page_footer", "page_header", "header",
+            "footer":
+            MathText(content: block.content, size: 12).font(.system(size: 12)).foregroundStyle(.secondary)
         default:
-            Text(block.content).font(.system(size: 14)).lineSpacing(2)
+            MathText(content: block.content, size: 14).font(.system(size: 14)).lineSpacing(2)
         }
     }
 
