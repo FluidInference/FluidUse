@@ -49,7 +49,7 @@ struct ContentView: View {
             HStack(spacing: 8) {
                 Button("Open PDF…") { openPanel() }
                     .disabled(model.phase == .loading || model.canPause)
-                Button(model.phase == .done ? "Restart" : "Start") { model.start() }
+                Button(model.hasStarted ? "Restart" : "Start") { model.start() }
                     .keyboardShortcut(.return, modifiers: [])
                     .disabled(!model.canStart)
                 Button(model.phase == .paused ? "Resume" : "Pause") { model.togglePause() }

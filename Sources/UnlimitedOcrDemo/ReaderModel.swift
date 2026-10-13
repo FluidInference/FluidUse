@@ -32,13 +32,24 @@ final class ReaderModel: ObservableObject {
     private var text = ""
     private var pausedAt: Date?
     private var loggedBlocks = 0
+    /// Bumped per read; events from a cancelled read are dropped.
+    private var generation = 0
     private var pausedTotal = 0.0
 
+    /// Start (or restart) is available whenever a document is loaded, including mid-read and while paused.
     var canStart: Bool {
         switch phase {
-        case .loaded, .done: return !pdfPages.isEmpty
+        case .loading, .ready: return false
         case .failed: return manager != nil && !pdfPages.isEmpty
-        default: return false
+        default: return !pdfPages.isEmpty
+        }
+    }
+
+    /// The button reads "Restart" once a read has begun.
+    var hasStarted: Bool {
+        switch phase {
+        case .loading, .ready, .loaded: return false
+        default: return true
         }
     }
 
@@ -91,11 +102,14 @@ final class ReaderModel: ObservableObject {
     /// Reads the loaded pages from the beginning.
     func start() {
         guard let manager, canStart else { return }
+        if hasStarted { print("[unlimited-ocr] restart") }
         stop()
         reset()
+        generation += 1
         let pages = pdfPages
+        let current = generation
         readTask = Task { [weak self] in
-            await self?.read(pages, with: manager)
+            await self?.read(pages, with: manager, generation: current)
         }
     }
 
@@ -149,7 +163,7 @@ final class ReaderModel: ObservableObject {
         loggedBlocks = done
     }
 
-    private func read(_ pdfPages: [PDFPage], with manager: UnlimitedOcrFastManager) async {
+    private func read(_ pdfPages: [PDFPage], with manager: UnlimitedOcrFastManager, generation: Int) async {
         let started = Date()
         do {
             phase = .encoding(pdfPages.count)
@@ -157,6 +171,7 @@ final class ReaderModel: ObservableObject {
             var decodeStart: Date?
             var lastParse = Date.distantPast
             for try await event in manager.read(pages: pages) {
+                guard generation == self.generation, !Task.isCancelled else { return }
                 switch event {
                 case .pageEncoded(let index, _):
                     phase = index + 1 == pdfPages.count ? .prefilling : .encoding(pdfPages.count)
@@ -195,7 +210,7 @@ final class ReaderModel: ObservableObject {
             }
         } catch is CancellationError {
         } catch {
-            phase = .failed(error.localizedDescription)
+            if generation == self.generation { phase = .failed(error.localizedDescription) }
         }
     }
 }
