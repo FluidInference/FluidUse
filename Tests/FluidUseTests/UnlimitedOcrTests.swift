@@ -80,5 +80,10 @@ final class UnlimitedOcrTests: XCTestCase {
         }
         XCTAssertTrue(UnlimitedOcrModelStore.assets.allSatisfy { $0.sha256.count == 64 })
         XCTAssertEqual(UnlimitedOcrModelStore.revision.count, 40)
+        let mlx = Set(UnlimitedOcrModelStore.assets(for: .mlx).map(\.path))
+        XCTAssertTrue(mlx.contains("mlx/decoder.safetensors"))
+        XCTAssertTrue(mlx.contains("UnlimitedOcrPageEncoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin"))
+        XCTAssertFalse(mlx.contains("UnlimitedOcrDecoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin"))
+        XCTAssertFalse(mlx.contains("embeddings.f16"))
     }
 }

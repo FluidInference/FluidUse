@@ -1,5 +1,6 @@
 import CoreGraphics
 import FluidUse
+import UnlimitedOcrMLX
 import Foundation
 import ImageIO
 import PDFKit
@@ -36,7 +37,8 @@ struct UnlimitedOcrCheck {
         let npyPath = option("--npy", &args)
         let cachePath = option("--cache", &args)
         let warmAll = args.contains("--warm-all")
-        args.removeAll { $0 == "--warm-all" }
+        let useMLX = args.contains("--mlx")
+        args.removeAll { $0 == "--warm-all" || $0 == "--mlx" }
         let maxNew = option("--max-new", &args).flatMap(Int.init)
         let firstPage = option("--first-page", &args).flatMap(Int.init) ?? 1
         let pageCount = option("--pages", &args).flatMap(Int.init)
@@ -54,7 +56,8 @@ struct UnlimitedOcrCheck {
         // "hub" downloads the pinned bundle (into --cache <dir> or the FluidUse cache).
         let bundle =
             args[0] == "hub"
-            ? try await UnlimitedOcrModelStore.ensure(cacheDirectory: cachePath.map { URL(fileURLWithPath: $0) })
+            ? try await UnlimitedOcrModelStore.ensure(
+                runtime: useMLX ? .mlx : .coreML, cacheDirectory: cachePath.map { URL(fileURLWithPath: $0) })
             : URL(fileURLWithPath: args[0])
         let inputs = args.dropFirst().map { URL(fileURLWithPath: $0) }
 
@@ -78,12 +81,20 @@ struct UnlimitedOcrCheck {
         }
 
         let loadStart = Date()
-        let manager = try await UnlimitedOcrManager.load(from: bundle)
-        try await manager.warm(pages: warmAll ? nil : [pixels.count])
+        let events: AsyncThrowingStream<UnlimitedOcrEvent, Error>
+        if useMLX {
+            let manager = try await UnlimitedOcrFastManager.load(from: bundle)
+            try await manager.warm()
+            events = manager.read(pages: pixels, maxNewTokens: maxNew)
+        } else {
+            let manager = try await UnlimitedOcrManager.load(from: bundle)
+            try await manager.warm(pages: warmAll ? nil : [pixels.count])
+            events = manager.read(pages: pixels, maxNewTokens: maxNew)
+        }
         print(String(format: "loaded in %.1f s, %d page(s)", Date().timeIntervalSince(loadStart), pixels.count))
 
         var text = ""
-        for try await event in manager.read(pages: pixels, maxNewTokens: maxNew) {
+        for try await event in events {
             switch event {
             case .pageEncoded(let index, let ms):
                 print(String(format: "page %d encoded in %.0f ms", index + 1, ms))

@@ -2,6 +2,7 @@ import AppKit
 import FluidUse
 import Foundation
 import PDFKit
+import UnlimitedOcrMLX
 
 /// Drives one read: PDF -> page tensors -> UnlimitedOcrManager stream -> parsed document for the UI. Opening a PDF
 /// only loads its pages; `start()` reads them, `togglePause()` holds / continues the generation.
@@ -9,7 +10,7 @@ import PDFKit
 @MainActor
 final class ReaderModel: ObservableObject {
     enum Phase: Equatable {
-        case loading, ready, preparing, loaded
+        case loading, ready, loaded
         case encoding(Int)
         case prefilling, reading, paused, done
         case failed(String)
@@ -25,9 +26,8 @@ final class ReaderModel: ObservableObject {
     @Published var maxPages = 0
     @Published var status = "Loading the model…"
 
-    private var manager: UnlimitedOcrManager?
+    private var manager: UnlimitedOcrFastManager?
     private var readTask: Task<Void, Never>?
-    private var prepareTask: Task<Void, Never>?
     private var pdfPages: [PDFPage] = []
     private var text = ""
     private var pausedAt: Date?
@@ -50,14 +50,13 @@ final class ReaderModel: ObservableObject {
             if let path = ProcessInfo.processInfo.environment["UNLIMITED_OCR_BUNDLE"], !path.isEmpty {
                 directory = URL(fileURLWithPath: path)
             } else {
-                status = "Downloading Unlimited-OCR Core ML (\(UnlimitedOcrModelStore.repository), ~3.8 GB)…"
-                directory = try await UnlimitedOcrModelStore.ensure()
+                status = "Downloading Unlimited-OCR (\(UnlimitedOcrModelStore.repository), ~3.9 GB)…"
+                directory = try await UnlimitedOcrModelStore.ensure(runtime: .mlx)
             }
-            status = "Loading the model (first launch compiles it, about a minute)…"
-            // Only the page encoder here; the decoder size for a document is prepared when it is opened
-            // (compiling every size up front took minutes).
-            let manager = try await UnlimitedOcrManager.load(from: directory)
-            try await manager.warm(pages: [])
+            status = "Loading the model…"
+            // Core ML page encoder + MLX text decoder (no per-size buckets, so nothing to prepare per document).
+            let manager = try await UnlimitedOcrFastManager.load(from: directory)
+            try await manager.warm()
             self.manager = manager
             maxPages = manager.maxPages
             print(
@@ -85,23 +84,7 @@ final class ReaderModel: ObservableObject {
         pdfPages = (0..<count).compactMap { pdf.page(at: $0) }
         pageImages = pdfPages.map { $0.thumbnail(of: NSSize(width: 900, height: 1200), for: .mediaBox) }
         reset()
-        guard let manager else { return }
-        phase = .preparing
-        status = "Preparing the model for \(count) page\(count == 1 ? "" : "s")…"
-        let started = Date()
-        prepareTask = Task { [weak self] in
-            do {
-                try await manager.warm(pages: [count])
-                guard let self, !Task.isCancelled else { return }
-                print(
-                    String(
-                        format: "[unlimited-ocr] ready for %d pages in %.1f s", count, Date().timeIntervalSince(started)
-                    ))
-                self.phase = .loaded
-            } catch {
-                self?.phase = .failed(error.localizedDescription)
-            }
-        }
+        phase = .loaded
     }
 
     /// Reads the loaded pages from the beginning.
@@ -132,7 +115,6 @@ final class ReaderModel: ObservableObject {
     }
 
     private func stop() {
-        prepareTask?.cancel()
         readTask?.cancel()
         readTask = nil
         if let manager { manager.resume() }
@@ -148,7 +130,7 @@ final class ReaderModel: ObservableObject {
         pausedTotal = 0
     }
 
-    private func read(_ pdfPages: [PDFPage], with manager: UnlimitedOcrManager) async {
+    private func read(_ pdfPages: [PDFPage], with manager: UnlimitedOcrFastManager) async {
         let started = Date()
         do {
             phase = .encoding(pdfPages.count)

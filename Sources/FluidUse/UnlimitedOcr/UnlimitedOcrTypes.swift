@@ -101,4 +101,17 @@ public struct UnlimitedOcrStats: Sendable {
     public let stoppedAtEOS: Bool
 
     public var millisecondsPerToken: Double { decodeMilliseconds / Double(max(1, outputTokens)) }
+
+    public init(
+        pages: Int, promptTokens: Int, outputTokens: Int, encodeMilliseconds: Double, prefillMilliseconds: Double,
+        decodeMilliseconds: Double, stoppedAtEOS: Bool
+    ) {
+        self.pages = pages
+        self.promptTokens = promptTokens
+        self.outputTokens = outputTokens
+        self.encodeMilliseconds = encodeMilliseconds
+        self.prefillMilliseconds = prefillMilliseconds
+        self.decodeMilliseconds = decodeMilliseconds
+        self.stoppedAtEOS = stoppedAtEOS
+    }
 }

@@ -40,7 +40,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("A whole PDF, read in one pass — on this Mac")
                     .font(.system(size: 22, weight: .semibold))
-                Text("Baidu Unlimited-OCR · 3B MoE on Core ML · offline")
+                Text("Baidu Unlimited-OCR · 3B MoE · MLX + Core ML · offline")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
@@ -77,7 +77,6 @@ struct ContentView: View {
         switch model.phase {
         case .loading: "loading model"
         case .ready: "drop a PDF"
-        case .preparing: "preparing"
         case .loaded: "press Start"
         case .encoding: "looking at pages"
         case .prefilling: "reading pages in"
@@ -184,9 +183,6 @@ struct ContentView: View {
                 Text(model.status).foregroundStyle(.secondary)
             case .failed(let message):
                 Text(message).foregroundStyle(.red)
-            case .preparing:
-                ProgressView().controlSize(.small)
-                Text(model.status).foregroundStyle(.secondary)
             case .loaded:
                 Text(
                     "Press Start to read \(model.pageImages.count) page\(model.pageImages.count == 1 ? "" : "s") in one pass."

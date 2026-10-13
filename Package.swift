@@ -8,7 +8,9 @@ let package = Package(
         .library(name: "FluidUse", targets: ["FluidUse"])
     ],
     dependencies: [
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.15.8")
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.15.8"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm", from: "3.32.3"),
+        .package(url: "https://github.com/ml-explore/mlx-swift", .upToNextMinor(from: "0.32.3")),
     ],
     targets: [
         .target(
@@ -67,8 +69,18 @@ let package = Package(
         .executableTarget(name: "ImageSortDemo", dependencies: ["ImageSort"], exclude: ["README.md"]),
         .executableTarget(name: "KevCheck", dependencies: ["FluidUse"]),
         .executableTarget(name: "ClefVisionCheck", dependencies: ["FluidUse"]),
-        .executableTarget(name: "UnlimitedOcrCheck", dependencies: ["FluidUse"]),
-        .executableTarget(name: "UnlimitedOcrDemo", dependencies: ["FluidUse"], exclude: ["README.md"]),
+        // Unlimited-OCR's text decoder in MLX (builds need Xcode's Metal toolchain for MLX's kernels).
+        .target(
+            name: "UnlimitedOcrMLX",
+            dependencies: [
+                "FluidUse",
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+            ]),
+        .executableTarget(name: "UnlimitedOcrCheck", dependencies: ["FluidUse", "UnlimitedOcrMLX"]),
+        .executableTarget(
+            name: "UnlimitedOcrDemo", dependencies: ["FluidUse", "UnlimitedOcrMLX"], exclude: ["README.md"]),
         .executableTarget(
             name: "ClefFlashDemo", dependencies: ["FluidUse"], exclude: ["README.md", "demo.sh", "bars.py"]),
         .executableTarget(name: "ClefTextCheck", dependencies: ["FluidUse"]),
