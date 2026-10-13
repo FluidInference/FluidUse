@@ -29,7 +29,7 @@ final class ReaderModel: ObservableObject {
     private var manager: UnlimitedOcrFastManager?
     private var readTask: Task<Void, Never>?
     private var pdfPages: [PDFPage] = []
-    private var text = ""
+    private var builder = UnlimitedOcrDocumentBuilder()
     private var pausedAt: Date?
     private var loggedBlocks = 0
     /// Bumped per read; events from a cancelled read are dropped.
@@ -136,7 +136,7 @@ final class ReaderModel: ObservableObject {
     }
 
     private func reset() {
-        text = ""
+        builder = UnlimitedOcrDocumentBuilder()
         document = UnlimitedOcrDocument(parsing: "")
         outputTokens = 0
         tokensPerSecond = 0
@@ -169,7 +169,8 @@ final class ReaderModel: ObservableObject {
             phase = .encoding(pdfPages.count)
             let pages = try pdfPages.map { try UnlimitedOcrPagePreprocessor.page(from: $0) }
             var decodeStart: Date?
-            var lastParse = Date.distantPast
+            var lastPublish = Date.distantPast
+            var tokens = 0
             for try await event in manager.read(pages: pages) {
                 guard generation == self.generation, !Task.isCancelled else { return }
                 switch event {
@@ -183,20 +184,22 @@ final class ReaderModel: ObservableObject {
                     if phase != .paused { phase = .reading }
                     decodeStart = Date()
                 case .text(let delta):
-                    text += delta
-                    outputTokens += 1
-                    if Date().timeIntervalSince(lastParse) > 0.05 {
-                        document = UnlimitedOcrDocument(parsing: text)
-                        lastParse = Date()
-                        logFinishedBlocks()
-                    }
+                    builder.append(delta)
+                    tokens += 1
+                    // Publish at 10 Hz: per-token @Published updates re-render the window ~260 times a second and
+                    // compete with the decoder for the GPU.
+                    let now = Date()
+                    guard now.timeIntervalSince(lastPublish) >= 0.1 else { continue }
+                    lastPublish = now
+                    document = builder.document
+                    outputTokens = tokens
                     if let decodeStart {
-                        let active = Date().timeIntervalSince(decodeStart) - pausedTotal
-                        tokensPerSecond = Double(outputTokens) / max(0.001, active)
+                        tokensPerSecond = Double(tokens) / max(0.001, now.timeIntervalSince(decodeStart) - pausedTotal)
                     }
-                    elapsed = Date().timeIntervalSince(started) - pausedTotal
+                    elapsed = now.timeIntervalSince(started) - pausedTotal
+                    logFinishedBlocks()
                 case .finished(let stats):
-                    document = UnlimitedOcrDocument(parsing: text)
+                    document = builder.document
                     logFinishedBlocks(final: true)
                     outputTokens = stats.outputTokens
                     tokensPerSecond = 1000 / stats.millisecondsPerToken

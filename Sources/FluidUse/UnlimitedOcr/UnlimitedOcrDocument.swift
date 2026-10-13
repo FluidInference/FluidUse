@@ -20,37 +20,37 @@ public struct UnlimitedOcrDocument: Sendable {
     public let pages: [Page]
 
     public init(parsing text: String) {
-        var pages: [Page] = []
         var sections = text.components(separatedBy: "<PAGE>")
         if sections.first?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true { sections.removeFirst() }
         var blockID = 0
-        for (pageIndex, section) in sections.enumerated() {
-            var blocks: [Block] = []
-            let parts = section.components(separatedBy: "<|det|>")
-            for part in parts.dropFirst() {
-                let pieces = part.components(separatedBy: "<|/det|>")
-                let header = pieces[0]
-                let content = pieces.count > 1 ? pieces[1...].joined(separator: "") : ""
-                let label =
-                    header.split(separator: "[", maxSplits: 1).first.map {
-                        $0.trimmingCharacters(in: .whitespaces)
-                    } ?? ""
-                blocks.append(
-                    Block(
-                        id: blockID, label: label, boxes: Self.boxes(in: header),
-                        content: content.trimmingCharacters(in: .whitespacesAndNewlines)))
-                blockID += 1
-            }
-            if blocks.isEmpty, !section.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                blocks.append(
-                    Block(
-                        id: blockID, label: "text", boxes: [],
-                        content: section.trimmingCharacters(in: .whitespacesAndNewlines)))
-                blockID += 1
-            }
-            pages.append(Page(id: pageIndex, blocks: blocks))
-        }
+        pages = sections.enumerated().map { Self.page($1, index: $0, blockID: &blockID) }
+    }
+
+    init(pages: [Page]) {
         self.pages = pages
+    }
+
+    /// One `<PAGE>` section: `<|det|>label [boxes]<|/det|>content` blocks (plain text if it has no markup yet).
+    static func page(_ section: String, index: Int, blockID: inout Int) -> Page {
+        var blocks: [Block] = []
+        for part in section.components(separatedBy: "<|det|>").dropFirst() {
+            let pieces = part.components(separatedBy: "<|/det|>")
+            let header = pieces[0]
+            let content = pieces.count > 1 ? pieces[1...].joined(separator: "") : ""
+            let label =
+                header.split(separator: "[", maxSplits: 1).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+            blocks.append(
+                Block(
+                    id: blockID, label: label, boxes: boxes(in: header),
+                    content: content.trimmingCharacters(in: .whitespacesAndNewlines)))
+            blockID += 1
+        }
+        let plain = section.trimmingCharacters(in: .whitespacesAndNewlines)
+        if blocks.isEmpty, !plain.isEmpty {
+            blocks.append(Block(id: blockID, label: "text", boxes: [], content: plain))
+            blockID += 1
+        }
+        return Page(id: index, blocks: blocks)
     }
 
     /// Every complete `[x1, y1, x2, y2]` group in a det header, normalized.
@@ -89,5 +89,38 @@ public struct UnlimitedOcrDocument: Sendable {
     public var markdown: String {
         pages.map { page in page.blocks.map(\.content).filter { !$0.isEmpty }.joined(separator: "\n\n") }
             .joined(separator: "\n\n---\n\n")
+    }
+}
+
+/// Incremental `UnlimitedOcrDocument` for streamed output: finished pages are parsed once at their `<PAGE>` boundary,
+/// so each update re-parses only the page being written (O(page) instead of O(document)).
+public struct UnlimitedOcrDocumentBuilder: Sendable {
+    private var finished: [UnlimitedOcrDocument.Page] = []
+    private var nextBlockID = 0
+    private var current = ""
+    private var sawMarker = false
+
+    public init() {}
+
+    public mutating func append(_ delta: String) {
+        current += delta
+        guard delta.contains(">") else { return }  // "<PAGE>" streams as several tokens; it ends with ">"
+        while let marker = current.range(of: "<PAGE>") {
+            let section = String(current[..<marker.lowerBound])
+            current = String(current[marker.upperBound...])
+            sawMarker = true
+            if section.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, finished.isEmpty { continue }
+            finished.append(UnlimitedOcrDocument.page(section, index: finished.count, blockID: &nextBlockID))
+        }
+    }
+
+    public var document: UnlimitedOcrDocument {
+        // Same as a full parse: only a leading empty section is dropped; a page just opened by "<PAGE>" exists (empty).
+        if finished.isEmpty, !sawMarker, current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return UnlimitedOcrDocument(pages: [])
+        }
+        var blockID = nextBlockID
+        return UnlimitedOcrDocument(
+            pages: finished + [UnlimitedOcrDocument.page(current, index: finished.count, blockID: &blockID)])
     }
 }

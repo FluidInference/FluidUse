@@ -18,6 +18,9 @@ if ! tmux has-session -t unlimited-ocr 2>/dev/null; then
   # the bars need 10 rows whatever size the terminal window attaches with
   tmux set-hook -t unlimited-ocr client-attached 'resize-pane -t unlimited-ocr:0.0 -y 10'
   tmux set-hook -t unlimited-ocr client-resized 'resize-pane -t unlimited-ocr:0.0 -y 10'
+fi
+# open the terminal window unless one is already attached (e.g. it was closed since the last run)
+if [[ -z "$(tmux list-clients -t unlimited-ocr 2>/dev/null)" ]]; then
   open -na /Applications/Ghostty.app --args -e "$(command -v tmux)" attach -t unlimited-ocr
 fi
 pkill -x UnlimitedOcrDemo 2>/dev/null || true

@@ -68,6 +68,8 @@ public actor UnlimitedOcrFastManager {
         let configuration = MLModelConfiguration()
         configuration.computeUnits = computeUnits
         let encoder = try await MLModel.load(contentsOf: compiled, configuration: configuration)
+        // MLX keeps freed buffers for reuse; cap that pool so long reads don't park GBs of stale cache copies.
+        Memory.cacheLimit = 512 * 1024 * 1024
         let decoder = try OcrDecoder.load(directory: directory.appendingPathComponent("mlx"))
         return UnlimitedOcrFastManager(config: config, encoder: encoder, decoder: decoder, tokenDecoder: tokenDecoder)
     }
@@ -199,6 +201,7 @@ public actor UnlimitedOcrFastManager {
             }
             logits = decoder(decoder.embed([token]), caches: caches)
         }
+        Memory.clearCache()
         emit(
             .finished(
                 UnlimitedOcrStats(

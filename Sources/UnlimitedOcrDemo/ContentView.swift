@@ -148,7 +148,7 @@ struct ContentView: View {
     private var outputColumn: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
+                LazyVStack(alignment: .leading, spacing: 10) {
                     if model.document.pages.isEmpty {
                         placeholder
                     }

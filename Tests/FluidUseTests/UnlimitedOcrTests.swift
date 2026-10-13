@@ -42,6 +42,27 @@ final class UnlimitedOcrTests: XCTestCase {
         XCTAssertTrue(markdown.contains("\n\n---\n\n3.1. Next"))
     }
 
+    func testBuilderMatchesFullParseWhileStreaming() {
+        var builder = UnlimitedOcrDocumentBuilder()
+        var text = ""
+        // Stream in small uneven chunks, the way tokens arrive ("<PAGE>" split across chunks).
+        var index = Self.output.startIndex
+        var step = 1
+        while index < Self.output.endIndex {
+            let end = Self.output.index(index, offsetBy: step, limitedBy: Self.output.endIndex) ?? Self.output.endIndex
+            let chunk = String(Self.output[index..<end])
+            builder.append(chunk)
+            text += chunk
+            let streamed = builder.document.pages.map { $0.blocks.map { "\($0.id) \($0.label) \($0.content)" } }
+            let full = UnlimitedOcrDocument(parsing: text).pages.map {
+                $0.blocks.map { "\($0.id) \($0.label) \($0.content)" }
+            }
+            XCTAssertEqual(streamed, full, "after \(text.count) chars")
+            index = end
+            step = step % 5 + 1
+        }
+    }
+
     func testFitRectCentersAnA4Page() {
         let rect = UnlimitedOcrPagePreprocessor.fitRect(width: 595, height: 842)
         XCTAssertEqual(rect.height, 1024)

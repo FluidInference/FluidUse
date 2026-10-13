@@ -44,40 +44,36 @@ struct UnlimitedOcrMLXConfig: Decodable, Sendable {
 }
 
 /// Upstream's R-SWA cache: the whole prefix (prompt + page tokens) plus a ring of the last `ring` generated tokens.
-/// Attention over it is unmasked during decode, so slot order does not matter.
+/// Attention over it is unmasked during decode, so slot order does not matter. Allocated once at prefix + ring slots
+/// after prefill; each generated token is written into its slot in place (no per-token copies of the prefix).
 final class RSWACache {
     let ring: Int
-    private(set) var keys: MLXArray?
-    private(set) var values: MLXArray?
+    private var keys: MLXArray?
+    private var values: MLXArray?
     private(set) var offset = 0
-    private var prefixLength: Int?
+    private var prefixLength = 0
+    private var filled = 0  // ring slots written so far (<= ring)
 
     init(ring: Int) { self.ring = ring }
 
     func update(keys k: MLXArray, values v: MLXArray) -> (MLXArray, MLXArray) {
         let n = k.dim(2)
-        if let keys, let values {
-            if n > 1 || prefixLength == nil && n > 1 {
-                self.keys = concatenated([keys, k], axis: 2)
-                self.values = concatenated([values, v], axis: 2)
-            } else {
-                let prefix = prefixLength ?? keys.dim(2)
-                prefixLength = prefix
-                if keys.dim(2) - prefix < ring {
-                    self.keys = concatenated([keys, k], axis: 2)
-                    self.values = concatenated([values, v], axis: 2)
-                } else {
-                    let slot = prefix + (offset - prefix) % ring
-                    keys[0..., 0..., slot..<slot + 1] = k
-                    values[0..., 0..., slot..<slot + 1] = v
-                }
-            }
-        } else {
-            keys = k
-            values = v
+        defer { offset += n }
+        guard let keys, let values else {
+            // Prefill: prefix + an empty ring, allocated once.
+            prefixLength = n
+            let pad = MLXArray.zeros([k.dim(0), k.dim(1), ring, k.dim(3)], dtype: k.dtype)
+            self.keys = concatenated([k, pad], axis: 2)
+            self.values = concatenated([v, pad], axis: 2)
+            return (k, v)
         }
-        offset += n
-        return (self.keys!, self.values!)
+        precondition(n == 1, "R-SWA cache: one generated token per call after prefill")
+        let slot = prefixLength + (offset - prefixLength) % ring
+        keys[0..., 0..., slot ..< slot + 1] = k
+        values[0..., 0..., slot ..< slot + 1] = v
+        filled = min(filled + 1, ring)
+        let visible = prefixLength + filled
+        return (keys[0..., 0..., ..<visible], values[0..., 0..., ..<visible])
     }
 }
 
