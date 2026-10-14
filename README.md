@@ -7,9 +7,7 @@ app or browser through the Accessibility API, asks a small on-device model
 what belongs in each field, and types the answer into the real app. About
 1 ms per decision on the Neural Engine, nothing leaves the machine.
 
-The first model is [CUA-S1-FORMS](https://huggingface.co/FluidInference/cua-s1-forms-coreml),
-a 706K-parameter form specialist from [Cua](https://github.com/trycua/cua),
-converted to Core ML and served by [FluidAudio](https://github.com/FluidInference/FluidAudio).
+The first model is [CUA-S1-FORMS](https://huggingface.co/FluidInference/cua-s1-forms-coreml), a 706K-parameter form specialist from [Cua](https://github.com/trycua/cua), converted to Core ML and served by [FluidInference](https://huggingface.co/FluidInference).
 
 ## Demo video
 
