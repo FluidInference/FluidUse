@@ -312,6 +312,33 @@ PII-masked before sending, replies checked against a source document) and
 [Sources/FrontDoorDemo](Sources/FrontDoorDemo/README.md) (1,000 synthetic chatbot messages screened and routed at ~90
 messages per second: guard on the Neural Engine, route + PII on the GPU).
 
+## Vela 3.0 decisions and spans
+
+`Vela3Manager` runs [vela3-fast](https://huggingface.co/vllm-sr/vela3-fast) (Vela 3.0, vLLM Semantic Router × KR Labs;
+UltraBERT-380M encoder, Apache-2.0) on Core ML: decisions over options you name (choice or yes / no about a state), and
+the two label sets of the release's `span_sets` adapter, personal information (17 types) and the words of an answer its
+context does not support. One encoder pass per question on the GPU (~10 ms for a decision, ~18 ms for a PII pass over a
+paragraph; the Neural Engine is slower for this encoder at every length). Rendering, readout, thresholds and the span
+decoder reproduce the release's own code: against the Python runtime on the same encoders, 0 token mismatches on 17
+Unicode-heavy texts, 0 / 120 decisions and 0 / 12 span sets differ (`swift run -c release Vela3Check parity …`). Inputs are
+limited to 1,024 tokens per pass. The pinned snapshot downloads from
+[FluidInference/vela-3.0-coreml](https://huggingface.co/FluidInference/vela-3.0-coreml) on first use (~1.48 GB: two
+multifunction packages, macOS 15 / iOS 18).
+
+```swift
+let vela = try await Vela3Manager.load(from: try await Vela3ModelStore.ensure())
+let r = try await vela.decide(
+    state: "My card was charged twice and I need this fixed today.",
+    questions: [
+        .choice(id: "intent", instructions: "What does the customer want?",
+                options: [("refund", "Money back for the duplicate charge"), ("cancel", "Cancel the order")]),
+        .yesNo(id: "urgent", instructions: "The customer needs a fast response."),
+    ])
+print(r["intent"]!.answer, r["urgent"]!.yes!)
+print(try await vela.pii("Hi, I'm Dana Whitfield, dana@example.com.").spans.map { "\($0.label): \($0.text)" })
+print(try await vela.unsupported(context: "Adults may take up to 4 g a day.", answer: "Adults may take up to 6 g a day.").spans.map(\.text))
+```
+
 ## d1-omni-600M decisions and moderation
 
 `D1OmniManager` runs the text path of Liquid AI's [d1-omni-600M](https://huggingface.co/LiquidAI/d1-omni-600M)

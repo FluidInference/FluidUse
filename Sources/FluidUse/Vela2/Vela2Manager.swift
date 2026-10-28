@@ -514,12 +514,20 @@ struct Vela2Heads: Sendable {
                 w[name] = Array(f[offset..<(offset + count)])
             }
         }
-        guard let n = w["norm.weight"], let p = w["w_o.bias"] else { throw Vela2Error.invalidAsset("heads.bin") }
+        try self.init(weights: w)
+    }
+
+    /// Heads from named fp32 tensors (Vela 3 ships them as safetensors). A decision-only head set has no span
+    /// temperature (`log_tau_span`) and is never asked for span logits.
+    init(weights w: [String: [Float]]) throws {
+        guard let n = w["norm.weight"], let p = w["w_o.bias"], let logTau = w["log_tau"]?.first else {
+            throw Vela2Error.invalidAsset("readout heads are missing norm / w_o / log_tau")
+        }
         self.hidden = n.count
         self.proj = p.count
         self.w = w
-        self.tau = exp(w["log_tau"]![0])
-        self.tauSpan = exp(w["log_tau_span"]![0])
+        self.tau = exp(logTau)
+        self.tauSpan = exp(w["log_tau_span"]?.first ?? 0)
     }
 
     private func layerNorm(_ x: ArraySlice<Float>) -> [Float] {
