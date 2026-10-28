@@ -319,9 +319,11 @@ UltraBERT-380M encoder, Apache-2.0) on Core ML: decisions over options you name 
 the two label sets of the release's `span_sets` adapter, personal information (17 types) and the words of an answer its
 context does not support. One encoder pass per question on the GPU (~10 ms for a decision, ~18 ms for a PII pass over a
 paragraph; the Neural Engine is slower for this encoder at every length). Rendering, readout, thresholds and the span
-decoder reproduce the release's own code: against the Python runtime on the same encoders, 0 token mismatches on 17
-Unicode-heavy texts, 0 / 120 decisions and 0 / 12 span sets differ (`swift run -c release Vela3Check parity …`). Inputs are
-limited to 1,024 tokens per pass. The pinned snapshot downloads from
+decoder reproduce the release's own code: against the Python runtime on the same encoders, 0 token mismatches on 23
+Unicode-heavy texts, 0 / 120 decisions and 0 / 16 span sets differ, including windowed inputs
+(`swift run -c release Vela3Check parity …`). One pass holds 1,024 tokens: a longer decision throws `tooLong`; for spans the
+context of an unsupported-claim check is cut first, then long text is read in overlapping windows (the release's rule).
+The pinned snapshot downloads from
 [FluidInference/vela-3.0-coreml](https://huggingface.co/FluidInference/vela-3.0-coreml) on first use (~1.48 GB: two
 multifunction packages, macOS 15 / iOS 18).
 

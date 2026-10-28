@@ -517,17 +517,26 @@ struct Vela2Heads: Sendable {
         try self.init(weights: w)
     }
 
-    /// Heads from named fp32 tensors (Vela 3 ships them as safetensors). A decision-only head set has no span
-    /// temperature (`log_tau_span`) and is never asked for span logits.
-    init(weights w: [String: [Float]]) throws {
+    /// Heads from named fp32 tensors (Vela 3 ships them as safetensors). `span: false` is a decision-only head set
+    /// (no `w_t` / `w_e` / `log_tau_span`), which is never asked for span logits.
+    init(weights w: [String: [Float]], span: Bool = true) throws {
         guard let n = w["norm.weight"], let p = w["w_o.bias"], let logTau = w["log_tau"]?.first else {
             throw Vela2Error.invalidAsset("readout heads are missing norm / w_o / log_tau")
         }
-        self.hidden = n.count
-        self.proj = p.count
+        let h = n.count, d = p.count
+        var shapes: [(String, Int)] = [
+            ("norm.bias", h), ("w_o.weight", d * h), ("w_q.weight", d * h), ("w_q.bias", d), ("w_p.weight", d * h), ("w_p.bias", d),
+            ("cls_mlp.0.weight", 2 * h * h), ("cls_mlp.0.bias", 2 * h), ("cls_mlp.3.weight", 2 * h), ("cls_mlp.3.bias", 1),
+        ]
+        if span { shapes += [("w_t.weight", d * h), ("w_t.bias", d), ("w_e.weight", d * h), ("w_e.bias", d), ("log_tau_span", 1)] }
+        for (name, count) in shapes where w[name]?.count != count {
+            throw Vela2Error.invalidAsset("readout head \(name) is missing or has \(w[name]?.count ?? 0) values, expected \(count)")
+        }
+        self.hidden = h
+        self.proj = d
         self.w = w
         self.tau = exp(logTau)
-        self.tauSpan = exp(w["log_tau_span"]?.first ?? 0)
+        self.tauSpan = span ? exp(w["log_tau_span"]![0]) : 1
     }
 
     private func layerNorm(_ x: ArraySlice<Float>) -> [Float] {

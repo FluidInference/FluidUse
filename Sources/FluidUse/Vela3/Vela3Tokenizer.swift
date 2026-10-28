@@ -2,7 +2,8 @@ import Foundation
 import os
 
 /// The byte-level BPE tokenizer of vela3-fast (UltraBERT's GPT-2 style `tokenizer.json`), with Hugging Face `tokenizers`
-/// offsets: special tokens matched literally, the GPT-2 split regex, merges by rank (leftmost first on ties), and each
+/// offsets: special tokens matched literally (`lstrip` / `rstrip` ones absorb the whitespace next to them, offsets
+/// included), the GPT-2 split regex, merges by rank (leftmost first on ties, O(n log n)), and each
 /// token's offsets running from the character of its first byte to the character of its last byte (so pieces of one
 /// multi-byte character share its offsets). Offsets are Unicode scalar indices, as Python string indices. No offset
 /// trimming: this tokenizer's post-processor is `TemplateProcessing`, so the leading space stays in a token's span.
@@ -18,10 +19,11 @@ public final class Vela3Tokenizer: Sendable {
     private let vocabulary: [String: Int]
     private let mergeRanks: [String: Int]
     /// Added tokens, longest first, so a longer token wins over one it contains.
-    private let addedTokens: [(scalars: [Unicode.Scalar], id: Int)]
+    private let addedTokens: [(scalars: [Unicode.Scalar], id: Int, lstrip: Bool, rstrip: Bool)]
     private let byteToCharacter: [String]
     private let regex: NSRegularExpression
-    /// Encoded pieces (token ids with their byte ranges); ordinary text repeats the same words.
+    /// Encoded pieces (token ids with their byte ranges); ordinary text repeats the same words. Long pieces are not
+    /// cached.
     private let cache = OSAllocatedUnfairLock<[String: [(Int, Int, Int)]]>(initialState: [:])
 
     public init(tokenizerJsonURL: URL) throws {
@@ -43,9 +45,9 @@ public final class Vela3Tokenizer: Sendable {
             }
         }
         mergeRanks = ranks
-        let added = (root["added_tokens"] as? [[String: Any]] ?? []).compactMap { t -> ([Unicode.Scalar], Int)? in
+        let added = (root["added_tokens"] as? [[String: Any]] ?? []).compactMap { t -> ([Unicode.Scalar], Int, Bool, Bool)? in
             guard let content = t["content"] as? String, let id = t["id"] as? Int, !content.isEmpty else { return nil }
-            return (Array(content.unicodeScalars), id)
+            return (Array(content.unicodeScalars), id, t["lstrip"] as? Bool ?? false, t["rstrip"] as? Bool ?? false)
         }
         addedTokens = added.sorted { $0.0.count > $1.0.count }
         byteToCharacter = Self.bytesToUnicode()
@@ -61,9 +63,13 @@ public final class Vela3Tokenizer: Sendable {
         var i = 0
         while i < scalars.count {
             if let match = addedTokens.first(where: { matches($0.scalars, scalars, at: i) }) {
-                if segmentStart < i { out += textTokens(scalars, segmentStart..<i) }
-                out.append(Token(id: match.id, start: i, end: i + match.scalars.count))
-                i += match.scalars.count
+                var start = i
+                var end = i + match.scalars.count
+                if match.lstrip { while start > segmentStart, scalars[start - 1].properties.isWhitespace { start -= 1 } }
+                if match.rstrip { while end < scalars.count, scalars[end].properties.isWhitespace { end += 1 } }
+                if segmentStart < start { out += textTokens(scalars, segmentStart..<start) }
+                out.append(Token(id: match.id, start: start, end: end))
+                i = end
                 segmentStart = i
             } else {
                 i += 1
@@ -117,30 +123,97 @@ public final class Vela3Tokenizer: Sendable {
         return out
     }
 
-    /// BPE over the byte characters of one piece -> (token id, first byte, end byte).
+    /// BPE over the byte characters of one piece -> (token id, first byte, end byte). Merges come off a min-heap of
+    /// (rank, position) over a linked list of symbols, as Hugging Face's `Word::merge_all`.
     private func encodePiece(_ bytes: [UInt8]) -> [(Int, Int, Int)] {
-        let key = bytes.map { byteToCharacter[Int($0)] }.joined()
-        if let hit = cache.withLock({ $0[key] }) { return hit }
-        var symbols: [(text: String, start: Int, end: Int)] = bytes.enumerated().map { (byteToCharacter[Int($0.element)], $0.offset, $0.offset + 1) }
-        while symbols.count > 1 {
-            var best = Int.max
-            var at = -1
-            for k in 0..<(symbols.count - 1) {
-                if let r = mergeRanks[symbols[k].text + " " + symbols[k + 1].text], r < best {
-                    best = r
-                    at = k
-                }
-            }
-            if at < 0 { break }
-            symbols[at] = (symbols[at].text + symbols[at + 1].text, symbols[at].start, symbols[at + 1].end)
-            symbols.remove(at: at + 1)
+        let cacheable = bytes.count <= 256
+        let key = cacheable ? bytes.map { byteToCharacter[Int($0)] }.joined() : ""
+        if cacheable, let hit = cache.withLock({ $0[key] }) { return hit }
+        let n = bytes.count
+        var text = bytes.map { byteToCharacter[Int($0)] }
+        var end = (0..<n).map { $0 + 1 }
+        var next = (0..<n).map { $0 + 1 < n ? $0 + 1 : -1 }
+        var prev = (0..<n).map { $0 - 1 }
+        var alive = [Bool](repeating: true, count: n)
+        var version = [Int](repeating: 0, count: n)
+        var heap = MergeHeap()
+        func push(_ left: Int) {
+            let right = next[left]
+            guard right >= 0, let rank = mergeRanks[text[left] + " " + text[right]] else { return }
+            heap.push(.init(rank: rank, left: left, leftVersion: version[left], right: right, rightVersion: version[right]))
         }
-        let out = symbols.map { (vocabulary[$0.text] ?? 0, $0.start, $0.end) }
-        cache.withLock { c in
-            if c.count > 50_000 { c.removeAll() }
-            c[key] = out
+        for k in 0..<max(n - 1, 0) { push(k) }
+        while let m = heap.pop() {
+            guard alive[m.left], alive[m.right], next[m.left] == m.right, version[m.left] == m.leftVersion,
+                version[m.right] == m.rightVersion
+            else { continue }
+            text[m.left] += text[m.right]
+            end[m.left] = end[m.right]
+            alive[m.right] = false
+            next[m.left] = next[m.right]
+            if next[m.left] >= 0 { prev[next[m.left]] = m.left }
+            version[m.left] += 1
+            if prev[m.left] >= 0 { push(prev[m.left]) }
+            push(m.left)
+        }
+        var out: [(Int, Int, Int)] = []
+        var k = n > 0 ? 0 : -1
+        var start = 0
+        while k >= 0 {
+            out.append((vocabulary[text[k]] ?? 0, start, end[k]))
+            start = end[k]
+            k = next[k]
+        }
+        if cacheable {
+            let result = out
+            cache.withLock { c in
+                if c.count > 50_000 { c.removeAll() }
+                c[key] = result
+            }
         }
         return out
+    }
+
+    private struct MergeHeap {
+        struct Item {
+            let rank: Int
+            let left: Int
+            let leftVersion: Int
+            let right: Int
+            let rightVersion: Int
+            func before(_ o: Item) -> Bool { rank != o.rank ? rank < o.rank : left < o.left }
+        }
+        private var items: [Item] = []
+
+        mutating func push(_ x: Item) {
+            items.append(x)
+            var i = items.count - 1
+            while i > 0 {
+                let p = (i - 1) / 2
+                guard items[i].before(items[p]) else { break }
+                items.swapAt(i, p)
+                i = p
+            }
+        }
+
+        mutating func pop() -> Item? {
+            guard let top = items.first else { return nil }
+            let last = items.removeLast()
+            if !items.isEmpty {
+                items[0] = last
+                var i = 0
+                while true {
+                    let l = 2 * i + 1, r = l + 1
+                    var m = i
+                    if l < items.count, items[l].before(items[m]) { m = l }
+                    if r < items.count, items[r].before(items[m]) { m = r }
+                    if m == i { break }
+                    items.swapAt(i, m)
+                    i = m
+                }
+            }
+            return top
+        }
     }
 
     /// GPT-2's reversible byte -> printable character table.
